@@ -12,7 +12,7 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto): Promise<AuthResponseDto> {
-    const user = await this.userRepository.findByUsername(dto.username);
+    const user = await this.userRepository.findByEmail(dto.email);
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid credentials.');
@@ -30,9 +30,9 @@ export class AuthService {
       accessToken,
       user: {
         id: user.id,
-        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
-        fullName: user.fullName,
         role: user.role,
       },
     };

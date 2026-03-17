@@ -4,55 +4,137 @@ import {
   Column,
   CreateDateColumn,
 } from 'typeorm';
-import { DocumentType, DocumentOwnerType } from './document.enums';
+import {
+  ClientDocumentType,
+  RepresentativeDocumentType,
+  GuardianDocumentType,
+  DocumentStatus,
+} from './document.enums';
 
-/**
- * Stores metadata for an uploaded file.
- * The actual bytes are written to disk (UPLOAD_DIR) by the service.
- */
-@Entity('documents')
-export class DocumentEntity {
+@Entity('client_documents')
+export class ClientDocumentEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'document_type', type: 'enum', enum: DocumentType })
-  document_type: DocumentType;
+  @Column({ name: 'client_id', type: 'uuid' })
+  client_id: string;
 
-  /** Relative path within UPLOAD_DIR, e.g. "clients/abc123/id-scan.jpg" */
-  @Column({ name: 'file_path', length: 500 })
-  file_path: string;
+  @Column({ name: 'document_type', type: 'enum', enum: ClientDocumentType })
+  document_type: ClientDocumentType;
 
-  @Column({ name: 'file_name', length: 255 })
+  @Column({ name: 'file_name', type: 'text' })
   file_name: string;
 
-  @Column({ name: 'original_name', length: 255 })
-  original_name: string;
+  @Column({ name: 'file_url', type: 'text' })
+  file_url: string;
 
-  @Column({ name: 'mime_type', length: 100 })
-  mime_type: string;
+  @Column({
+    type: 'enum',
+    enum: DocumentStatus,
+    default: DocumentStatus.PENDING,
+  })
+  status: DocumentStatus;
 
-  @Column({ name: 'file_size_bytes', type: 'int' })
-  file_size_bytes: number;
-
-  @Column({ name: 'owner_type', type: 'enum', enum: DocumentOwnerType })
-  owner_type: DocumentOwnerType;
-
-  /** UUID of the owning entity (client_id, representative_id, or guardian_id) */
-  @Column({ name: 'owner_id', type: 'uuid' })
-  owner_id: string;
+  @Column({ name: 'rejection_reason', type: 'text', nullable: true })
+  rejection_reason: string | null;
 
   @Column({ name: 'uploaded_by', type: 'uuid' })
   uploaded_by: string;
 
+  @Column({ name: 'reviewed_by', type: 'uuid', nullable: true })
+  reviewed_by: string | null;
+
+  @Column({ name: 'reviewed_at', type: 'timestamptz', nullable: true })
+  reviewed_at: Date | null;
+
   @CreateDateColumn({ name: 'uploaded_at', type: 'timestamptz' })
   uploaded_at: Date;
+}
 
-  @Column({ name: 'is_verified', default: false })
-  is_verified: boolean;
+// ---------------------------------------------------------------------------
 
-  @Column({ name: 'verified_by', type: 'uuid', nullable: true })
-  verified_by: string | null;
+@Entity('representative_documents')
+export class RepresentativeDocumentEntity {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
-  @Column({ name: 'verified_at', type: 'timestamptz', nullable: true })
-  verified_at: Date | null;
+  @Column({ name: 'representative_id', type: 'uuid' })
+  representative_id: string;
+
+  @Column({
+    name: 'document_type',
+    type: 'enum',
+    enum: RepresentativeDocumentType,
+  })
+  document_type: RepresentativeDocumentType;
+
+  @Column({ name: 'file_name', type: 'text' })
+  file_name: string;
+
+  @Column({ name: 'file_url', type: 'text' })
+  file_url: string;
+
+  @Column({
+    type: 'enum',
+    enum: DocumentStatus,
+    default: DocumentStatus.PENDING,
+  })
+  status: DocumentStatus;
+
+  @Column({ name: 'rejection_reason', type: 'text', nullable: true })
+  rejection_reason: string | null;
+
+  @Column({ name: 'uploaded_by', type: 'uuid' })
+  uploaded_by: string;
+
+  @Column({ name: 'reviewed_by', type: 'uuid', nullable: true })
+  reviewed_by: string | null;
+
+  @Column({ name: 'reviewed_at', type: 'timestamptz', nullable: true })
+  reviewed_at: Date | null;
+
+  @CreateDateColumn({ name: 'uploaded_at', type: 'timestamptz' })
+  uploaded_at: Date;
+}
+
+// ---------------------------------------------------------------------------
+
+@Entity('guardian_documents')
+export class GuardianDocumentEntity {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ name: 'guardian_id', type: 'uuid' })
+  guardian_id: string;
+
+  @Column({ name: 'document_type', type: 'enum', enum: GuardianDocumentType })
+  document_type: GuardianDocumentType;
+
+  @Column({ name: 'file_name', type: 'text' })
+  file_name: string;
+
+  @Column({ name: 'file_url', type: 'text' })
+  file_url: string;
+
+  @Column({
+    type: 'enum',
+    enum: DocumentStatus,
+    default: DocumentStatus.PENDING,
+  })
+  status: DocumentStatus;
+
+  @Column({ name: 'rejection_reason', type: 'text', nullable: true })
+  rejection_reason: string | null;
+
+  @Column({ name: 'uploaded_by', type: 'uuid' })
+  uploaded_by: string;
+
+  @Column({ name: 'reviewed_by', type: 'uuid', nullable: true })
+  reviewed_by: string | null;
+
+  @Column({ name: 'reviewed_at', type: 'timestamptz', nullable: true })
+  reviewed_at: Date | null;
+
+  @CreateDateColumn({ name: 'uploaded_at', type: 'timestamptz' })
+  uploaded_at: Date;
 }

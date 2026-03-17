@@ -10,10 +10,11 @@ export enum ClientStatus {
 }
 
 export enum KycStatus {
-  PENDING = 'PENDING',     // Submitted, awaiting officer review
-  VERIFIED = 'VERIFIED',   // Approved and within expiry
-  REJECTED = 'REJECTED',   // Declined, must resubmit
-  EXPIRED = 'EXPIRED',     // ID has passed its expiry date
+  PENDING = 'PENDING',
+  UNDER_REVIEW = 'UNDER_REVIEW',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  REQUIRES_UPDATE = 'REQUIRES_UPDATE',
 }
 
 export enum Gender {
@@ -25,13 +26,24 @@ export enum Gender {
 export enum IdType {
   NATIONAL_ID = 'NATIONAL_ID',
   PASSPORT = 'PASSPORT',
-  DRIVERS_LICENSE = 'DRIVERS_LICENSE',
-  RESIDENCE_PERMIT = 'RESIDENCE_PERMIT',
+  CEPGL_CARD = 'CEPGL_CARD',
+}
+
+export enum MaritalStatus {
+  SINGLE = 'SINGLE',
+  MARRIED = 'MARRIED',
+  DIVORCED = 'DIVORCED',
+  WIDOWED = 'WIDOWED',
+}
+
+export enum SignatoryType {
+  MANDATORY = 'MANDATORY',
+  OPTIONAL = 'OPTIONAL',
 }
 
 export enum SignaturePolicy {
-  SINGLE = 'SINGLE',   // Any one signatory can authorise
-  DUAL = 'DUAL',       // Exactly two signatories required
+  SINGLE = 'SINGLE', // Any one signatory can authorise
+  DUAL = 'DUAL', // Exactly two signatories required
   ANY_TWO = 'ANY_TWO', // Any two of the listed signatories
 }
 

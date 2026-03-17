@@ -4,19 +4,12 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
-  Patch,
   Post,
-  Query,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ClientService } from './client.service';
-import {
-  CreateIndividualClientDto,
-  CreateBusinessClientDto,
-  VerifyKycDto,
-  RejectKycDto,
-  SearchClientDto,
-} from './client.dto';
+import { CreateClientDto, RejectKycDto, RequestUpdateDto } from './client.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -24,10 +17,8 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { UserModel } from '../users/user.model';
 import { UserRole } from '../users/user.enums';
 
-/**
- * HTTP layer only — parse the request, call the service, return the result.
- * No business logic lives here.
- */
+@ApiTags('Clients')
+@ApiBearerAuth()
 @Controller('clients')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ClientController {
@@ -35,34 +26,37 @@ export class ClientController {
 
   // --- Onboarding ---
 
-  @Post('individual')
-  @Roles(UserRole.TELLER, UserRole.LOAN_OFFICER, UserRole.MANAGER, UserRole.ADMIN)
-  registerIndividual(
-    @Body() dto: CreateIndividualClientDto,
-    @CurrentUser() user: UserModel,
-  ) {
-    return this.clientService.registerIndividual(dto, user.id);
-  }
-
-  @Post('business')
-  @Roles(UserRole.TELLER, UserRole.LOAN_OFFICER, UserRole.MANAGER, UserRole.ADMIN)
-  registerBusiness(
-    @Body() dto: CreateBusinessClientDto,
-    @CurrentUser() user: UserModel,
-  ) {
-    return this.clientService.registerBusiness(dto, user.id);
+  @Post()
+  @Roles(
+    UserRole.TELLER,
+    UserRole.LOAN_OFFICER,
+    UserRole.MANAGER,
+    UserRole.ADMIN,
+  )
+  register(@Body() dto: CreateClientDto, @CurrentUser() user: UserModel) {
+    return this.clientService.register(dto, user.id);
   }
 
   // --- KYC lifecycle ---
 
-  @Post(':id/kyc/verify')
+  @Post(':id/kyc/submit')
+  @Roles(
+    UserRole.TELLER,
+    UserRole.LOAN_OFFICER,
+    UserRole.MANAGER,
+    UserRole.ADMIN,
+  )
+  submitForReview(@Param('id', ParseUUIDPipe) id: string) {
+    return this.clientService.submitForReview(id);
+  }
+
+  @Post(':id/kyc/approve')
   @Roles(UserRole.LOAN_OFFICER, UserRole.MANAGER, UserRole.ADMIN)
-  verifyKyc(
+  approveKyc(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: VerifyKycDto,
     @CurrentUser() user: UserModel,
   ) {
-    return this.clientService.verifyKyc(id, dto, user.id);
+    return this.clientService.approveKyc(id, user.id);
   }
 
   @Post(':id/kyc/reject')
@@ -75,42 +69,36 @@ export class ClientController {
     return this.clientService.rejectKyc(id, dto, user.id);
   }
 
-  @Post(':id/kyc/reset')
-  @Roles(UserRole.MANAGER, UserRole.ADMIN)
-  resetKyc(@Param('id', ParseUUIDPipe) id: string) {
-    return this.clientService.resetKyc(id);
-  }
-
-  // --- Client status ---
-
-  @Patch(':id/deactivate')
-  @Roles(UserRole.MANAGER, UserRole.ADMIN)
-  deactivate(@Param('id', ParseUUIDPipe) id: string) {
-    return this.clientService.deactivate(id);
-  }
-
-  @Patch(':id/reactivate')
-  @Roles(UserRole.MANAGER, UserRole.ADMIN)
-  reactivate(@Param('id', ParseUUIDPipe) id: string) {
-    return this.clientService.reactivate(id);
-  }
-
-  @Patch(':id/blacklist')
-  @Roles(UserRole.MANAGER, UserRole.ADMIN)
-  blacklist(@Param('id', ParseUUIDPipe) id: string) {
-    return this.clientService.blacklist(id);
+  @Post(':id/kyc/request-update')
+  @Roles(UserRole.LOAN_OFFICER, UserRole.MANAGER, UserRole.ADMIN)
+  requestUpdate(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RequestUpdateDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.clientService.requestUpdate(id, dto, user.id);
   }
 
   // --- Queries ---
 
   @Get()
-  @Roles(UserRole.TELLER, UserRole.LOAN_OFFICER, UserRole.MANAGER, UserRole.ADMIN)
-  search(@Query() dto: SearchClientDto) {
-    return this.clientService.search(dto);
+  @Roles(
+    UserRole.TELLER,
+    UserRole.LOAN_OFFICER,
+    UserRole.MANAGER,
+    UserRole.ADMIN,
+  )
+  findAll() {
+    return this.clientService.findAll();
   }
 
   @Get(':id')
-  @Roles(UserRole.TELLER, UserRole.LOAN_OFFICER, UserRole.MANAGER, UserRole.ADMIN)
+  @Roles(
+    UserRole.TELLER,
+    UserRole.LOAN_OFFICER,
+    UserRole.MANAGER,
+    UserRole.ADMIN,
+  )
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.clientService.findById(id);
   }

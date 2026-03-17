@@ -14,9 +14,6 @@ export class UserService {
   constructor(private readonly userRepository: UserRepository) {}
 
   async create(dto: CreateUserDto): Promise<UserModel> {
-    if (await this.userRepository.existsByUsername(dto.username)) {
-      throw new ConflictException(`Username '${dto.username}' is already taken.`);
-    }
     if (await this.userRepository.existsByEmail(dto.email)) {
       throw new ConflictException(`Email '${dto.email}' is already registered.`);
     }
@@ -24,10 +21,12 @@ export class UserService {
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = new UserModel({
       id: randomUUID(),
-      username: dto.username,
+      branchId: dto.branchId ?? null,
+      firstName: dto.firstName,
+      middleName: dto.middleName ?? null,
+      lastName: dto.lastName,
       email: dto.email,
       passwordHash,
-      fullName: dto.fullName,
       role: dto.role,
       isActive: true,
       createdAt: new Date(),

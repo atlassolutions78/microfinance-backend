@@ -21,11 +21,6 @@ export class UserRepository {
     return entity ? UserMapper.toDomain(entity) : null;
   }
 
-  async findByUsername(username: string): Promise<UserModel | null> {
-    const entity = await this.repo.findOne({ where: { username } });
-    return entity ? UserMapper.toDomain(entity) : null;
-  }
-
   async findByEmail(email: string): Promise<UserModel | null> {
     const entity = await this.repo.findOne({ where: { email } });
     return entity ? UserMapper.toDomain(entity) : null;
@@ -34,10 +29,6 @@ export class UserRepository {
   async findAll(): Promise<UserModel[]> {
     const entities = await this.repo.find();
     return entities.map(UserMapper.toDomain);
-  }
-
-  async existsByUsername(username: string): Promise<boolean> {
-    return this.repo.existsBy({ username });
   }
 
   async existsByEmail(email: string): Promise<boolean> {

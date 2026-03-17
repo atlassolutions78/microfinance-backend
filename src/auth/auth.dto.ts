@@ -1,8 +1,8 @@
-import { IsString, MinLength } from 'class-validator';
+import { IsEmail, IsString, MinLength } from 'class-validator';
 
 export class LoginDto {
-  @IsString()
-  username: string;
+  @IsEmail()
+  email: string;
 
   @IsString()
   @MinLength(1)
@@ -13,9 +13,9 @@ export class AuthResponseDto {
   accessToken: string;
   user: {
     id: string;
-    username: string;
+    firstName: string;
+    lastName: string;
     email: string;
-    fullName: string;
     role: string;
   };
 }

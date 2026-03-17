@@ -2,9 +2,9 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   ClientEntity,
-  IndividualDetailsEntity,
-  BusinessDetailsEntity,
-  GuardianEntity,
+  IndividualProfileEntity,
+  BusinessProfileEntity,
+  MinorGuardianEntity,
   RepresentativeEntity,
 } from './client.entity';
 import { ClientRepository } from './client.repository';
@@ -15,9 +15,9 @@ import { ClientController } from './client.controller';
   imports: [
     TypeOrmModule.forFeature([
       ClientEntity,
-      IndividualDetailsEntity,
-      BusinessDetailsEntity,
-      GuardianEntity,
+      IndividualProfileEntity,
+      BusinessProfileEntity,
+      MinorGuardianEntity,
       RepresentativeEntity,
     ]),
   ],

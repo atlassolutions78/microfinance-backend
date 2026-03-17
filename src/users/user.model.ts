@@ -2,10 +2,12 @@ import { UserRole } from './user.enums';
 
 export interface UserModelProps {
   id: string;
-  username: string;
+  branchId: string | null;
+  firstName: string;
+  middleName: string | null;
+  lastName: string;
   email: string;
   passwordHash: string;
-  fullName: string;
   role: UserRole;
   isActive: boolean;
   createdAt: Date;
@@ -18,10 +20,12 @@ export interface UserModelProps {
  */
 export class UserModel {
   readonly id: string;
-  readonly username: string;
+  readonly branchId: string | null;
+  readonly firstName: string;
+  readonly middleName: string | null;
+  readonly lastName: string;
   readonly email: string;
   readonly passwordHash: string;
-  readonly fullName: string;
   readonly createdAt: Date;
 
   role: UserRole;
@@ -30,10 +34,12 @@ export class UserModel {
 
   constructor(props: UserModelProps) {
     this.id = props.id;
-    this.username = props.username;
+    this.branchId = props.branchId;
+    this.firstName = props.firstName;
+    this.middleName = props.middleName;
+    this.lastName = props.lastName;
     this.email = props.email;
     this.passwordHash = props.passwordHash;
-    this.fullName = props.fullName;
     this.role = props.role;
     this.isActive = props.isActive;
     this.createdAt = props.createdAt;

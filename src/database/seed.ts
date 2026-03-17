@@ -5,10 +5,11 @@
  *   pnpm run seed
  *
  * Creates:
- *   - 4 system users (one per role)
- *   - 3 individual clients (one minor with guardian)
+ *   - 1 branch (Agence de Goma)
+ *   - 4 system users (one per role) — staff from Goma, Nord-Kivu
+ *   - 2 individual clients (one adult, one minor with guardian)
  *   - 1 business client with 2 representatives
- *   - Sample documents metadata for each client
+ *   - Sample documents for each client
  */
 
 import 'reflect-metadata';
@@ -18,14 +19,33 @@ config();
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
-import { ClientEntity, IndividualDetailsEntity, BusinessDetailsEntity, GuardianEntity, RepresentativeEntity } from 'src/clients/client.entity';
-import { Gender, IdType, ClientType, ClientStatus, KycStatus, GuardianRelationship, SignaturePolicy } from 'src/clients/client.enums';
-import { DocumentEntity } from 'src/documents/document.entity';
-import { DocumentType, DocumentOwnerType } from 'src/documents/document.enums';
+import {
+  ClientEntity,
+  IndividualProfileEntity,
+  BusinessProfileEntity,
+  MinorGuardianEntity,
+  RepresentativeEntity,
+} from 'src/clients/client.entity';
+import {
+  Gender,
+  IdType,
+  ClientType,
+  KycStatus,
+  MaritalStatus,
+  SignatoryType,
+} from 'src/clients/client.enums';
+import {
+  ClientDocumentEntity,
+  GuardianDocumentEntity,
+} from 'src/documents/document.entity';
+import {
+  ClientDocumentType,
+  GuardianDocumentType,
+  DocumentStatus,
+} from 'src/documents/document.enums';
 import { UserEntity } from 'src/users/user.entity';
 import { UserRole } from 'src/users/user.enums';
-
-
+import { BranchEntity } from 'src/settings/branch.entity';
 
 // ---------------------------------------------------------------------------
 
@@ -39,270 +59,454 @@ const ds = new DataSource({
   entities: [
     UserEntity,
     ClientEntity,
-    IndividualDetailsEntity,
-    BusinessDetailsEntity,
-    GuardianEntity,
+    IndividualProfileEntity,
+    BusinessProfileEntity,
+    MinorGuardianEntity,
     RepresentativeEntity,
-    DocumentEntity,
+    ClientDocumentEntity,
+    GuardianDocumentEntity,
+    BranchEntity,
   ],
   synchronize: false,
 });
 
 async function seed() {
   await ds.initialize();
-  console.log('Connected to database.');
+  console.log('Connected to database.\n');
+
+  // -------------------------------------------------------------------------
+  // Branch
+  // -------------------------------------------------------------------------
+  const branchRepo = ds.getRepository(BranchEntity);
+
+  let gomaBranch = await branchRepo.findOne({
+    where: { name: 'Agence de Goma' },
+  });
+  if (!gomaBranch) {
+    gomaBranch = branchRepo.create({
+      id: randomUUID(),
+      name: 'Agence de Goma',
+      address: 'Avenue du Commerce, Quartier Himbi, Goma, Nord-Kivu',
+    });
+    await branchRepo.save(gomaBranch);
+    console.log('  created branch: Agence de Goma');
+  } else {
+    console.log('  skip branch: Agence de Goma (already exists)');
+  }
+
+  const gomaBranchId = gomaBranch.id;
 
   // -------------------------------------------------------------------------
   // Users
   // -------------------------------------------------------------------------
   const userRepo = ds.getRepository(UserEntity);
 
-  const users: Array<{ username: string; email: string; fullName: string; role: UserRole }> = [
-    { username: 'admin',        email: 'admin@microfinance.local',        fullName: 'System Administrator', role: UserRole.ADMIN },
-    { username: 'manager',      email: 'manager@microfinance.local',      fullName: 'Jane Manager',         role: UserRole.MANAGER },
-    { username: 'loan_officer', email: 'loan.officer@microfinance.local', fullName: 'Bob Loan Officer',     role: UserRole.LOAN_OFFICER },
-    { username: 'teller',       email: 'teller@microfinance.local',       fullName: 'Carol Teller',         role: UserRole.TELLER },
+  const users: Array<{
+    firstName: string;
+    middleName: string | null;
+    lastName: string;
+    email: string;
+    role: UserRole;
+  }> = [
+    {
+      firstName: 'Jean-Pierre',
+      middleName: 'Mapendo',
+      lastName: 'Kahindo',
+      email: 'jp.kahindo@microfinance.cd',
+      role: UserRole.ADMIN,
+    },
+    {
+      firstName: 'Cécile',
+      middleName: 'Zawadi',
+      lastName: 'Lubanga',
+      email: 'cecile.lubanga@microfinance.cd',
+      role: UserRole.MANAGER,
+    },
+    {
+      firstName: 'Patrick',
+      middleName: 'Bahati',
+      lastName: 'Katembo',
+      email: 'patrick.katembo@microfinance.cd',
+      role: UserRole.LOAN_OFFICER,
+    },
+    {
+      firstName: 'Aimée',
+      middleName: null,
+      lastName: 'Masika',
+      email: 'aimee.masika@microfinance.cd',
+      role: UserRole.TELLER,
+    },
   ];
 
   const createdUsers: Record<string, UserEntity> = {};
 
   for (const u of users) {
-    const existing = await userRepo.findOne({ where: { username: u.username } });
+    const existing = await userRepo.findOne({ where: { email: u.email } });
     if (existing) {
-      console.log(`  skip user: ${u.username} (already exists)`);
+      console.log(`  skip user: ${u.email} (already exists)`);
       createdUsers[u.role] = existing;
       continue;
     }
     const entity = userRepo.create({
       id: randomUUID(),
-      username: u.username,
+      branch_id: gomaBranchId,
+      first_name: u.firstName,
+      middle_name: u.middleName,
+      last_name: u.lastName,
       email: u.email,
       password_hash: await bcrypt.hash('Password123!', 12),
-      full_name: u.fullName,
       role: u.role,
       is_active: true,
     });
     await userRepo.save(entity);
     createdUsers[u.role] = entity;
-    console.log(`  created user: ${u.username} [${u.role}]  password: Password123!`);
+    console.log(
+      `  created user: ${u.firstName} ${u.lastName} [${u.role}]  password: Password123!`,
+    );
   }
 
   const adminId = createdUsers[UserRole.ADMIN].id;
   const officerId = createdUsers[UserRole.LOAN_OFFICER].id;
 
   // -------------------------------------------------------------------------
-  // Individual clients
+  // Clients
   // -------------------------------------------------------------------------
-  const clientRepo        = ds.getRepository(ClientEntity);
-  const indivRepo         = ds.getRepository(IndividualDetailsEntity);
-  const guardianRepo      = ds.getRepository(GuardianEntity);
-  const bizRepo           = ds.getRepository(BusinessDetailsEntity);
-  const repRepo           = ds.getRepository(RepresentativeEntity);
-  const docRepo           = ds.getRepository(DocumentEntity);
+  const clientRepo = ds.getRepository(ClientEntity);
+  const profileRepo = ds.getRepository(IndividualProfileEntity);
+  const bizRepo = ds.getRepository(BusinessProfileEntity);
+  const guardianRepo = ds.getRepository(MinorGuardianEntity);
+  const repRepo = ds.getRepository(RepresentativeEntity);
+  const clientDocRepo = ds.getRepository(ClientDocumentEntity);
+  const guardianDocRepo = ds.getRepository(GuardianDocumentEntity);
 
-  // Helper: skip if client number exists
   async function clientExists(num: string) {
     return !!(await clientRepo.findOne({ where: { client_number: num } }));
   }
 
-  // --- Client 1: verified adult individual ---
-  if (!(await clientExists('CLT-000001'))) {
-    const ind1 = indivRepo.create({
-      id: randomUUID(),
-      first_name: 'Alice', last_name: 'Mwangi', middle_name: 'Grace',
-      date_of_birth: new Date('1990-04-15'),
-      gender: Gender.FEMALE,
-      nationality: 'Kenyan',
-      phone: '+254700000001',
-      email: 'alice.mwangi@example.com',
-      address_line1: '12 Ngong Road', city: 'Nairobi', country: 'Kenya',
-      id_type: IdType.NATIONAL_ID, id_number: 'KE-NID-001234',
-      id_expiry_date: new Date('2030-04-14'),
-      is_minor: false,
-    });
-    await indivRepo.save(ind1);
+  // -------------------------------------------------------------------------
+  // Client 1 — Espérance Amani Kahambu (adult woman, KYC APPROVED)
+  // -------------------------------------------------------------------------
+  if (!(await clientExists('CL-000001'))) {
+    const c1Id = randomUUID();
 
     const c1 = clientRepo.create({
-      id: randomUUID(),
-      client_number: 'CLT-000001',
-      client_type: ClientType.INDIVIDUAL,
-      status: ClientStatus.ACTIVE,
-      kyc_status: KycStatus.VERIFIED,
-      kyc_verified_by: officerId,
-      kyc_verified_at: new Date('2026-01-10'),
-      kyc_expiry_date: new Date('2030-04-14'),
-      individual_details: ind1,
-      representatives: [],
+      id: c1Id,
+      client_number: 'CL-000001',
+      type: ClientType.INDIVIDUAL,
+      kyc_status: KycStatus.APPROVED,
+      kyc_reviewed_by: officerId,
+      kyc_reviewed_at: new Date('2026-02-15'),
+      kyc_notes: null,
+      branch_id: gomaBranchId,
       created_by: adminId,
     });
     await clientRepo.save(c1);
 
-    await docRepo.save(docRepo.create({
-      id: randomUUID(),
-      document_type: DocumentType.ID_SCAN,
-      file_path: 'client/alice-id-scan.jpg',
-      file_name: 'alice-id-scan.jpg',
-      original_name: 'national_id_scan.jpg',
-      mime_type: 'image/jpeg',
-      file_size_bytes: 204800,
-      owner_type: DocumentOwnerType.CLIENT,
-      owner_id: c1.id,
-      uploaded_by: adminId,
-      is_verified: true,
-      verified_by: officerId,
-      verified_at: new Date('2026-01-10'),
-    }));
+    await profileRepo.save(
+      profileRepo.create({
+        client_id: c1Id,
+        first_name: 'Espérance',
+        middle_name: 'Amani',
+        last_name: 'Kahambu',
+        date_of_birth: new Date('1992-06-18'),
+        gender: Gender.FEMALE,
+        nationality: 'Congolaise',
+        marital_status: MaritalStatus.MARRIED,
+        profession: 'Commerçante',
+        province: 'Nord-Kivu',
+        municipality: 'Goma',
+        neighborhood: 'Himbi',
+        street: 'Avenue des Volcans',
+        plot_number: '14',
+        phone: '+243810000001',
+        id_type: IdType.NATIONAL_ID,
+        id_number: 'NK-NID-001234',
+        is_minor: false,
+        responsible_adult_name: null,
+        responsible_adult_id: null,
+      }),
+    );
 
-    console.log('  created client: CLT-000001 Alice Mwangi (VERIFIED)');
+    await clientDocRepo.save(
+      clientDocRepo.create({
+        id: randomUUID(),
+        client_id: c1Id,
+        document_type: ClientDocumentType.ID_DOCUMENT,
+        file_name: 'esperance-id.jpg',
+        file_url: 'uploads/clients/CL-000001/esperance-id.jpg',
+        status: DocumentStatus.ACCEPTED,
+        rejection_reason: null,
+        uploaded_by: adminId,
+        reviewed_by: officerId,
+        reviewed_at: new Date('2026-02-15'),
+      }),
+    );
+
+    await clientDocRepo.save(
+      clientDocRepo.create({
+        id: randomUUID(),
+        client_id: c1Id,
+        document_type: ClientDocumentType.PASSPORT_PHOTO,
+        file_name: 'esperance-photo.jpg',
+        file_url: 'uploads/clients/CL-000001/esperance-photo.jpg',
+        status: DocumentStatus.ACCEPTED,
+        rejection_reason: null,
+        uploaded_by: adminId,
+        reviewed_by: officerId,
+        reviewed_at: new Date('2026-02-15'),
+      }),
+    );
+
+    console.log(
+      '  created client: CL-000001 Espérance Amani Kahambu (INDIVIDUAL, APPROVED)',
+    );
   } else {
-    console.log('  skip client: CLT-000001 (already exists)');
+    console.log('  skip client: CL-000001 (already exists)');
   }
 
-  // --- Client 2: pending adult individual ---
-  if (!(await clientExists('CLT-000002'))) {
-    const ind2 = indivRepo.create({
-      id: randomUUID(),
-      first_name: 'John', last_name: 'Otieno',
-      date_of_birth: new Date('1985-08-22'),
-      gender: Gender.MALE,
-      nationality: 'Kenyan',
-      phone: '+254711000002',
-      address_line1: '5 Moi Avenue', city: 'Mombasa', country: 'Kenya',
-      id_type: IdType.NATIONAL_ID, id_number: 'KE-NID-005678',
-      id_expiry_date: new Date('2028-08-21'),
-      is_minor: false,
-    });
-    await indivRepo.save(ind2);
+  // -------------------------------------------------------------------------
+  // Client 2 — Gabriel Paluku Mastaki (adult man, KYC UNDER_REVIEW)
+  // -------------------------------------------------------------------------
+  if (!(await clientExists('CL-000002'))) {
+    const c2Id = randomUUID();
 
     const c2 = clientRepo.create({
-      id: randomUUID(),
-      client_number: 'CLT-000002',
-      client_type: ClientType.INDIVIDUAL,
-      status: ClientStatus.ACTIVE,
-      kyc_status: KycStatus.PENDING,
-      individual_details: ind2,
-      representatives: [],
+      id: c2Id,
+      client_number: 'CL-000002',
+      type: ClientType.INDIVIDUAL,
+      kyc_status: KycStatus.UNDER_REVIEW,
+      kyc_reviewed_by: null,
+      kyc_reviewed_at: null,
+      kyc_notes: null,
+      branch_id: gomaBranchId,
       created_by: adminId,
     });
     await clientRepo.save(c2);
-    console.log('  created client: CLT-000002 John Otieno (PENDING)');
+
+    await profileRepo.save(
+      profileRepo.create({
+        client_id: c2Id,
+        first_name: 'Gabriel',
+        middle_name: 'Paluku',
+        last_name: 'Mastaki',
+        date_of_birth: new Date('1988-11-03'),
+        gender: Gender.MALE,
+        nationality: 'Congolais',
+        marital_status: MaritalStatus.SINGLE,
+        profession: 'Enseignant',
+        province: 'Nord-Kivu',
+        municipality: 'Goma',
+        neighborhood: 'Katindo',
+        street: 'Avenue Rutshuru',
+        plot_number: '27B',
+        phone: '+243820000002',
+        id_type: IdType.NATIONAL_ID,
+        id_number: 'NK-NID-005678',
+        is_minor: false,
+        responsible_adult_name: null,
+        responsible_adult_id: null,
+      }),
+    );
+
+    await clientDocRepo.save(
+      clientDocRepo.create({
+        id: randomUUID(),
+        client_id: c2Id,
+        document_type: ClientDocumentType.ID_DOCUMENT,
+        file_name: 'gabriel-id.jpg',
+        file_url: 'uploads/clients/CL-000002/gabriel-id.jpg',
+        status: DocumentStatus.PENDING,
+        rejection_reason: null,
+        uploaded_by: adminId,
+        reviewed_by: null,
+        reviewed_at: null,
+      }),
+    );
+
+    console.log(
+      '  created client: CL-000002 Gabriel Paluku Mastaki (INDIVIDUAL, UNDER_REVIEW)',
+    );
   } else {
-    console.log('  skip client: CLT-000002 (already exists)');
+    console.log('  skip client: CL-000002 (already exists)');
   }
 
-  // --- Client 3: minor with guardian ---
-  if (!(await clientExists('CLT-000003'))) {
-    const guardian = guardianRepo.create({
-      id: randomUUID(),
-      first_name: 'Mary', last_name: 'Kamau',
-      relationship: GuardianRelationship.PARENT,
-      phone: '+254722000003',
-      email: 'mary.kamau@example.com',
-      id_type: IdType.NATIONAL_ID, id_number: 'KE-NID-009999',
-      id_expiry_date: new Date('2029-12-31'),
-    });
-    await guardianRepo.save(guardian);
-
-    const ind3 = indivRepo.create({
-      id: randomUUID(),
-      first_name: 'Tom', last_name: 'Kamau',
-      date_of_birth: new Date('2012-03-01'),
-      gender: Gender.MALE,
-      nationality: 'Kenyan',
-      phone: '+254722000003',
-      address_line1: '5 Moi Avenue', city: 'Kisumu', country: 'Kenya',
-      id_type: IdType.NATIONAL_ID, id_number: 'KE-NID-MINOR001',
-      id_expiry_date: new Date('2027-03-01'),
-      is_minor: true,
-    });
-    await indivRepo.save(ind3);
+  // -------------------------------------------------------------------------
+  // Client 3 — Furaha Vivalya (minor, KYC PENDING) + guardian Riziki Vivalya
+  // -------------------------------------------------------------------------
+  if (!(await clientExists('CL-000003'))) {
+    const c3Id = randomUUID();
 
     const c3 = clientRepo.create({
-      id: randomUUID(),
-      client_number: 'CLT-000003',
-      client_type: ClientType.INDIVIDUAL,
-      status: ClientStatus.ACTIVE,
+      id: c3Id,
+      client_number: 'CL-000003',
+      type: ClientType.INDIVIDUAL,
       kyc_status: KycStatus.PENDING,
-      individual_details: ind3,
-      guardian,
-      representatives: [],
+      kyc_reviewed_by: null,
+      kyc_reviewed_at: null,
+      kyc_notes: null,
+      branch_id: gomaBranchId,
       created_by: adminId,
     });
     await clientRepo.save(c3);
-    console.log('  created client: CLT-000003 Tom Kamau (minor, PENDING)');
+
+    await profileRepo.save(
+      profileRepo.create({
+        client_id: c3Id,
+        first_name: 'Furaha',
+        middle_name: null,
+        last_name: 'Vivalya',
+        date_of_birth: new Date('2013-04-22'),
+        gender: Gender.FEMALE,
+        nationality: 'Congolaise',
+        marital_status: MaritalStatus.SINGLE,
+        profession: 'Élève',
+        province: 'Nord-Kivu',
+        municipality: 'Butembo',
+        neighborhood: 'Kimemi',
+        street: 'Avenue de la Paix',
+        plot_number: '5',
+        phone: '+243830000003',
+        id_type: IdType.NATIONAL_ID,
+        id_number: 'NK-NID-MINOR001',
+        is_minor: true,
+        responsible_adult_name: 'Riziki Vivalya Kasereka',
+        responsible_adult_id: 'NK-NID-009321',
+      }),
+    );
+
+    const guardian = guardianRepo.create({
+      client_id: c3Id,
+      first_name: 'Riziki',
+      middle_name: 'Vivalya',
+      last_name: 'Kasereka',
+      id_document_ref: 'NK-NID-009321',
+    });
+    await guardianRepo.save(guardian);
+
+    await guardianDocRepo.save(
+      guardianDocRepo.create({
+        id: randomUUID(),
+        guardian_id: guardian.guardian_id,
+        document_type: GuardianDocumentType.ID_DOCUMENT,
+        file_name: 'riziki-id.jpg',
+        file_url: 'uploads/guardians/riziki-id.jpg',
+        status: DocumentStatus.PENDING,
+        rejection_reason: null,
+        uploaded_by: adminId,
+        reviewed_by: null,
+        reviewed_at: null,
+      }),
+    );
+
+    console.log(
+      '  created client: CL-000003 Furaha Vivalya (minor, PENDING) + guardian Riziki Vivalya Kasereka',
+    );
   } else {
-    console.log('  skip client: CLT-000003 (already exists)');
+    console.log('  skip client: CL-000003 (already exists)');
   }
 
-  // --- Client 4: business client ---
-  if (!(await clientExists('CLT-000004'))) {
-    const biz = bizRepo.create({
-      id: randomUUID(),
-      company_name: 'Savannah Trading Co. Ltd',
-      registration_number: 'KE-BIZ-00123',
-      tax_id: 'P051234567A',
-      business_type: 'Retail',
-      phone: '+254733000004',
-      email: 'info@savannah-trading.co.ke',
-      address_line1: '20 Industrial Area', city: 'Nairobi', country: 'Kenya',
-      signature_policy: SignaturePolicy.DUAL,
-    });
-    await bizRepo.save(biz);
-
-    const rep1 = repRepo.create({
-      id: randomUUID(),
-      first_name: 'David', last_name: 'Njoroge',
-      role: 'Director',
-      phone: '+254744000041',
-      email: 'david@savannah-trading.co.ke',
-      id_type: IdType.PASSPORT, id_number: 'KE-PP-ABC001',
-      id_expiry_date: new Date('2031-06-30'),
-      is_primary_signatory: true,
-    });
-
-    const rep2 = repRepo.create({
-      id: randomUUID(),
-      first_name: 'Esther', last_name: 'Wanjiku',
-      role: 'Company Secretary',
-      phone: '+254744000042',
-      id_type: IdType.NATIONAL_ID, id_number: 'KE-NID-REP002',
-      id_expiry_date: new Date('2029-09-15'),
-      is_primary_signatory: true,
-    });
+  // -------------------------------------------------------------------------
+  // Client 4 — Coopérative Agricole Virunga SARL (BUSINESS, PENDING)
+  // -------------------------------------------------------------------------
+  if (!(await clientExists('CL-000004'))) {
+    const c4Id = randomUUID();
 
     const c4 = clientRepo.create({
-      id: randomUUID(),
-      client_number: 'CLT-000004',
-      client_type: ClientType.BUSINESS,
-      status: ClientStatus.ACTIVE,
+      id: c4Id,
+      client_number: 'CL-000004',
+      type: ClientType.BUSINESS,
       kyc_status: KycStatus.PENDING,
-      business_details: biz,
-      representatives: [],
+      kyc_reviewed_by: null,
+      kyc_reviewed_at: null,
+      kyc_notes: null,
+      branch_id: gomaBranchId,
       created_by: adminId,
     });
     await clientRepo.save(c4);
 
-    rep1.client_id = c4.id;
-    rep2.client_id = c4.id;
-    await repRepo.save([rep1, rep2]);
+    await bizRepo.save(
+      bizRepo.create({
+        client_id: c4Id,
+        company_name: 'Coopérative Agricole Virunga SARL',
+        mandatory_signatories: 2,
+        optional_signatories: 0,
+      }),
+    );
 
-    await docRepo.save(docRepo.create({
-      id: randomUUID(),
-      document_type: DocumentType.REGISTRATION_DOC,
-      file_path: 'client/savannah-reg-doc.pdf',
-      file_name: 'savannah-reg-doc.pdf',
-      original_name: 'certificate_of_incorporation.pdf',
-      mime_type: 'application/pdf',
-      file_size_bytes: 512000,
-      owner_type: DocumentOwnerType.CLIENT,
-      owner_id: c4.id,
-      uploaded_by: adminId,
-      is_verified: false,
-    }));
+    // Representative 1 — Directeur Général
+    await repRepo.save(
+      repRepo.create({
+        client_id: c4Id,
+        first_name: 'Célestin',
+        middle_name: 'Sivulyangwa',
+        last_name: 'Mbavumoja',
+        gender: Gender.MALE,
+        date_of_birth: new Date('1975-09-10'),
+        place_of_birth: 'Goma',
+        province_of_origin: 'Nord-Kivu',
+        marital_status: MaritalStatus.MARRIED,
+        profession: 'Agronome',
+        id_type: IdType.PASSPORT,
+        id_number: 'CD-PP-NK00123',
+        province: 'Nord-Kivu',
+        municipality: 'Goma',
+        neighborhood: 'Ndosho',
+        street: 'Avenue du Lac',
+        plot_number: '3',
+        phone: '+243840000041',
+        email: 'celestin.mbavumoja@virunga-coop.cd',
+        signatory_type: SignatoryType.MANDATORY,
+        role: 'Directeur Général',
+      }),
+    );
 
-    console.log('  created client: CLT-000004 Savannah Trading Co. Ltd (BUSINESS, PENDING)');
+    // Representative 2 — Directrice Financière
+    await repRepo.save(
+      repRepo.create({
+        client_id: c4Id,
+        first_name: 'Solange',
+        middle_name: 'Mapendo',
+        last_name: 'Kageuka',
+        gender: Gender.FEMALE,
+        date_of_birth: new Date('1982-03-25'),
+        place_of_birth: 'Butembo',
+        province_of_origin: 'Nord-Kivu',
+        marital_status: MaritalStatus.MARRIED,
+        profession: 'Comptable',
+        id_type: IdType.NATIONAL_ID,
+        id_number: 'NK-NID-REP002',
+        province: 'Nord-Kivu',
+        municipality: 'Goma',
+        neighborhood: 'Birere',
+        street: 'Avenue Nyiragongo',
+        plot_number: '11',
+        phone: '+243840000042',
+        email: 'solange.kageuka@virunga-coop.cd',
+        signatory_type: SignatoryType.MANDATORY,
+        role: 'Directrice Financière',
+      }),
+    );
+
+    await clientDocRepo.save(
+      clientDocRepo.create({
+        id: randomUUID(),
+        client_id: c4Id,
+        document_type: ClientDocumentType.REGISTRATION_DOC,
+        file_name: 'virunga-coop-statuts.pdf',
+        file_url: 'uploads/clients/CL-000004/virunga-coop-statuts.pdf',
+        status: DocumentStatus.PENDING,
+        rejection_reason: null,
+        uploaded_by: adminId,
+        reviewed_by: null,
+        reviewed_at: null,
+      }),
+    );
+
+    console.log(
+      '  created client: CL-000004 Coopérative Agricole Virunga SARL (BUSINESS, PENDING)',
+    );
   } else {
-    console.log('  skip client: CLT-000004 (already exists)');
+    console.log('  skip client: CL-000004 (already exists)');
   }
 
   await ds.destroy();

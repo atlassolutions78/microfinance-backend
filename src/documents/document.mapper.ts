@@ -1,41 +1,104 @@
-import { DocumentEntity } from './document.entity';
+import {
+  ClientDocumentEntity,
+  RepresentativeDocumentEntity,
+  GuardianDocumentEntity,
+} from './document.entity';
 import { DocumentModel } from './document.model';
 
 export class DocumentMapper {
-  static toDomain(entity: DocumentEntity): DocumentModel {
+  static fromClientEntity(entity: ClientDocumentEntity): DocumentModel {
     return new DocumentModel({
       id: entity.id,
+      ownerType: 'CLIENT',
+      ownerId: entity.client_id,
       documentType: entity.document_type,
-      filePath: entity.file_path,
       fileName: entity.file_name,
-      originalName: entity.original_name,
-      mimeType: entity.mime_type,
-      fileSizeBytes: entity.file_size_bytes,
-      ownerType: entity.owner_type,
-      ownerId: entity.owner_id,
+      fileUrl: entity.file_url,
+      status: entity.status,
+      rejectionReason: entity.rejection_reason,
       uploadedBy: entity.uploaded_by,
+      reviewedBy: entity.reviewed_by,
+      reviewedAt: entity.reviewed_at,
       uploadedAt: entity.uploaded_at,
-      isVerified: entity.is_verified,
-      verifiedBy: entity.verified_by ?? undefined,
-      verifiedAt: entity.verified_at ?? undefined,
     });
   }
 
-  static toEntity(model: DocumentModel): DocumentEntity {
-    const entity = new DocumentEntity();
+  static fromRepresentativeEntity(entity: RepresentativeDocumentEntity): DocumentModel {
+    return new DocumentModel({
+      id: entity.id,
+      ownerType: 'REPRESENTATIVE',
+      ownerId: entity.representative_id,
+      documentType: entity.document_type,
+      fileName: entity.file_name,
+      fileUrl: entity.file_url,
+      status: entity.status,
+      rejectionReason: entity.rejection_reason,
+      uploadedBy: entity.uploaded_by,
+      reviewedBy: entity.reviewed_by,
+      reviewedAt: entity.reviewed_at,
+      uploadedAt: entity.uploaded_at,
+    });
+  }
+
+  static fromGuardianEntity(entity: GuardianDocumentEntity): DocumentModel {
+    return new DocumentModel({
+      id: entity.id,
+      ownerType: 'GUARDIAN',
+      ownerId: entity.guardian_id,
+      documentType: entity.document_type,
+      fileName: entity.file_name,
+      fileUrl: entity.file_url,
+      status: entity.status,
+      rejectionReason: entity.rejection_reason,
+      uploadedBy: entity.uploaded_by,
+      reviewedBy: entity.reviewed_by,
+      reviewedAt: entity.reviewed_at,
+      uploadedAt: entity.uploaded_at,
+    });
+  }
+
+  static toClientEntity(model: DocumentModel): ClientDocumentEntity {
+    const entity = new ClientDocumentEntity();
     entity.id = model.id;
-    entity.document_type = model.documentType;
-    entity.file_path = model.filePath;
+    entity.client_id = model.ownerId;
+    entity.document_type = model.documentType as any;
     entity.file_name = model.fileName;
-    entity.original_name = model.originalName;
-    entity.mime_type = model.mimeType;
-    entity.file_size_bytes = model.fileSizeBytes;
-    entity.owner_type = model.ownerType;
-    entity.owner_id = model.ownerId;
+    entity.file_url = model.fileUrl;
+    entity.status = model.status;
+    entity.rejection_reason = model.rejectionReason;
     entity.uploaded_by = model.uploadedBy;
-    entity.is_verified = model.isVerified;
-    entity.verified_by = model.verifiedBy ?? null;
-    entity.verified_at = model.verifiedAt ?? null;
+    entity.reviewed_by = model.reviewedBy;
+    entity.reviewed_at = model.reviewedAt;
+    return entity;
+  }
+
+  static toRepresentativeEntity(model: DocumentModel): RepresentativeDocumentEntity {
+    const entity = new RepresentativeDocumentEntity();
+    entity.id = model.id;
+    entity.representative_id = model.ownerId;
+    entity.document_type = model.documentType as any;
+    entity.file_name = model.fileName;
+    entity.file_url = model.fileUrl;
+    entity.status = model.status;
+    entity.rejection_reason = model.rejectionReason;
+    entity.uploaded_by = model.uploadedBy;
+    entity.reviewed_by = model.reviewedBy;
+    entity.reviewed_at = model.reviewedAt;
+    return entity;
+  }
+
+  static toGuardianEntity(model: DocumentModel): GuardianDocumentEntity {
+    const entity = new GuardianDocumentEntity();
+    entity.id = model.id;
+    entity.guardian_id = model.ownerId;
+    entity.document_type = model.documentType as any;
+    entity.file_name = model.fileName;
+    entity.file_url = model.fileUrl;
+    entity.status = model.status;
+    entity.rejection_reason = model.rejectionReason;
+    entity.uploaded_by = model.uploadedBy;
+    entity.reviewed_by = model.reviewedBy;
+    entity.reviewed_at = model.reviewedAt;
     return entity;
   }
 }

@@ -1,64 +1,83 @@
-import { DocumentType, DocumentOwnerType } from './document.enums';
+import {
+  ClientDocumentType,
+  RepresentativeDocumentType,
+  GuardianDocumentType,
+  DocumentStatus,
+} from './document.enums';
+
+export type AnyDocumentType =
+  | ClientDocumentType
+  | RepresentativeDocumentType
+  | GuardianDocumentType;
+
+export type DocumentOwnerType = 'CLIENT' | 'REPRESENTATIVE' | 'GUARDIAN';
 
 export interface DocumentModelProps {
   id: string;
-  documentType: DocumentType;
-  filePath: string;
-  fileName: string;
-  originalName: string;
-  mimeType: string;
-  fileSizeBytes: number;
   ownerType: DocumentOwnerType;
   ownerId: string;
+  documentType: AnyDocumentType;
+  fileName: string;
+  fileUrl: string;
+  status: DocumentStatus;
+  rejectionReason: string | null;
   uploadedBy: string;
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
   uploadedAt: Date;
-  isVerified: boolean;
-  verifiedBy?: string;
-  verifiedAt?: Date;
 }
 
 /**
- * Document domain model.
+ * Document domain model — shared across all three document tables.
  * No NestJS, no TypeORM — pure TypeScript.
  */
 export class DocumentModel {
   readonly id: string;
-  readonly documentType: DocumentType;
-  readonly filePath: string;
-  readonly fileName: string;
-  readonly originalName: string;
-  readonly mimeType: string;
-  readonly fileSizeBytes: number;
   readonly ownerType: DocumentOwnerType;
   readonly ownerId: string;
+  readonly documentType: AnyDocumentType;
+  readonly fileName: string;
+  readonly fileUrl: string;
   readonly uploadedBy: string;
   readonly uploadedAt: Date;
 
-  isVerified: boolean;
-  verifiedBy?: string;
-  verifiedAt?: Date;
+  status: DocumentStatus;
+  rejectionReason: string | null;
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
 
   constructor(props: DocumentModelProps) {
     this.id = props.id;
-    this.documentType = props.documentType;
-    this.filePath = props.filePath;
-    this.fileName = props.fileName;
-    this.originalName = props.originalName;
-    this.mimeType = props.mimeType;
-    this.fileSizeBytes = props.fileSizeBytes;
     this.ownerType = props.ownerType;
     this.ownerId = props.ownerId;
+    this.documentType = props.documentType;
+    this.fileName = props.fileName;
+    this.fileUrl = props.fileUrl;
+    this.status = props.status;
+    this.rejectionReason = props.rejectionReason;
     this.uploadedBy = props.uploadedBy;
+    this.reviewedBy = props.reviewedBy;
+    this.reviewedAt = props.reviewedAt;
     this.uploadedAt = props.uploadedAt;
-    this.isVerified = props.isVerified;
-    this.verifiedBy = props.verifiedBy;
-    this.verifiedAt = props.verifiedAt;
   }
 
-  verify(officerId: string): void {
-    if (this.isVerified) throw new Error('Document is already verified.');
-    this.isVerified = true;
-    this.verifiedBy = officerId;
-    this.verifiedAt = new Date();
+  accept(officerId: string): void {
+    if (this.status !== DocumentStatus.PENDING) {
+      throw new Error(`Cannot accept a document in status: ${this.status}`);
+    }
+    this.status = DocumentStatus.ACCEPTED;
+    this.reviewedBy = officerId;
+    this.reviewedAt = new Date();
+    this.rejectionReason = null;
+  }
+
+  reject(officerId: string, reason: string): void {
+    if (this.status !== DocumentStatus.PENDING) {
+      throw new Error(`Cannot reject a document in status: ${this.status}`);
+    }
+    this.status = DocumentStatus.REJECTED;
+    this.reviewedBy = officerId;
+    this.reviewedAt = new Date();
+    this.rejectionReason = reason;
   }
 }
