@@ -1,0 +1,24 @@
+export enum ClientDocumentType {
+  PASSPORT_PHOTO = 'PASSPORT_PHOTO',
+  ID_DOCUMENT = 'ID_DOCUMENT',
+  REGISTRATION_DOC = 'REGISTRATION_DOC',
+  OPENING_LETTER = 'OPENING_LETTER',
+  BIOMETRIC = 'BIOMETRIC',
+}
+
+export enum RepresentativeDocumentType {
+  PASSPORT_PHOTO = 'PASSPORT_PHOTO',
+  ID_DOCUMENT = 'ID_DOCUMENT',
+  REPRESENTATIVE_ID = 'REPRESENTATIVE_ID',
+}
+
+export enum GuardianDocumentType {
+  PASSPORT_PHOTO = 'PASSPORT_PHOTO',
+  ID_DOCUMENT = 'ID_DOCUMENT',
+}
+
+export enum DocumentStatus {
+  PENDING = 'PENDING',
+  ACCEPTED = 'ACCEPTED',
+  REJECTED = 'REJECTED',
+}

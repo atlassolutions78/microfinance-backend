@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { LoanService } from './loan.service';
 import { CreateLoanDto, ApproveLoanDto, RejectLoanDto } from './loan.dto';
 
@@ -6,6 +14,8 @@ import { CreateLoanDto, ApproveLoanDto, RejectLoanDto } from './loan.dto';
  * HTTP layer only — parse the request, call the service, return the result.
  * No business logic lives here.
  */
+@ApiTags('Loans')
+@ApiBearerAuth()
 @Controller('loans')
 export class LoanController {
   constructor(private readonly loanService: LoanService) {}
@@ -16,18 +26,12 @@ export class LoanController {
   }
 
   @Post(':id/approve')
-  approve(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: ApproveLoanDto,
-  ) {
+  approve(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ApproveLoanDto) {
     return this.loanService.approve(id, dto);
   }
 
   @Post(':id/reject')
-  reject(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: RejectLoanDto,
-  ) {
+  reject(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RejectLoanDto) {
     return this.loanService.reject(id, dto);
   }
 
