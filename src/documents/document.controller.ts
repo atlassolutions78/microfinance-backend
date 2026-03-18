@@ -37,7 +37,7 @@ export class DocumentController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
     UserRole.ADMIN,
   )
   uploadForClient(
@@ -51,7 +51,7 @@ export class DocumentController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
     UserRole.ADMIN,
   )
   uploadForRepresentative(
@@ -65,7 +65,7 @@ export class DocumentController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
     UserRole.ADMIN,
   )
   uploadForGuardian(
@@ -78,7 +78,12 @@ export class DocumentController {
   // --- Review ---
 
   @Patch(':ownerType/:id/accept')
-  @Roles(UserRole.LOAN_OFFICER, UserRole.MANAGER, UserRole.ADMIN)
+  @Roles(
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
+    UserRole.ADMIN,
+  )
   accept(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('ownerType') ownerType: DocumentOwnerType,
@@ -88,7 +93,12 @@ export class DocumentController {
   }
 
   @Patch(':ownerType/:id/reject')
-  @Roles(UserRole.LOAN_OFFICER, UserRole.MANAGER, UserRole.ADMIN)
+  @Roles(
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
+    UserRole.ADMIN,
+  )
   reject(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('ownerType') ownerType: DocumentOwnerType,
@@ -104,7 +114,8 @@ export class DocumentController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
     UserRole.ADMIN,
   )
   findByClient(@Param('clientId', ParseUUIDPipe) clientId: string) {
@@ -115,7 +126,8 @@ export class DocumentController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
     UserRole.ADMIN,
   )
   findByRepresentative(
@@ -128,7 +140,8 @@ export class DocumentController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
     UserRole.ADMIN,
   )
   findByGuardian(@Param('guardianId', ParseUUIDPipe) guardianId: string) {

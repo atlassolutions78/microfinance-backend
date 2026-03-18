@@ -9,8 +9,15 @@
 |---|---|---|
 | id | uuid PK | |
 | name | text | |
+| code | text unique | e.g. `HQ`, `KGL01`, `HUY01` |
+| type | enum | `HEAD` `NORMAL` |
 | address | text | |
+| phone | text | nullable |
+| is_active | boolean | default true |
+| created_by | uuid FK → users | |
+| updated_by | uuid FK → users | nullable |
 | created_at | timestamp | |
+| updated_at | timestamp | |
 
 #### `users`
 | Column | Type | Notes |
@@ -22,7 +29,7 @@
 | last_name | text | |
 | email | text unique | |
 | password_hash | text | |
-| role | enum | `ADMIN` `MANAGER` `LOAN_OFFICER` `TELLER` |
+| role | enum | `ADMIN` `HQ_MANAGER` `BRANCH_MANAGER` `LOAN_OFFICER` `TELLER` |
 | is_active | boolean | |
 | created_at | timestamp | |
 | updated_at | timestamp | |
@@ -171,6 +178,7 @@
 | id | uuid PK | |
 | account_number | text unique | |
 | client_id | uuid FK → clients | |
+| branch_id | uuid FK → branches | inherited from client at account opening |
 | type | enum | `SAVINGS` `CHECKING` `BUSINESS` |
 | currency | enum | `USD` `FC` |
 | balance | numeric(18,4) | |
@@ -184,6 +192,7 @@
 |---|---|---|
 | id | uuid PK | |
 | account_id | uuid FK → accounts | |
+| branch_id | uuid FK → branches | inherited from account at transaction time |
 | type | enum | `DEPOSIT` `WITHDRAWAL` `TRANSFER_IN` `TRANSFER_OUT` `LOAN_DISBURSEMENT` `LOAN_REPAYMENT` `FEE` `PENALTY` |
 | amount | numeric(18,4) | |
 | currency | enum | `USD` `FC` |
@@ -247,6 +256,7 @@
 |---|---|---|
 | id | uuid PK | |
 | loan_id | uuid FK → loans | |
+| branch_id | uuid FK → branches | inherited from loan at repayment time |
 | transaction_id | uuid FK → transactions | links to the account debit |
 | amount | numeric(18,4) | |
 | payment_date | date | |
@@ -261,16 +271,20 @@
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
-| code | text unique | e.g. `1001` |
+| branch_id | uuid FK → branches | |
+| code | text | e.g. `1001` — unique per branch, not globally |
 | name | text | e.g. `Cash - USD` |
 | type | enum | `ASSET` `LIABILITY` `INCOME` `EXPENSE` |
 | currency | text | `USD` or `FC` |
 | balance | numeric(18,4) | running balance |
 
+Unique constraint: `(code, branch_id)`
+
 #### `journal_entries`
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | |
+| branch_id | uuid FK → branches | branch where the operation occurred |
 | reference | text unique | |
 | description | text | |
 | operation_type | enum | `DEPOSIT` `WITHDRAWAL` `LOAN_DISBURSEMENT` `LOAN_REPAYMENT` `FEE_PENALTY` `TRANSFER` |
@@ -293,7 +307,12 @@
 ```
 branches ──────────────< users
 branches ──────────────< clients
+branches ──────────────< accounts
+branches ──────────────< transactions
 branches ──────────────< loans
+branches ──────────────< repayments
+branches ──────────────< chart_of_accounts
+branches ──────────────< journal_entries
 
 users ──────────────────< clients (created_by)
 users ──────────────────< clients (kyc_reviewed_by)
