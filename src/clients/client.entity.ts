@@ -15,6 +15,7 @@ import {
   Gender,
   IdType,
   MaritalStatus,
+  OrganizationType,
   SignatoryType,
 } from './client.enums';
 
@@ -160,8 +161,8 @@ export class MinorGuardianEntity {
 
 // ---------------------------------------------------------------------------
 
-@Entity('business_profiles')
-export class BusinessProfileEntity {
+@Entity('organization_profiles')
+export class OrganizationProfileEntity {
   @PrimaryColumn({ name: 'client_id', type: 'uuid' })
   client_id: string;
 
@@ -169,8 +170,14 @@ export class BusinessProfileEntity {
   @JoinColumn({ name: 'client_id' })
   client: ClientEntity;
 
-  @Column({ name: 'company_name', type: 'text' })
-  company_name: string;
+  @Column({ name: 'organization_type', type: 'enum', enum: OrganizationType })
+  organization_type: OrganizationType;
+
+  @Column({ name: 'organization_type_other', type: 'text', nullable: true })
+  organization_type_other: string | null;
+
+  @Column({ name: 'organization_name', type: 'text' })
+  organization_name: string;
 
   @Column({ name: 'mandatory_signatories', type: 'int' })
   mandatory_signatories: number;

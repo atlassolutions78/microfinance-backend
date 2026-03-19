@@ -24,7 +24,8 @@ export class CreateAllTables1773771287585 implements MigrationInterface {
         await queryRunner.query(`CREATE TYPE "public"."individual_profiles_id_type_enum" AS ENUM('NATIONAL_ID', 'PASSPORT', 'CEPGL_CARD')`);
         await queryRunner.query(`CREATE TABLE "individual_profiles" ("client_id" uuid NOT NULL, "first_name" text NOT NULL, "middle_name" text, "last_name" text NOT NULL, "date_of_birth" date NOT NULL, "gender" "public"."individual_profiles_gender_enum" NOT NULL, "nationality" text NOT NULL, "marital_status" "public"."individual_profiles_marital_status_enum" NOT NULL, "profession" text NOT NULL, "province" text NOT NULL, "municipality" text NOT NULL, "neighborhood" text NOT NULL, "street" text NOT NULL, "plot_number" text NOT NULL, "phone" text NOT NULL, "id_type" "public"."individual_profiles_id_type_enum" NOT NULL, "id_number" text NOT NULL, "is_minor" boolean NOT NULL DEFAULT false, "responsible_adult_name" text, "responsible_adult_id" text, CONSTRAINT "PK_fdef233c45023bd51f3002e1835" PRIMARY KEY ("client_id"))`);
         await queryRunner.query(`CREATE TABLE "minor_guardians" ("guardian_id" uuid NOT NULL DEFAULT uuid_generate_v4(), "client_id" uuid NOT NULL, "first_name" text NOT NULL, "middle_name" text, "last_name" text NOT NULL, "id_document_ref" text NOT NULL, CONSTRAINT "PK_c17b5589a4b33717534f11fbb3e" PRIMARY KEY ("guardian_id"))`);
-        await queryRunner.query(`CREATE TABLE "business_profiles" ("client_id" uuid NOT NULL, "company_name" text NOT NULL, "mandatory_signatories" integer NOT NULL, "optional_signatories" integer NOT NULL, CONSTRAINT "PK_5f629e15d16b419e7d1b8774b45" PRIMARY KEY ("client_id"))`);
+        await queryRunner.query(`CREATE TYPE "public"."organization_profiles_organization_type_enum" AS ENUM('COMPANY', 'SCHOOL', 'NGO', 'GOVERNMENT', 'OTHER')`);
+        await queryRunner.query(`CREATE TABLE "organization_profiles" ("client_id" uuid NOT NULL, "organization_type" "public"."organization_profiles_organization_type_enum" NOT NULL, "organization_type_other" text, "organization_name" text NOT NULL, "mandatory_signatories" integer NOT NULL, "optional_signatories" integer NOT NULL, CONSTRAINT "PK_5f629e15d16b419e7d1b8774b45" PRIMARY KEY ("client_id"))`);
         await queryRunner.query(`CREATE TYPE "public"."representatives_gender_enum" AS ENUM('MALE', 'FEMALE', 'OTHER')`);
         await queryRunner.query(`CREATE TYPE "public"."representatives_marital_status_enum" AS ENUM('SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED')`);
         await queryRunner.query(`CREATE TYPE "public"."representatives_id_type_enum" AS ENUM('NATIONAL_ID', 'PASSPORT', 'CEPGL_CARD')`);
@@ -32,13 +33,13 @@ export class CreateAllTables1773771287585 implements MigrationInterface {
         await queryRunner.query(`CREATE TABLE "representatives" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "client_id" uuid NOT NULL, "first_name" text NOT NULL, "middle_name" text, "last_name" text NOT NULL, "gender" "public"."representatives_gender_enum", "date_of_birth" date, "place_of_birth" text, "province_of_origin" text, "marital_status" "public"."representatives_marital_status_enum", "profession" text, "id_type" "public"."representatives_id_type_enum", "id_number" text NOT NULL, "province" text NOT NULL, "municipality" text NOT NULL, "neighborhood" text NOT NULL, "street" text NOT NULL, "plot_number" text NOT NULL, "phone" text NOT NULL, "email" text, "signatory_type" "public"."representatives_signatory_type_enum" NOT NULL, "role" text, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_80e9af53802d5e0376d1ae8f68c" PRIMARY KEY ("id"))`);
         await queryRunner.query(`ALTER TABLE "individual_profiles" ADD CONSTRAINT "FK_fdef233c45023bd51f3002e1835" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "minor_guardians" ADD CONSTRAINT "FK_86caa63f0db59ff0906b915a72c" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "business_profiles" ADD CONSTRAINT "FK_5f629e15d16b419e7d1b8774b45" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "organization_profiles" ADD CONSTRAINT "FK_5f629e15d16b419e7d1b8774b45" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "representatives" ADD CONSTRAINT "FK_c847630094f3c23fdd22bd30f0b" FOREIGN KEY ("client_id") REFERENCES "clients"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`ALTER TABLE "representatives" DROP CONSTRAINT "FK_c847630094f3c23fdd22bd30f0b"`);
-        await queryRunner.query(`ALTER TABLE "business_profiles" DROP CONSTRAINT "FK_5f629e15d16b419e7d1b8774b45"`);
+        await queryRunner.query(`ALTER TABLE "organization_profiles" DROP CONSTRAINT "FK_5f629e15d16b419e7d1b8774b45"`);
         await queryRunner.query(`ALTER TABLE "minor_guardians" DROP CONSTRAINT "FK_86caa63f0db59ff0906b915a72c"`);
         await queryRunner.query(`ALTER TABLE "individual_profiles" DROP CONSTRAINT "FK_fdef233c45023bd51f3002e1835"`);
         await queryRunner.query(`DROP TABLE "representatives"`);
@@ -46,7 +47,8 @@ export class CreateAllTables1773771287585 implements MigrationInterface {
         await queryRunner.query(`DROP TYPE "public"."representatives_id_type_enum"`);
         await queryRunner.query(`DROP TYPE "public"."representatives_marital_status_enum"`);
         await queryRunner.query(`DROP TYPE "public"."representatives_gender_enum"`);
-        await queryRunner.query(`DROP TABLE "business_profiles"`);
+        await queryRunner.query(`DROP TABLE "organization_profiles"`);
+        await queryRunner.query(`DROP TYPE "public"."organization_profiles_organization_type_enum"`);
         await queryRunner.query(`DROP TABLE "minor_guardians"`);
         await queryRunner.query(`DROP TABLE "individual_profiles"`);
         await queryRunner.query(`DROP TYPE "public"."individual_profiles_id_type_enum"`);

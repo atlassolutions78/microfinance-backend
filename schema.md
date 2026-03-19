@@ -77,11 +77,13 @@
 | responsible_adult_name | text | nullable |
 | responsible_adult_id | text | nullable |
 
-#### `business_profiles` — 1:1 with clients
+#### `organization_profiles` — 1:1 with clients
 | Column | Type | Notes |
 |---|---|---|
 | client_id | uuid PK/FK → clients | |
-| company_name | text | |
+| organization_type | enum | `COMPANY` `SCHOOL` `NGO` `GOVERNMENT` `OTHER` |
+| organization_type_other | text | nullable — required when `organization_type = OTHER` |
+| organization_name | text | |
 | mandatory_signatories | integer | minimum number of mandatory signatories required |
 | optional_signatories | integer | minimum number of optional signatories required (0 = on record only) |
 
@@ -325,7 +327,7 @@ users ──────────────────< client_documents (
 users ──────────────────< journal_entries (created_by)
 
 clients ─────────────── individual_profiles  (1:1)
-clients ─────────────── business_profiles    (1:1)
+clients ─────────────── organization_profiles (1:1)
 clients ──────────────< representatives
 clients ──────────────< client_documents
 clients ──────────────< accounts

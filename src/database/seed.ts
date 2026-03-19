@@ -22,7 +22,7 @@ import { randomUUID } from 'crypto';
 import {
   ClientEntity,
   IndividualProfileEntity,
-  BusinessProfileEntity,
+  OrganizationProfileEntity,
   MinorGuardianEntity,
   RepresentativeEntity,
 } from 'src/clients/client.entity';
@@ -32,6 +32,7 @@ import {
   ClientType,
   KycStatus,
   MaritalStatus,
+  OrganizationType,
   SignatoryType,
 } from 'src/clients/client.enums';
 import {
@@ -61,7 +62,7 @@ const ds = new DataSource({
     UserEntity,
     ClientEntity,
     IndividualProfileEntity,
-    BusinessProfileEntity,
+    OrganizationProfileEntity,
     MinorGuardianEntity,
     RepresentativeEntity,
     ClientDocumentEntity,
@@ -178,7 +179,7 @@ async function seed() {
   // -------------------------------------------------------------------------
   const clientRepo = ds.getRepository(ClientEntity);
   const profileRepo = ds.getRepository(IndividualProfileEntity);
-  const bizRepo = ds.getRepository(BusinessProfileEntity);
+  const orgRepo = ds.getRepository(OrganizationProfileEntity);
   const guardianRepo = ds.getRepository(MinorGuardianEntity);
   const repRepo = ds.getRepository(RepresentativeEntity);
   const clientDocRepo = ds.getRepository(ClientDocumentEntity);
@@ -429,10 +430,12 @@ async function seed() {
     });
     await clientRepo.save(c4);
 
-    await bizRepo.save(
-      bizRepo.create({
+    await orgRepo.save(
+      orgRepo.create({
         client_id: c4Id,
-        company_name: 'Coopérative Agricole Virunga SARL',
+        organization_type: OrganizationType.COMPANY,
+        organization_type_other: null,
+        organization_name: 'Coopérative Agricole Virunga SARL',
         mandatory_signatories: 2,
         optional_signatories: 0,
       }),
