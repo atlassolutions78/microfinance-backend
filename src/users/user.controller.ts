@@ -30,15 +30,15 @@ export class UserController {
     return this.userService.create(dto);
   }
 
-  /** Admin / Manager: list all users */
+  /** Admin / HQ Manager / Branch Manager: list users */
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER, UserRole.BRANCH_MANAGER)
   findAll() {
     return this.userService.findAll();
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER, UserRole.BRANCH_MANAGER)
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.userService.findById(id);
   }

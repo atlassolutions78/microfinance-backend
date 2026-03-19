@@ -46,6 +46,7 @@ import {
 import { UserEntity } from 'src/users/user.entity';
 import { UserRole } from 'src/users/user.enums';
 import { BranchEntity } from 'src/settings/branch.entity';
+import { BranchType } from 'src/settings/branch.enums';
 
 // ---------------------------------------------------------------------------
 
@@ -86,7 +87,11 @@ async function seed() {
     gomaBranch = branchRepo.create({
       id: randomUUID(),
       name: 'Agence de Goma',
+      code: 'GOM01',
+      type: BranchType.NORMAL,
       address: 'Avenue du Commerce, Quartier Himbi, Goma, Nord-Kivu',
+      phone: null,
+      is_active: true,
     });
     await branchRepo.save(gomaBranch);
     console.log('  created branch: Agence de Goma');
@@ -120,7 +125,7 @@ async function seed() {
       middleName: 'Zawadi',
       lastName: 'Lubanga',
       email: 'cecile.lubanga@microfinance.cd',
-      role: UserRole.MANAGER,
+      role: UserRole.BRANCH_MANAGER,
     },
     {
       firstName: 'Patrick',

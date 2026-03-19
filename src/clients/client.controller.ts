@@ -30,7 +30,7 @@ export class ClientController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
     UserRole.ADMIN,
   )
   register(@Body() dto: CreateClientDto, @CurrentUser() user: UserModel) {
@@ -43,7 +43,7 @@ export class ClientController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
     UserRole.ADMIN,
   )
   submitForReview(@Param('id', ParseUUIDPipe) id: string) {
@@ -51,7 +51,12 @@ export class ClientController {
   }
 
   @Post(':id/kyc/approve')
-  @Roles(UserRole.LOAN_OFFICER, UserRole.MANAGER, UserRole.ADMIN)
+  @Roles(
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
+    UserRole.ADMIN,
+  )
   approveKyc(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserModel,
@@ -60,7 +65,12 @@ export class ClientController {
   }
 
   @Post(':id/kyc/reject')
-  @Roles(UserRole.LOAN_OFFICER, UserRole.MANAGER, UserRole.ADMIN)
+  @Roles(
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
+    UserRole.ADMIN,
+  )
   rejectKyc(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RejectKycDto,
@@ -70,7 +80,12 @@ export class ClientController {
   }
 
   @Post(':id/kyc/request-update')
-  @Roles(UserRole.LOAN_OFFICER, UserRole.MANAGER, UserRole.ADMIN)
+  @Roles(
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
+    UserRole.ADMIN,
+  )
   requestUpdate(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RequestUpdateDto,
@@ -85,7 +100,8 @@ export class ClientController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
     UserRole.ADMIN,
   )
   findAll() {
@@ -96,7 +112,8 @@ export class ClientController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
     UserRole.ADMIN,
   )
   findOne(@Param('id', ParseUUIDPipe) id: string) {
