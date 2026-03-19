@@ -3,7 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   ClientEntity,
   IndividualProfileEntity,
-  BusinessProfileEntity,
+  OrganizationProfileEntity,
   MinorGuardianEntity,
   RepresentativeEntity,
 } from './client.entity';
@@ -16,7 +16,7 @@ import { ClientController } from './client.controller';
     TypeOrmModule.forFeature([
       ClientEntity,
       IndividualProfileEntity,
-      BusinessProfileEntity,
+      OrganizationProfileEntity,
       MinorGuardianEntity,
       RepresentativeEntity,
     ]),

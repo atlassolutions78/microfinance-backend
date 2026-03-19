@@ -54,3 +54,11 @@ export enum GuardianRelationship {
   GRANDPARENT = 'GRANDPARENT',
   OTHER = 'OTHER',
 }
+
+export enum OrganizationType {
+  COMPANY = 'COMPANY',
+  SCHOOL = 'SCHOOL',
+  NGO = 'NGO',
+  GOVERNMENT = 'GOVERNMENT',
+  OTHER = 'OTHER',
+}
