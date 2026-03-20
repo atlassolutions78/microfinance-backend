@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { basename } from 'path';
 import { ClientRepository } from './client.repository';
@@ -6,6 +10,7 @@ import { ClientModel } from './client.model';
 import { ClientType, KycStatus } from './client.enums';
 import {
   CreateIndividualClientDto,
+  CreateOrganizationClientDto,
   AttachIndividualDocumentsDto,
   RejectKycDto,
   RequestUpdateDto,
@@ -75,6 +80,46 @@ export class ClientService {
     return client;
   }
 
+  async registerOrganization(
+    dto: CreateOrganizationClientDto,
+    user: UserModel,
+  ): Promise<ClientModel> {
+    if (!user.branchId) {
+      throw new ForbiddenException('User has no assigned branch.');
+    }
+
+    const clientId = randomUUID();
+    const clientNumber = await this.generateClientNumber();
+
+    const client = new ClientModel({
+      id: clientId,
+      clientNumber,
+      type: ClientType.ORGANIZATION,
+      kycStatus: KycStatus.PENDING,
+      branchId: user.branchId,
+      createdBy: user.id,
+      kycReviewedBy: null,
+      kycReviewedAt: null,
+      kycNotes: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const profile = ClientMapper.toOrganizationProfileEntity(clientId, dto);
+
+    const representatives = dto.organizationRepresentatives.map((repDto) =>
+      ClientMapper.toOrgRepresentativeEntity(clientId, repDto, user.id),
+    );
+
+    await this.clientRepository.saveOrganization({
+      client,
+      profile,
+      representatives,
+    });
+
+    return client;
+  }
+
   async attachIndividualDocuments(
     clientId: string,
     dto: AttachIndividualDocumentsDto,
@@ -85,21 +130,36 @@ export class ClientService {
     // Passport photos
     for (const key of dto.passportPhotos) {
       await this.documentService.uploadForClient(
-        { clientId, documentType: ClientDocumentType.PASSPORT_PHOTO, fileUrl: key, fileName: basename(key) },
+        {
+          clientId,
+          documentType: ClientDocumentType.PASSPORT_PHOTO,
+          fileUrl: key,
+          fileName: basename(key),
+        },
         uploadedBy,
       );
     }
 
     // ID document
     await this.documentService.uploadForClient(
-      { clientId, documentType: ClientDocumentType.ID_DOCUMENT, fileUrl: dto.identificationDocument, fileName: basename(dto.identificationDocument) },
+      {
+        clientId,
+        documentType: ClientDocumentType.ID_DOCUMENT,
+        fileUrl: dto.identificationDocument,
+        fileName: basename(dto.identificationDocument),
+      },
       uploadedBy,
     );
 
     // Signature
     if (dto.signatureFile) {
       await this.documentService.uploadForClient(
-        { clientId, documentType: ClientDocumentType.SIGNATURE, fileUrl: dto.signatureFile, fileName: basename(dto.signatureFile) },
+        {
+          clientId,
+          documentType: ClientDocumentType.SIGNATURE,
+          fileUrl: dto.signatureFile,
+          fileName: basename(dto.signatureFile),
+        },
         uploadedBy,
       );
     }
@@ -107,17 +167,28 @@ export class ClientService {
     // Additional documents
     for (const key of dto.additionalDocuments ?? []) {
       await this.documentService.uploadForClient(
-        { clientId, documentType: ClientDocumentType.REGISTRATION_DOC, fileUrl: key, fileName: basename(key) },
+        {
+          clientId,
+          documentType: ClientDocumentType.REGISTRATION_DOC,
+          fileUrl: key,
+          fileName: basename(key),
+        },
         uploadedBy,
       );
     }
 
     // Representative ID document
     if (dto.representativeIdDocument) {
-      const rep = await this.clientRepository.findRepresentativeByClientId(clientId);
+      const rep =
+        await this.clientRepository.findRepresentativeByClientId(clientId);
       if (rep) {
         await this.documentService.uploadForRepresentative(
-          { representativeId: rep.id, documentType: RepresentativeDocumentType.ID_DOCUMENT, fileUrl: dto.representativeIdDocument, fileName: basename(dto.representativeIdDocument) },
+          {
+            representativeId: rep.id,
+            documentType: RepresentativeDocumentType.ID_DOCUMENT,
+            fileUrl: dto.representativeIdDocument,
+            fileName: basename(dto.representativeIdDocument),
+          },
           uploadedBy,
         );
       }
@@ -125,10 +196,16 @@ export class ClientService {
 
     // Guardian ID document
     if (dto.responsiblePersonIdDocument) {
-      const guardian = await this.clientRepository.findGuardianByClientId(clientId);
+      const guardian =
+        await this.clientRepository.findGuardianByClientId(clientId);
       if (guardian) {
         await this.documentService.uploadForGuardian(
-          { guardianId: guardian.guardian_id, documentType: GuardianDocumentType.ID_DOCUMENT, fileUrl: dto.responsiblePersonIdDocument, fileName: basename(dto.responsiblePersonIdDocument) },
+          {
+            guardianId: guardian.guardian_id,
+            documentType: GuardianDocumentType.ID_DOCUMENT,
+            fileUrl: dto.responsiblePersonIdDocument,
+            fileName: basename(dto.responsiblePersonIdDocument),
+          },
           uploadedBy,
         );
       }

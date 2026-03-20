@@ -5,6 +5,8 @@ import {
   ClientEntity,
   IndividualProfileEntity,
   MinorGuardianEntity,
+  OrganizationProfileEntity,
+  OrganizationRepresentativeEntity,
   RepresentativeEntity,
 } from './client.entity';
 import { ClientModel } from './client.model';
@@ -19,6 +21,8 @@ export class ClientRepository {
     private readonly representativeRepo: Repository<RepresentativeEntity>,
     @InjectRepository(MinorGuardianEntity)
     private readonly guardianRepo: Repository<MinorGuardianEntity>,
+    @InjectRepository(OrganizationRepresentativeEntity)
+    private readonly orgRepRepo: Repository<OrganizationRepresentativeEntity>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -44,13 +48,29 @@ export class ClientRepository {
     });
   }
 
+  async saveOrganization(params: {
+    client: ClientModel;
+    profile: OrganizationProfileEntity;
+    representatives: OrganizationRepresentativeEntity[];
+  }): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      await manager.save(ClientEntity, ClientMapper.toEntity(params.client));
+      await manager.save(OrganizationProfileEntity, params.profile);
+      for (const rep of params.representatives) {
+        await manager.save(OrganizationRepresentativeEntity, rep);
+      }
+    });
+  }
+
   async findById(id: string): Promise<ClientModel | null> {
     const entity = await this.repo.findOne({ where: { id } });
     return entity ? ClientMapper.toDomain(entity) : null;
   }
 
   async findByClientNumber(clientNumber: string): Promise<ClientModel | null> {
-    const entity = await this.repo.findOne({ where: { client_number: clientNumber } });
+    const entity = await this.repo.findOne({
+      where: { client_number: clientNumber },
+    });
     return entity ? ClientMapper.toDomain(entity) : null;
   }
 

@@ -4,12 +4,21 @@ import {
   IsDateString,
   IsEmail,
   IsEnum,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MinLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
-import { Gender, IdType, MaritalStatus } from './client.enums';
+import { Type } from 'class-transformer';
+import {
+  Gender,
+  IdType,
+  MaritalStatus,
+  OrganizationType,
+  SignatoryType,
+} from './client.enums';
 
 export class CreateIndividualClientDto {
   // ═══ PERSONAL INFORMATION ═══
@@ -144,6 +153,86 @@ export class AttachIndividualDocumentsDto {
   @IsOptional()
   @IsString()
   responsiblePersonIdDocument?: string;
+}
+
+// ─── Organization ────────────────────────────────────────────────────────────
+
+export class CreateOrgRepresentativeDto {
+  @IsString()
+  @IsNotEmpty()
+  firstName: string;
+
+  @IsOptional()
+  @IsString()
+  middleName?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  lastName: string;
+
+  @IsEnum(IdType)
+  idType: IdType;
+
+  @IsString()
+  @IsNotEmpty()
+  idNumber: string;
+
+  @IsString()
+  @IsNotEmpty()
+  phone: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  province: string;
+
+  @IsString()
+  @IsNotEmpty()
+  municipality: string;
+
+  @IsString()
+  @IsNotEmpty()
+  neighborhood: string;
+
+  @IsString()
+  @IsNotEmpty()
+  street: string;
+
+  @IsString()
+  @IsNotEmpty()
+  plotNumber: string;
+
+  @IsEnum(SignatoryType)
+  signatoryType: SignatoryType;
+
+  @IsString()
+  @IsNotEmpty()
+  role: string;
+}
+
+export class CreateOrganizationClientDto {
+  @IsString()
+  @IsNotEmpty()
+  organizationName: string;
+
+  @IsEnum(OrganizationType)
+  organizationType: OrganizationType;
+
+  @ValidateIf(
+    (o: CreateOrganizationClientDto) =>
+      o.organizationType === OrganizationType.OTHER,
+  )
+  @IsString()
+  @IsNotEmpty()
+  organizationTypeOther?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateOrgRepresentativeDto)
+  organizationRepresentatives: CreateOrgRepresentativeDto[];
 }
 
 export class ApproveKycDto {}

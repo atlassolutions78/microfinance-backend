@@ -441,8 +441,6 @@ async function seed() {
         organization_type: OrganizationType.COMPANY,
         organization_type_other: null,
         organization_name: 'Coopérative Agricole Virunga SARL',
-        mandatory_signatories: 2,
-        optional_signatories: 0,
       }),
     );
 
