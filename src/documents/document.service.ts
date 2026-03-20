@@ -7,6 +7,7 @@ import {
   UploadClientDocumentDto,
   UploadRepresentativeDocumentDto,
   UploadGuardianDocumentDto,
+  UploadOrgRepresentativeDocumentDto,
   RejectDocumentDto,
 } from './document.dto';
 
@@ -80,7 +81,11 @@ export class DocumentService {
     return doc;
   }
 
-  async accept(id: string, ownerType: DocumentOwnerType, officerId: string): Promise<DocumentModel> {
+  async accept(
+    id: string,
+    ownerType: DocumentOwnerType,
+    officerId: string,
+  ): Promise<DocumentModel> {
     const doc = await this.findOrFail(id, ownerType);
     doc.accept(officerId);
     await this.documentRepository.save(doc);
@@ -103,7 +108,9 @@ export class DocumentService {
     return this.documentRepository.findByClient(clientId);
   }
 
-  async findByRepresentative(representativeId: string): Promise<DocumentModel[]> {
+  async findByRepresentative(
+    representativeId: string,
+  ): Promise<DocumentModel[]> {
     return this.documentRepository.findByRepresentative(representativeId);
   }
 
@@ -111,7 +118,38 @@ export class DocumentService {
     return this.documentRepository.findByGuardian(guardianId);
   }
 
-  private async findOrFail(id: string, ownerType: DocumentOwnerType): Promise<DocumentModel> {
+  async uploadForOrgRepresentative(
+    dto: UploadOrgRepresentativeDocumentDto,
+    uploadedBy: string,
+  ): Promise<DocumentModel> {
+    const doc = new DocumentModel({
+      id: randomUUID(),
+      ownerType: 'ORG_REPRESENTATIVE',
+      ownerId: dto.orgRepresentativeId,
+      documentType: dto.documentType,
+      fileName: dto.fileName,
+      fileUrl: dto.fileUrl,
+      status: DocumentStatus.PENDING,
+      rejectionReason: null,
+      uploadedBy,
+      reviewedBy: null,
+      reviewedAt: null,
+      uploadedAt: new Date(),
+    });
+    await this.documentRepository.save(doc);
+    return doc;
+  }
+
+  async findByOrgRepresentative(
+    orgRepresentativeId: string,
+  ): Promise<DocumentModel[]> {
+    return this.documentRepository.findByOrgRepresentative(orgRepresentativeId);
+  }
+
+  private async findOrFail(
+    id: string,
+    ownerType: DocumentOwnerType,
+  ): Promise<DocumentModel> {
     const doc = await this.documentRepository.findById(id, ownerType);
     if (!doc) throw new NotFoundException(`Document ${id} not found.`);
     return doc;

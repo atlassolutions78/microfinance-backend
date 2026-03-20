@@ -2,15 +2,21 @@ import {
   ClientDocumentType,
   RepresentativeDocumentType,
   GuardianDocumentType,
+  OrgRepresentativeDocumentType,
   DocumentStatus,
 } from './document.enums';
 
 export type AnyDocumentType =
   | ClientDocumentType
   | RepresentativeDocumentType
-  | GuardianDocumentType;
+  | GuardianDocumentType
+  | OrgRepresentativeDocumentType;
 
-export type DocumentOwnerType = 'CLIENT' | 'REPRESENTATIVE' | 'GUARDIAN';
+export type DocumentOwnerType =
+  | 'CLIENT'
+  | 'REPRESENTATIVE'
+  | 'GUARDIAN'
+  | 'ORG_REPRESENTATIVE';
 
 export interface DocumentModelProps {
   id: string;
