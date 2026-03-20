@@ -11,6 +11,7 @@ export enum RepresentativeDocumentType {
   PASSPORT_PHOTO = 'PASSPORT_PHOTO',
   ID_DOCUMENT = 'ID_DOCUMENT',
   REPRESENTATIVE_ID = 'REPRESENTATIVE_ID',
+  SIGNATURE = 'SIGNATURE',
 }
 
 export enum GuardianDocumentType {
@@ -21,6 +22,7 @@ export enum GuardianDocumentType {
 export enum OrgRepresentativeDocumentType {
   PASSPORT_PHOTO = 'PASSPORT_PHOTO',
   ID_DOCUMENT = 'ID_DOCUMENT',
+  SIGNATURE = 'SIGNATURE',
 }
 
 export enum DocumentStatus {
