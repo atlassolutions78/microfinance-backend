@@ -123,6 +123,13 @@ async function seed() {
       role: UserRole.ADMIN,
     },
     {
+      firstName: 'Admin',
+      middleName: null,
+      lastName: 'User',
+      email: 'admin@microfinance.cd',
+      role: UserRole.ADMIN,
+    },
+    {
       firstName: 'Cécile',
       middleName: 'Zawadi',
       lastName: 'Lubanga',
