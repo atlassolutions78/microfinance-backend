@@ -93,6 +93,7 @@ async function seed() {
       address: 'Avenue du Commerce, Quartier Himbi, Goma, Nord-Kivu',
       phone: null,
       is_active: true,
+      created_by: '00000000-0000-0000-0000-000000000000',
     });
     await branchRepo.save(gomaBranch);
     console.log('  created branch: Agence de Goma');
