@@ -10,6 +10,7 @@ import { ClientsModule } from './clients/clients.module';
 import { DocumentsModule } from './documents/documents.module';
 import { SettingsModule } from './settings/settings.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { AccountsModule } from './accounts/accounts.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { UploadsModule } from './uploads/uploads.module';
 
     SettingsModule,
     UploadsModule,
+    AccountsModule,
     LoansModule,
     UsersModule,
     AuthModule,
