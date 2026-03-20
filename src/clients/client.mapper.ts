@@ -3,10 +3,16 @@ import {
   ClientEntity,
   IndividualProfileEntity,
   MinorGuardianEntity,
+  OrganizationProfileEntity,
+  OrganizationRepresentativeEntity,
   RepresentativeEntity,
 } from './client.entity';
 import { ClientModel } from './client.model';
-import { CreateIndividualClientDto } from './client.dto';
+import {
+  CreateIndividualClientDto,
+  CreateOrganizationClientDto,
+  CreateOrgRepresentativeDto,
+} from './client.dto';
 
 /**
  * Translates between entities (DB) and domain models / DTOs.
@@ -100,6 +106,50 @@ export class ClientMapper {
     entity.first_name = dto.responsiblePersonFirstName!;
     entity.middle_name = dto.responsiblePersonMiddleName ?? null;
     entity.last_name = dto.responsiblePersonLastName!;
+    return entity;
+  }
+
+  static toOrganizationProfileEntity(
+    clientId: string,
+    dto: CreateOrganizationClientDto,
+  ): OrganizationProfileEntity {
+    const entity = new OrganizationProfileEntity();
+    entity.client_id = clientId;
+    entity.organization_name = dto.organizationName;
+    entity.organization_type = dto.organizationType;
+    entity.organization_type_other = dto.organizationTypeOther ?? null;
+    return entity;
+  }
+
+  static toOrgRepresentativeEntity(
+    clientId: string,
+    dto: CreateOrgRepresentativeDto,
+    createdBy: string,
+  ): OrganizationRepresentativeEntity {
+    const entity = new OrganizationRepresentativeEntity();
+    entity.client_id = clientId;
+    entity.first_name = dto.firstName;
+    entity.middle_name = dto.middleName ?? null;
+    entity.last_name = dto.lastName;
+    entity.id_type = dto.idType;
+    entity.id_number = dto.idNumber;
+    entity.phone = dto.phone;
+    entity.email = dto.email ?? null;
+    entity.province = dto.province;
+    entity.municipality = dto.municipality;
+    entity.neighborhood = dto.neighborhood;
+    entity.street = dto.street;
+    entity.plot_number = dto.plotNumber;
+    entity.signatory_type = dto.signatoryType;
+    entity.role = dto.role;
+    entity.gender = null;
+    entity.date_of_birth = null;
+    entity.place_of_birth = null;
+    entity.province_of_origin = null;
+    entity.marital_status = null;
+    entity.profession = null;
+    entity.created_by = createdBy;
+    entity.updated_by = null;
     return entity;
   }
 }

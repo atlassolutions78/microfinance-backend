@@ -15,6 +15,7 @@ import { ClientService } from './client.service';
 import {
   AttachIndividualDocumentsDto,
   CreateIndividualClientDto,
+  CreateOrganizationClientDto,
   RejectKycDto,
   RequestUpdateDto,
 } from './client.dto';
@@ -46,6 +47,20 @@ export class ClientController {
     @CurrentUser() user: UserModel,
   ) {
     return this.clientService.registerIndividual(dto, user);
+  }
+
+  @Post('organization')
+  @Roles(
+    UserRole.TELLER,
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.ADMIN,
+  )
+  registerOrganization(
+    @Body() dto: CreateOrganizationClientDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.clientService.registerOrganization(dto, user);
   }
 
   @Patch(':id/documents')

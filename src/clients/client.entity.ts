@@ -181,12 +181,6 @@ export class OrganizationProfileEntity {
 
   @Column({ name: 'organization_name', type: 'text' })
   organization_name: string;
-
-  @Column({ name: 'mandatory_signatories', type: 'int' })
-  mandatory_signatories: number;
-
-  @Column({ name: 'optional_signatories', type: 'int' })
-  optional_signatories: number;
 }
 
 // ---------------------------------------------------------------------------
