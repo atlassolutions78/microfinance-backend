@@ -14,6 +14,7 @@ import {
   UploadClientDocumentDto,
   UploadRepresentativeDocumentDto,
   UploadGuardianDocumentDto,
+  UploadOrgRepresentativeDocumentDto,
   RejectDocumentDto,
 } from './document.dto';
 import type { DocumentOwnerType } from './document.model';
@@ -37,7 +38,7 @@ export class DocumentController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
     UserRole.ADMIN,
   )
   uploadForClient(
@@ -51,7 +52,7 @@ export class DocumentController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
     UserRole.ADMIN,
   )
   uploadForRepresentative(
@@ -65,7 +66,7 @@ export class DocumentController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
     UserRole.ADMIN,
   )
   uploadForGuardian(
@@ -75,10 +76,29 @@ export class DocumentController {
     return this.documentService.uploadForGuardian(dto, user.id);
   }
 
+  @Post('org-representative')
+  @Roles(
+    UserRole.TELLER,
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.ADMIN,
+  )
+  uploadForOrgRepresentative(
+    @Body() dto: UploadOrgRepresentativeDocumentDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.documentService.uploadForOrgRepresentative(dto, user.id);
+  }
+
   // --- Review ---
 
   @Patch(':ownerType/:id/accept')
-  @Roles(UserRole.LOAN_OFFICER, UserRole.MANAGER, UserRole.ADMIN)
+  @Roles(
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
+    UserRole.ADMIN,
+  )
   accept(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('ownerType') ownerType: DocumentOwnerType,
@@ -88,7 +108,12 @@ export class DocumentController {
   }
 
   @Patch(':ownerType/:id/reject')
-  @Roles(UserRole.LOAN_OFFICER, UserRole.MANAGER, UserRole.ADMIN)
+  @Roles(
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
+    UserRole.ADMIN,
+  )
   reject(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('ownerType') ownerType: DocumentOwnerType,
@@ -104,7 +129,8 @@ export class DocumentController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
     UserRole.ADMIN,
   )
   findByClient(@Param('clientId', ParseUUIDPipe) clientId: string) {
@@ -115,7 +141,8 @@ export class DocumentController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
     UserRole.ADMIN,
   )
   findByRepresentative(
@@ -128,10 +155,25 @@ export class DocumentController {
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
-    UserRole.MANAGER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
     UserRole.ADMIN,
   )
   findByGuardian(@Param('guardianId', ParseUUIDPipe) guardianId: string) {
     return this.documentService.findByGuardian(guardianId);
+  }
+
+  @Get('org-representative/:orgRepresentativeId')
+  @Roles(
+    UserRole.TELLER,
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
+    UserRole.ADMIN,
+  )
+  findByOrgRepresentative(
+    @Param('orgRepresentativeId', ParseUUIDPipe) orgRepresentativeId: string,
+  ) {
+    return this.documentService.findByOrgRepresentative(orgRepresentativeId);
   }
 }

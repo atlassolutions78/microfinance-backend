@@ -1,6 +1,6 @@
 export enum ClientType {
   INDIVIDUAL = 'INDIVIDUAL',
-  BUSINESS = 'BUSINESS',
+  ORGANIZATION = 'ORGANIZATION',
 }
 
 export enum ClientStatus {
@@ -47,10 +47,10 @@ export enum SignaturePolicy {
   ANY_TWO = 'ANY_TWO', // Any two of the listed signatories
 }
 
-export enum GuardianRelationship {
-  PARENT = 'PARENT',
-  LEGAL_GUARDIAN = 'LEGAL_GUARDIAN',
-  SIBLING = 'SIBLING',
-  GRANDPARENT = 'GRANDPARENT',
+export enum OrganizationType {
+  COMPANY = 'COMPANY',
+  SCHOOL = 'SCHOOL',
+  NGO = 'NGO',
+  GOVERNMENT = 'GOVERNMENT',
   OTHER = 'OTHER',
 }

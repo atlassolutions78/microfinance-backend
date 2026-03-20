@@ -1,31 +1,58 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { basename } from 'path';
 import { ClientRepository } from './client.repository';
 import { ClientModel } from './client.model';
-import { KycStatus } from './client.enums';
-import { CreateClientDto, RejectKycDto, RequestUpdateDto } from './client.dto';
+import { ClientType, KycStatus } from './client.enums';
+import {
+  CreateIndividualClientDto,
+  CreateOrganizationClientDto,
+  AttachIndividualDocumentsDto,
+  RejectKycDto,
+  RequestUpdateDto,
+} from './client.dto';
+import { ClientMapper } from './client.mapper';
+import { UserModel } from '../users/user.model';
+import { DocumentService } from '../documents/document.service';
+import {
+  ClientDocumentType,
+  RepresentativeDocumentType,
+  GuardianDocumentType,
+} from '../documents/document.enums';
 
 @Injectable()
 export class ClientService {
-  constructor(private readonly clientRepository: ClientRepository) {}
+  constructor(
+    private readonly clientRepository: ClientRepository,
+    private readonly documentService: DocumentService,
+  ) {}
 
   // ---------------------------------------------------------------------------
   // Onboarding
   // ---------------------------------------------------------------------------
 
-  async register(
-    dto: CreateClientDto,
-    createdBy: string,
+  async registerIndividual(
+    dto: CreateIndividualClientDto,
+    user: UserModel,
   ): Promise<ClientModel> {
+    if (!user.branchId) {
+      throw new ForbiddenException('User has no assigned branch.');
+    }
+
+    const clientId = randomUUID();
     const clientNumber = await this.generateClientNumber();
 
     const client = new ClientModel({
-      id: randomUUID(),
+      id: clientId,
       clientNumber,
-      type: dto.type,
+      type: ClientType.INDIVIDUAL,
       kycStatus: KycStatus.PENDING,
-      branchId: dto.branchId,
-      createdBy,
+      branchId: user.branchId,
+      createdBy: user.id,
       kycReviewedBy: null,
       kycReviewedAt: null,
       kycNotes: null,
@@ -33,8 +60,156 @@ export class ClientService {
       updatedAt: new Date(),
     });
 
-    await this.clientRepository.save(client);
+    const profile = ClientMapper.toIndividualProfileEntity(clientId, dto);
+
+    const representative = dto.addRepresentative
+      ? ClientMapper.toRepresentativeEntity(clientId, dto, user.id)
+      : undefined;
+
+    const guardian = dto.isMinor
+      ? ClientMapper.toMinorGuardianEntity(clientId, dto)
+      : undefined;
+
+    await this.clientRepository.saveIndividual({
+      client,
+      profile,
+      representative,
+      guardian,
+    });
+
     return client;
+  }
+
+  async registerOrganization(
+    dto: CreateOrganizationClientDto,
+    user: UserModel,
+  ): Promise<ClientModel> {
+    if (!user.branchId) {
+      throw new ForbiddenException('User has no assigned branch.');
+    }
+
+    const clientId = randomUUID();
+    const clientNumber = await this.generateClientNumber();
+
+    const client = new ClientModel({
+      id: clientId,
+      clientNumber,
+      type: ClientType.ORGANIZATION,
+      kycStatus: KycStatus.PENDING,
+      branchId: user.branchId,
+      createdBy: user.id,
+      kycReviewedBy: null,
+      kycReviewedAt: null,
+      kycNotes: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const profile = ClientMapper.toOrganizationProfileEntity(clientId, dto);
+
+    const representatives = dto.organizationRepresentatives.map((repDto) =>
+      ClientMapper.toOrgRepresentativeEntity(clientId, repDto, user.id),
+    );
+
+    await this.clientRepository.saveOrganization({
+      client,
+      profile,
+      representatives,
+    });
+
+    return client;
+  }
+
+  async attachIndividualDocuments(
+    clientId: string,
+    dto: AttachIndividualDocumentsDto,
+    uploadedBy: string,
+  ): Promise<void> {
+    await this.findOrFail(clientId);
+
+    // Passport photos
+    for (const key of dto.passportPhotos) {
+      await this.documentService.uploadForClient(
+        {
+          clientId,
+          documentType: ClientDocumentType.PASSPORT_PHOTO,
+          fileUrl: key,
+          fileName: basename(key),
+        },
+        uploadedBy,
+      );
+    }
+
+    // ID document
+    await this.documentService.uploadForClient(
+      {
+        clientId,
+        documentType: ClientDocumentType.ID_DOCUMENT,
+        fileUrl: dto.identificationDocument,
+        fileName: basename(dto.identificationDocument),
+      },
+      uploadedBy,
+    );
+
+    // Signature
+    if (dto.signatureFile) {
+      await this.documentService.uploadForClient(
+        {
+          clientId,
+          documentType: ClientDocumentType.SIGNATURE,
+          fileUrl: dto.signatureFile,
+          fileName: basename(dto.signatureFile),
+        },
+        uploadedBy,
+      );
+    }
+
+    // Additional documents
+    for (const key of dto.additionalDocuments ?? []) {
+      await this.documentService.uploadForClient(
+        {
+          clientId,
+          documentType: ClientDocumentType.REGISTRATION_DOC,
+          fileUrl: key,
+          fileName: basename(key),
+        },
+        uploadedBy,
+      );
+    }
+
+    // Representative ID document
+    if (dto.representativeIdDocument) {
+      const rep =
+        await this.clientRepository.findRepresentativeByClientId(clientId);
+      if (rep) {
+        await this.documentService.uploadForRepresentative(
+          {
+            representativeId: rep.id,
+            documentType: RepresentativeDocumentType.ID_DOCUMENT,
+            fileUrl: dto.representativeIdDocument,
+            fileName: basename(dto.representativeIdDocument),
+          },
+          uploadedBy,
+        );
+      }
+    }
+
+    // Guardian ID document
+    if (dto.responsiblePersonIdDocument) {
+      const guardian =
+        await this.clientRepository.findGuardianByClientId(clientId);
+      if (guardian) {
+        await this.documentService.uploadForGuardian(
+          {
+            guardianId: guardian.guardian_id,
+            documentType: GuardianDocumentType.ID_DOCUMENT,
+            fileUrl: dto.responsiblePersonIdDocument,
+            fileName: basename(dto.responsiblePersonIdDocument),
+          },
+          uploadedBy,
+        );
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------

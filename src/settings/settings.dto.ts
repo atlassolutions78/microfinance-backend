@@ -1,4 +1,5 @@
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
+import { BranchType } from './branch.enums';
 
 export class CreateBranchDto {
   @IsString()
@@ -7,7 +8,18 @@ export class CreateBranchDto {
 
   @IsString()
   @IsNotEmpty()
+  code: string;
+
+  @IsEnum(BranchType)
+  type: BranchType;
+
+  @IsString()
+  @IsNotEmpty()
   address: string;
+
+  @IsString()
+  @IsOptional()
+  phone?: string;
 }
 
 export class UpdateBranchDto {
@@ -20,4 +32,8 @@ export class UpdateBranchDto {
   @IsNotEmpty()
   @IsOptional()
   address?: string;
+
+  @IsString()
+  @IsOptional()
+  phone?: string;
 }

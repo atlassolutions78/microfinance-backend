@@ -8,7 +8,7 @@
  *   - 1 branch (Agence de Goma)
  *   - 4 system users (one per role) — staff from Goma, Nord-Kivu
  *   - 2 individual clients (one adult, one minor with guardian)
- *   - 1 business client with 2 representatives
+ *   - 1 organization client with 2 representatives
  *   - Sample documents for each client
  */
 
@@ -22,9 +22,9 @@ import { randomUUID } from 'crypto';
 import {
   ClientEntity,
   IndividualProfileEntity,
-  BusinessProfileEntity,
+  OrganizationProfileEntity,
   MinorGuardianEntity,
-  RepresentativeEntity,
+  OrganizationRepresentativeEntity,
 } from 'src/clients/client.entity';
 import {
   Gender,
@@ -32,6 +32,7 @@ import {
   ClientType,
   KycStatus,
   MaritalStatus,
+  OrganizationType,
   SignatoryType,
 } from 'src/clients/client.enums';
 import {
@@ -46,6 +47,7 @@ import {
 import { UserEntity } from 'src/users/user.entity';
 import { UserRole } from 'src/users/user.enums';
 import { BranchEntity } from 'src/settings/branch.entity';
+import { BranchType } from 'src/settings/branch.enums';
 
 // ---------------------------------------------------------------------------
 
@@ -60,9 +62,9 @@ const ds = new DataSource({
     UserEntity,
     ClientEntity,
     IndividualProfileEntity,
-    BusinessProfileEntity,
+    OrganizationProfileEntity,
     MinorGuardianEntity,
-    RepresentativeEntity,
+    OrganizationRepresentativeEntity,
     ClientDocumentEntity,
     GuardianDocumentEntity,
     BranchEntity,
@@ -86,7 +88,11 @@ async function seed() {
     gomaBranch = branchRepo.create({
       id: randomUUID(),
       name: 'Agence de Goma',
+      code: 'GOM01',
+      type: BranchType.NORMAL,
       address: 'Avenue du Commerce, Quartier Himbi, Goma, Nord-Kivu',
+      phone: null,
+      is_active: true,
     });
     await branchRepo.save(gomaBranch);
     console.log('  created branch: Agence de Goma');
@@ -120,7 +126,7 @@ async function seed() {
       middleName: 'Zawadi',
       lastName: 'Lubanga',
       email: 'cecile.lubanga@microfinance.cd',
-      role: UserRole.MANAGER,
+      role: UserRole.BRANCH_MANAGER,
     },
     {
       firstName: 'Patrick',
@@ -173,9 +179,9 @@ async function seed() {
   // -------------------------------------------------------------------------
   const clientRepo = ds.getRepository(ClientEntity);
   const profileRepo = ds.getRepository(IndividualProfileEntity);
-  const bizRepo = ds.getRepository(BusinessProfileEntity);
+  const orgRepo = ds.getRepository(OrganizationProfileEntity);
   const guardianRepo = ds.getRepository(MinorGuardianEntity);
-  const repRepo = ds.getRepository(RepresentativeEntity);
+  const repRepo = ds.getRepository(OrganizationRepresentativeEntity);
   const clientDocRepo = ds.getRepository(ClientDocumentEntity);
   const guardianDocRepo = ds.getRepository(GuardianDocumentEntity);
 
@@ -209,6 +215,8 @@ async function seed() {
         middle_name: 'Amani',
         last_name: 'Kahambu',
         date_of_birth: new Date('1992-06-18'),
+        place_of_birth: 'Goma',
+        province_of_origin: 'Nord-Kivu',
         gender: Gender.FEMALE,
         nationality: 'Congolaise',
         marital_status: MaritalStatus.MARRIED,
@@ -219,11 +227,11 @@ async function seed() {
         street: 'Avenue des Volcans',
         plot_number: '14',
         phone: '+243810000001',
+        email: null,
         id_type: IdType.NATIONAL_ID,
         id_number: 'NK-NID-001234',
+        matriculation_number: null,
         is_minor: false,
-        responsible_adult_name: null,
-        responsible_adult_id: null,
       }),
     );
 
@@ -290,6 +298,8 @@ async function seed() {
         middle_name: 'Paluku',
         last_name: 'Mastaki',
         date_of_birth: new Date('1988-11-03'),
+        place_of_birth: 'Goma',
+        province_of_origin: 'Nord-Kivu',
         gender: Gender.MALE,
         nationality: 'Congolais',
         marital_status: MaritalStatus.SINGLE,
@@ -300,11 +310,11 @@ async function seed() {
         street: 'Avenue Rutshuru',
         plot_number: '27B',
         phone: '+243820000002',
+        email: null,
         id_type: IdType.NATIONAL_ID,
         id_number: 'NK-NID-005678',
+        matriculation_number: null,
         is_minor: false,
-        responsible_adult_name: null,
-        responsible_adult_id: null,
       }),
     );
 
@@ -356,6 +366,8 @@ async function seed() {
         middle_name: null,
         last_name: 'Vivalya',
         date_of_birth: new Date('2013-04-22'),
+        place_of_birth: 'Butembo',
+        province_of_origin: 'Nord-Kivu',
         gender: Gender.FEMALE,
         nationality: 'Congolaise',
         marital_status: MaritalStatus.SINGLE,
@@ -366,11 +378,11 @@ async function seed() {
         street: 'Avenue de la Paix',
         plot_number: '5',
         phone: '+243830000003',
+        email: null,
         id_type: IdType.NATIONAL_ID,
         id_number: 'NK-NID-MINOR001',
+        matriculation_number: null,
         is_minor: true,
-        responsible_adult_name: 'Riziki Vivalya Kasereka',
-        responsible_adult_id: 'NK-NID-009321',
       }),
     );
 
@@ -379,7 +391,6 @@ async function seed() {
       first_name: 'Riziki',
       middle_name: 'Vivalya',
       last_name: 'Kasereka',
-      id_document_ref: 'NK-NID-009321',
     });
     await guardianRepo.save(guardian);
 
@@ -406,7 +417,7 @@ async function seed() {
   }
 
   // -------------------------------------------------------------------------
-  // Client 4 — Coopérative Agricole Virunga SARL (BUSINESS, PENDING)
+  // Client 4 — Coopérative Agricole Virunga SARL (ORGANIZATION, PENDING)
   // -------------------------------------------------------------------------
   if (!(await clientExists('CL-000004'))) {
     const c4Id = randomUUID();
@@ -414,7 +425,7 @@ async function seed() {
     const c4 = clientRepo.create({
       id: c4Id,
       client_number: 'CL-000004',
-      type: ClientType.BUSINESS,
+      type: ClientType.ORGANIZATION,
       kyc_status: KycStatus.PENDING,
       kyc_reviewed_by: null,
       kyc_reviewed_at: null,
@@ -424,12 +435,12 @@ async function seed() {
     });
     await clientRepo.save(c4);
 
-    await bizRepo.save(
-      bizRepo.create({
+    await orgRepo.save(
+      orgRepo.create({
         client_id: c4Id,
-        company_name: 'Coopérative Agricole Virunga SARL',
-        mandatory_signatories: 2,
-        optional_signatories: 0,
+        organization_type: OrganizationType.COMPANY,
+        organization_type_other: null,
+        organization_name: 'Coopérative Agricole Virunga SARL',
       }),
     );
 
@@ -457,6 +468,8 @@ async function seed() {
         email: 'celestin.mbavumoja@virunga-coop.cd',
         signatory_type: SignatoryType.MANDATORY,
         role: 'Directeur Général',
+        created_by: adminId,
+        updated_by: null,
       }),
     );
 
@@ -484,6 +497,8 @@ async function seed() {
         email: 'solange.kageuka@virunga-coop.cd',
         signatory_type: SignatoryType.MANDATORY,
         role: 'Directrice Financière',
+        created_by: adminId,
+        updated_by: null,
       }),
     );
 
@@ -503,7 +518,7 @@ async function seed() {
     );
 
     console.log(
-      '  created client: CL-000004 Coopérative Agricole Virunga SARL (BUSINESS, PENDING)',
+      '  created client: CL-000004 Coopérative Agricole Virunga SARL (ORGANIZATION, PENDING)',
     );
   } else {
     console.log('  skip client: CL-000004 (already exists)');

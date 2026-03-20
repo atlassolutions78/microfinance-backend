@@ -4,6 +4,7 @@ export enum ClientDocumentType {
   REGISTRATION_DOC = 'REGISTRATION_DOC',
   OPENING_LETTER = 'OPENING_LETTER',
   BIOMETRIC = 'BIOMETRIC',
+  SIGNATURE = 'SIGNATURE',
 }
 
 export enum RepresentativeDocumentType {
@@ -13,6 +14,11 @@ export enum RepresentativeDocumentType {
 }
 
 export enum GuardianDocumentType {
+  PASSPORT_PHOTO = 'PASSPORT_PHOTO',
+  ID_DOCUMENT = 'ID_DOCUMENT',
+}
+
+export enum OrgRepresentativeDocumentType {
   PASSPORT_PHOTO = 'PASSPORT_PHOTO',
   ID_DOCUMENT = 'ID_DOCUMENT',
 }

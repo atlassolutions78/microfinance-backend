@@ -4,6 +4,7 @@ import {
   ClientDocumentEntity,
   RepresentativeDocumentEntity,
   GuardianDocumentEntity,
+  OrgRepresentativeDocumentEntity,
 } from './document.entity';
 import { DocumentRepository } from './document.repository';
 import { DocumentService } from './document.service';
@@ -15,6 +16,7 @@ import { DocumentController } from './document.controller';
       ClientDocumentEntity,
       RepresentativeDocumentEntity,
       GuardianDocumentEntity,
+      OrgRepresentativeDocumentEntity,
     ]),
   ],
   controllers: [DocumentController],
