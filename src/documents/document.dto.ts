@@ -3,6 +3,7 @@ import {
   ClientDocumentType,
   RepresentativeDocumentType,
   GuardianDocumentType,
+  OrgRepresentativeDocumentType,
 } from './document.enums';
 
 export class UploadClientDocumentDto {
@@ -39,6 +40,20 @@ export class UploadGuardianDocumentDto {
 
   @IsEnum(GuardianDocumentType)
   documentType: GuardianDocumentType;
+
+  @IsString()
+  fileUrl: string;
+
+  @IsString()
+  fileName: string;
+}
+
+export class UploadOrgRepresentativeDocumentDto {
+  @IsUUID()
+  orgRepresentativeId: string;
+
+  @IsEnum(OrgRepresentativeDocumentType)
+  documentType: OrgRepresentativeDocumentType;
 
   @IsString()
   fileUrl: string;

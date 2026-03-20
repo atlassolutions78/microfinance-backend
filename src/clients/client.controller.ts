@@ -2,14 +2,22 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ClientService } from './client.service';
-import { CreateClientDto, RejectKycDto, RequestUpdateDto } from './client.dto';
+import {
+  AttachIndividualDocumentsDto,
+  CreateIndividualClientDto,
+  RejectKycDto,
+  RequestUpdateDto,
+} from './client.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -26,15 +34,34 @@ export class ClientController {
 
   // --- Onboarding ---
 
-  @Post()
+  @Post('individual')
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
     UserRole.BRANCH_MANAGER,
     UserRole.ADMIN,
   )
-  register(@Body() dto: CreateClientDto, @CurrentUser() user: UserModel) {
-    return this.clientService.register(dto, user.id);
+  registerIndividual(
+    @Body() dto: CreateIndividualClientDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.clientService.registerIndividual(dto, user);
+  }
+
+  @Patch(':id/documents')
+  @HttpCode(HttpStatus.OK)
+  @Roles(
+    UserRole.TELLER,
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.ADMIN,
+  )
+  attachDocuments(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AttachIndividualDocumentsDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.clientService.attachIndividualDocuments(id, dto, user.id);
   }
 
   // --- KYC lifecycle ---

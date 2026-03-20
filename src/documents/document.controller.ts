@@ -14,6 +14,7 @@ import {
   UploadClientDocumentDto,
   UploadRepresentativeDocumentDto,
   UploadGuardianDocumentDto,
+  UploadOrgRepresentativeDocumentDto,
   RejectDocumentDto,
 } from './document.dto';
 import type { DocumentOwnerType } from './document.model';
@@ -73,6 +74,20 @@ export class DocumentController {
     @CurrentUser() user: UserModel,
   ) {
     return this.documentService.uploadForGuardian(dto, user.id);
+  }
+
+  @Post('org-representative')
+  @Roles(
+    UserRole.TELLER,
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.ADMIN,
+  )
+  uploadForOrgRepresentative(
+    @Body() dto: UploadOrgRepresentativeDocumentDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.documentService.uploadForOrgRepresentative(dto, user.id);
   }
 
   // --- Review ---
@@ -146,5 +161,19 @@ export class DocumentController {
   )
   findByGuardian(@Param('guardianId', ParseUUIDPipe) guardianId: string) {
     return this.documentService.findByGuardian(guardianId);
+  }
+
+  @Get('org-representative/:orgRepresentativeId')
+  @Roles(
+    UserRole.TELLER,
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
+    UserRole.ADMIN,
+  )
+  findByOrgRepresentative(
+    @Param('orgRepresentativeId', ParseUUIDPipe) orgRepresentativeId: string,
+  ) {
+    return this.documentService.findByOrgRepresentative(orgRepresentativeId);
   }
 }
