@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddBranchTypeAndRoles1742300000000 implements MigrationInterface {
-  name = 'AddBranchTypeAndRoles1742300000000';
+export class AddBranchTypeAndRoles1773800000000 implements MigrationInterface {
+  name = 'AddBranchTypeAndRoles1773800000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // --- branches: add type, code, phone, is_active ---

@@ -13,12 +13,8 @@ export class UpdateSchema1773925430605 implements MigrationInterface {
     await queryRunner.query(
       `CREATE TABLE "organization_representative_documents" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "org_representative_id" uuid NOT NULL, "document_type" "public"."organization_representative_documents_document_type_enum" NOT NULL, "file_name" text NOT NULL, "file_url" text NOT NULL, "status" "public"."organization_representative_documents_status_enum" NOT NULL DEFAULT 'PENDING', "rejection_reason" text, "uploaded_by" uuid NOT NULL, "reviewed_by" uuid, "reviewed_at" TIMESTAMP WITH TIME ZONE, "uploaded_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_52dbd854ff821b362c934a9a3f8" PRIMARY KEY ("id"))`,
     );
-    await queryRunner.query(
-      `CREATE TYPE "public"."organization_profiles_organization_type_enum" AS ENUM('COMPANY', 'SCHOOL', 'NGO', 'GOVERNMENT', 'OTHER')`,
-    );
-    await queryRunner.query(
-      `CREATE TABLE "organization_profiles" ("client_id" uuid NOT NULL, "organization_type" "public"."organization_profiles_organization_type_enum" NOT NULL, "organization_type_other" text, "organization_name" text NOT NULL, "mandatory_signatories" integer NOT NULL, "optional_signatories" integer NOT NULL, CONSTRAINT "PK_2d92f63ec83b9263e4aaa9c82c1" PRIMARY KEY ("client_id"))`,
-    );
+    // organization_profiles_organization_type_enum and organization_profiles table
+    // are already created by CreateAllTables1773771287585 — skip to avoid duplicate.
     await queryRunner.query(
       `CREATE TYPE "public"."organization_representatives_gender_enum" AS ENUM('MALE', 'FEMALE', 'OTHER')`,
     );
