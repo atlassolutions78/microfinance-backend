@@ -67,9 +67,7 @@ export class CreateAccountsTables1774300000000 implements MigrationInterface {
       `ALTER TABLE "accounts" DROP CONSTRAINT "FK_accounts_client_id"`,
     );
     await queryRunner.query(`DROP TABLE "account_sequences"`);
-    await queryRunner.query(
-      `DROP TYPE "public"."account_sequences_type_enum"`,
-    );
+    await queryRunner.query(`DROP TYPE "public"."account_sequences_type_enum"`);
     await queryRunner.query(`DROP TABLE "accounts"`);
     await queryRunner.query(`DROP TYPE "public"."accounts_status_enum"`);
     await queryRunner.query(`DROP TYPE "public"."accounts_currency_enum"`);

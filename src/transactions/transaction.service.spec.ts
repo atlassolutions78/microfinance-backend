@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { TransactionService } from './transaction.service';
 import { TransactionRepository } from './transaction.repository';
 import { TransactionModel } from './transaction.model';
@@ -10,25 +11,152 @@ import {
   InternalTransferDto,
   WithdrawalDto,
 } from './transaction.dto';
+import { AccountService } from '../accounts/account.service';
+import { AccountModel } from '../accounts/account.model';
+import {
+  AccountStatus,
+  AccountType,
+  AccountCurrency,
+} from '../accounts/account.enums';
+import { AccountingService } from '../accounting/accounting.service';
 
 const ACCOUNT_ID = '550e8400-e29b-41d4-a716-446655440001';
 const ACCOUNT_ID_2 = '550e8400-e29b-41d4-a716-446655440002';
 const BRANCH_ID = '550e8400-e29b-41d4-a716-446655440003';
 const USER_ID = '550e8400-e29b-41d4-a716-446655440004';
 
-function makeRepo(overrides: Partial<TransactionRepository> = {}): TransactionRepository {
-  const repo = new TransactionRepository();
-  Object.assign(repo, overrides);
-  return repo;
+// ── Fakes ─────────────────────────────────────────────────────────────────────
+
+const fakeDataSource = {
+  transaction: async (cb: (em: unknown) => Promise<void>) => cb({}),
+} as unknown as DataSource;
+
+function makeStubRepo(): TransactionRepository {
+  const transactions = new Map<string, TransactionModel>();
+  const transfers = new Map<string, TransferModel>();
+
+  return {
+    save: async (tx: TransactionModel) => {
+      transactions.set(tx.id, tx);
+    },
+    saveTransfer: async (transfer: TransferModel) => {
+      transfers.set(transfer.id, transfer);
+    },
+    async getBalance(accountId: string): Promise<number> {
+      let latest: TransactionModel | null = null;
+      for (const tx of transactions.values()) {
+        if (tx.accountId === accountId) {
+          if (!latest || tx.createdAt.getTime() > latest.createdAt.getTime()) {
+            latest = tx;
+          }
+        }
+      }
+      return latest ? latest.balanceAfter : 0;
+    },
+    async findById(id: string): Promise<TransactionModel | null> {
+      return transactions.get(id) ?? null;
+    },
+    async findByAccountId(accountId: string): Promise<TransactionModel[]> {
+      return Array.from(transactions.values())
+        .filter((tx) => tx.accountId === accountId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    },
+    async findAll(): Promise<TransactionModel[]> {
+      return Array.from(transactions.values()).sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+      );
+    },
+    async findTransferByDebitId(
+      debitTxId: string,
+    ): Promise<TransferModel | null> {
+      for (const t of transfers.values()) {
+        if (t.debitTransactionId === debitTxId) return t;
+      }
+      return null;
+    },
+    setBalance: async () => {},
+  } as unknown as TransactionRepository;
 }
+
+function makeActiveAccount(id: string): AccountModel {
+  return new AccountModel({
+    id,
+    accountNumber: `50 001\\2 serie 433`,
+    clientId: '00000000-0000-0000-0000-000000000001',
+    branchId: BRANCH_ID,
+    accountType: AccountType.SAVINGS,
+    currency: AccountCurrency.USD,
+    status: AccountStatus.ACTIVE,
+    balance: 0,
+    openedBy: USER_ID,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+}
+
+function makeAccountService(
+  accountMap: Map<string, AccountModel> = new Map([
+    [ACCOUNT_ID, makeActiveAccount(ACCOUNT_ID)],
+    [ACCOUNT_ID_2, makeActiveAccount(ACCOUNT_ID_2)],
+  ]),
+): AccountService {
+  const svc = new AccountService(null as any, null as any);
+  Object.assign(svc, {
+    findById: async (id: string) => {
+      const acc = accountMap.get(id);
+      if (!acc) throw new NotFoundException(`Account ${id} not found`);
+      return acc;
+    },
+    recordBalance: jest.fn(),
+  });
+  return svc;
+}
+
+function makeAccountingService(): AccountingService & {
+  postDeposit: jest.Mock;
+  postWithdrawal: jest.Mock;
+  postInternalTransfer: jest.Mock;
+  postExternalTransfer: jest.Mock;
+} {
+  const svc = new AccountingService(null as any);
+  const mock = {
+    postDeposit: jest.fn(),
+    postWithdrawal: jest.fn(),
+    postInternalTransfer: jest.fn(),
+    postExternalTransfer: jest.fn(),
+  };
+  Object.assign(svc, mock);
+  return svc as any;
+}
+
+function makeService(
+  repo?: TransactionRepository,
+  accountSvc?: AccountService,
+  accountingSvc?: AccountingService,
+): {
+  service: TransactionService;
+  repo: TransactionRepository;
+  accounting: ReturnType<typeof makeAccountingService>;
+} {
+  const r = repo ?? makeStubRepo();
+  const a = accountSvc ?? makeAccountService();
+  const ac = (accountingSvc as any) ?? makeAccountingService();
+  const service = new TransactionService(r, a, ac, fakeDataSource);
+  return { service, repo: r, accounting: ac };
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('TransactionService', () => {
   let repo: TransactionRepository;
   let service: TransactionService;
+  let accounting: ReturnType<typeof makeAccountingService>;
 
   beforeEach(() => {
-    repo = new TransactionRepository();
-    service = new TransactionService(repo);
+    const result = makeService();
+    repo = result.repo;
+    service = result.service;
+    accounting = result.accounting;
   });
 
   // ─── deposit ────────────────────────────────────────────────────────────────
@@ -71,13 +199,73 @@ describe('TransactionService', () => {
     });
 
     it('sets description when provided', async () => {
-      const tx = await service.deposit({ ...dto, description: 'Salary credit' });
+      const tx = await service.deposit({
+        ...dto,
+        description: 'Salary credit',
+      });
       expect(tx.description).toBe('Salary credit');
     });
 
     it('sets description to undefined when not provided', async () => {
       const tx = await service.deposit(dto);
       expect(tx.description).toBeUndefined();
+    });
+
+    it('throws BadRequestException when account is SUSPENDED', async () => {
+      const suspendedAccount = makeActiveAccount(ACCOUNT_ID);
+      Object.assign(suspendedAccount, { status: AccountStatus.SUSPENDED });
+      const { service: svc } = makeService(
+        undefined,
+        makeAccountService(new Map([[ACCOUNT_ID, suspendedAccount]])),
+      );
+      await expect(svc.deposit(dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when account is CLOSED', async () => {
+      const closedAccount = makeActiveAccount(ACCOUNT_ID);
+      Object.assign(closedAccount, { status: AccountStatus.CLOSED });
+      const { service: svc } = makeService(
+        undefined,
+        makeAccountService(new Map([[ACCOUNT_ID, closedAccount]])),
+      );
+      await expect(svc.deposit(dto)).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ─── deposit — accounting integration ───────────────────────────────────────
+
+  describe('deposit() — accounting integration', () => {
+    const dto: DepositDto = {
+      accountId: ACCOUNT_ID,
+      branchId: BRANCH_ID,
+      amount: 500,
+      currency: Currency.USD,
+      performedBy: USER_ID,
+    };
+
+    it('calls accountingService.postDeposit() with correct args', async () => {
+      await service.deposit(dto);
+      expect(accounting.postDeposit).toHaveBeenCalledWith(
+        500,
+        Currency.USD,
+        BRANCH_ID,
+        USER_ID,
+        undefined,
+        expect.anything(),
+      );
+    });
+
+    it('does NOT call postDeposit when account status blocks the deposit', async () => {
+      const suspendedAccount = makeActiveAccount(ACCOUNT_ID);
+      Object.assign(suspendedAccount, { status: AccountStatus.SUSPENDED });
+      const ac = makeAccountingService();
+      const { service: svc } = makeService(
+        undefined,
+        makeAccountService(new Map([[ACCOUNT_ID, suspendedAccount]])),
+        ac,
+      );
+      await expect(svc.deposit(dto)).rejects.toThrow();
+      expect(ac.postDeposit).not.toHaveBeenCalled();
     });
   });
 
@@ -93,7 +281,6 @@ describe('TransactionService', () => {
     };
 
     beforeEach(async () => {
-      // seed the account with 500
       await service.deposit({
         accountId: ACCOUNT_ID,
         branchId: BRANCH_ID,
@@ -125,15 +312,16 @@ describe('TransactionService', () => {
     });
 
     it('throws BadRequestException when account has no balance', async () => {
-      const emptyAccountDto: WithdrawalDto = {
-        ...dto,
-        accountId: '550e8400-e29b-41d4-a716-999999999999',
-      };
-      await expect(service.withdraw(emptyAccountDto)).rejects.toThrow(BadRequestException);
+      const emptyDto: WithdrawalDto = { ...dto, accountId: ACCOUNT_ID_2 };
+      await expect(service.withdraw(emptyDto)).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('does not update balance when withdrawal fails', async () => {
-      await expect(service.withdraw({ ...dto, amount: 9999 })).rejects.toThrow();
+      await expect(
+        service.withdraw({ ...dto, amount: 9999 }),
+      ).rejects.toThrow();
       const balance = await repo.getBalance(ACCOUNT_ID);
       expect(balance).toBe(500);
     });
@@ -141,6 +329,53 @@ describe('TransactionService', () => {
     it('calls assertSignaturePolicy for BUSINESS accounts (no-op currently)', async () => {
       const tx = await service.withdraw({ ...dto, accountType: 'BUSINESS' });
       expect(tx.type).toBe(TransactionType.WITHDRAWAL);
+    });
+  });
+
+  // ─── withdraw — accounting integration ──────────────────────────────────────
+
+  describe('withdraw() — accounting integration', () => {
+    beforeEach(async () => {
+      await service.deposit({
+        accountId: ACCOUNT_ID,
+        branchId: BRANCH_ID,
+        amount: 500,
+        currency: Currency.USD,
+        performedBy: USER_ID,
+      });
+    });
+
+    it('calls accountingService.postWithdrawal() with correct args', async () => {
+      await service.withdraw({
+        accountId: ACCOUNT_ID,
+        branchId: BRANCH_ID,
+        amount: 200,
+        currency: Currency.USD,
+        performedBy: USER_ID,
+      });
+      expect(accounting.postWithdrawal).toHaveBeenCalledWith(
+        200,
+        Currency.USD,
+        BRANCH_ID,
+        USER_ID,
+        undefined,
+        expect.anything(),
+      );
+    });
+
+    it('does NOT call postWithdrawal when insufficient balance', async () => {
+      const ac = makeAccountingService();
+      const { service: svc } = makeService(repo, undefined, ac);
+      await expect(
+        svc.withdraw({
+          accountId: ACCOUNT_ID,
+          branchId: BRANCH_ID,
+          amount: 9999,
+          currency: Currency.USD,
+          performedBy: USER_ID,
+        }),
+      ).rejects.toThrow();
+      expect(ac.postWithdrawal).not.toHaveBeenCalled();
     });
   });
 
@@ -206,9 +441,9 @@ describe('TransactionService', () => {
     });
 
     it('throws BadRequestException when source has insufficient balance', async () => {
-      await expect(service.internalTransfer({ ...dto, amount: 2000 })).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.internalTransfer({ ...dto, amount: 2000 }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('saves both transactions so they appear in history', async () => {
@@ -217,6 +452,11 @@ describe('TransactionService', () => {
       const destHistory = await service.findByAccount(ACCOUNT_ID_2);
       expect(sourceHistory.some((t) => t.id === debit.id)).toBe(true);
       expect(destHistory.some((t) => t.id === credit.id)).toBe(true);
+    });
+
+    it('calls accountingService.postInternalTransfer() once', async () => {
+      await service.internalTransfer(dto);
+      expect(accounting.postInternalTransfer).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -298,14 +538,12 @@ describe('TransactionService', () => {
     });
 
     it('throws BadRequestException when balance is insufficient for amount + fee', async () => {
-      // balance is 2000, transfer 1990 would require 1990 + 19.9 = 2009.9 > 2000
-      await expect(service.externalTransfer({ ...dto, amount: 1990 })).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.externalTransfer({ ...dto, amount: 1990 }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('rounds fee to 4 decimal places', async () => {
-      // 333 * 0.01 = 3.33
       await service.deposit({
         accountId: ACCOUNT_ID,
         branchId: BRANCH_ID,
@@ -315,6 +553,19 @@ describe('TransactionService', () => {
       });
       const { fee } = await service.externalTransfer({ ...dto, amount: 333 });
       expect(fee.amount).toBe(3.33);
+    });
+
+    it('calls accountingService.postExternalTransfer() with amount and feeAmount', async () => {
+      await service.externalTransfer(dto);
+      expect(accounting.postExternalTransfer).toHaveBeenCalledWith(
+        1000,
+        10,
+        Currency.USD,
+        BRANCH_ID,
+        USER_ID,
+        undefined,
+        expect.anything(),
+      );
     });
   });
 
@@ -358,7 +609,6 @@ describe('TransactionService', () => {
         currency: Currency.USD,
         performedBy: USER_ID,
       });
-
       const history = await service.findByAccount(ACCOUNT_ID);
       expect(history).toHaveLength(1);
       expect(history[0].accountId).toBe(ACCOUNT_ID);
@@ -366,7 +616,6 @@ describe('TransactionService', () => {
 
     it('returns transactions sorted newest first', async () => {
       jest.useFakeTimers();
-
       jest.setSystemTime(new Date('2026-01-01T10:00:00Z'));
       await service.deposit({
         accountId: ACCOUNT_ID,
@@ -375,7 +624,6 @@ describe('TransactionService', () => {
         currency: Currency.USD,
         performedBy: USER_ID,
       });
-
       jest.setSystemTime(new Date('2026-01-01T10:01:00Z'));
       await service.deposit({
         accountId: ACCOUNT_ID,
@@ -384,9 +632,7 @@ describe('TransactionService', () => {
         currency: Currency.USD,
         performedBy: USER_ID,
       });
-
       jest.useRealTimers();
-
       const history = await service.findByAccount(ACCOUNT_ID);
       expect(history[0].amount).toBe(200);
       expect(history[1].amount).toBe(100);
@@ -416,7 +662,6 @@ describe('TransactionService', () => {
         currency: Currency.USD,
         performedBy: USER_ID,
       });
-
       const all = await service.findAll();
       expect(all).toHaveLength(2);
     });

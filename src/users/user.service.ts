@@ -15,7 +15,9 @@ export class UserService {
 
   async create(dto: CreateUserDto): Promise<UserModel> {
     if (await this.userRepository.existsByEmail(dto.email)) {
-      throw new ConflictException(`Email '${dto.email}' is already registered.`);
+      throw new ConflictException(
+        `Email '${dto.email}' is already registered.`,
+      );
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 12);

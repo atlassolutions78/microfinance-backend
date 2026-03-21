@@ -24,15 +24,15 @@ describe('TransactionModel', () => {
     });
 
     it('throws when amount is zero', () => {
-      expect(() => TransactionModel.create({ ...baseProps(), amount: 0 })).toThrow(
-        'Transaction amount must be positive',
-      );
+      expect(() =>
+        TransactionModel.create({ ...baseProps(), amount: 0 }),
+      ).toThrow('Transaction amount must be positive');
     });
 
     it('throws when amount is negative', () => {
-      expect(() => TransactionModel.create({ ...baseProps(), amount: -50 })).toThrow(
-        'Transaction amount must be positive',
-      );
+      expect(() =>
+        TransactionModel.create({ ...baseProps(), amount: -50 }),
+      ).toThrow('Transaction amount must be positive');
     });
 
     it('assigns all props correctly', () => {
@@ -82,12 +82,18 @@ describe('TransactionModel', () => {
 
   describe('isCredit()', () => {
     it('returns true for DEPOSIT', () => {
-      const tx = TransactionModel.create({ ...baseProps(), type: TransactionType.DEPOSIT });
+      const tx = TransactionModel.create({
+        ...baseProps(),
+        type: TransactionType.DEPOSIT,
+      });
       expect(tx.isCredit()).toBe(true);
     });
 
     it('returns false for WITHDRAWAL', () => {
-      const tx = TransactionModel.create({ ...baseProps(), type: TransactionType.WITHDRAWAL });
+      const tx = TransactionModel.create({
+        ...baseProps(),
+        type: TransactionType.WITHDRAWAL,
+      });
       expect(tx.isCredit()).toBe(false);
     });
   });

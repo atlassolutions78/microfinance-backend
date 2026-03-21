@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { AccountEntity, AccountSequenceEntity } from './account.entity';
 import { AccountModel } from './account.model';
 import { AccountMapper } from './account.mapper';
-import { AccountCurrency, AccountType } from './account.enums';
+import { AccountCurrency, AccountStatus, AccountType } from './account.enums';
 
 @Injectable()
 export class AccountRepository {
@@ -36,6 +36,33 @@ export class AccountRepository {
   async findAll(): Promise<AccountModel[]> {
     const entities = await this.repo.find({ order: { created_at: 'DESC' } });
     return entities.map(AccountMapper.toDomain);
+  }
+
+  async findByAccountNumber(
+    accountNumber: string,
+  ): Promise<AccountModel | null> {
+    const entity = await this.repo.findOne({
+      where: { account_number: accountNumber },
+    });
+    return entity ? AccountMapper.toDomain(entity) : null;
+  }
+
+  async updateBalance(
+    id: string,
+    newBalance: number,
+    em?: EntityManager,
+  ): Promise<void> {
+    const repo = em ? em.getRepository(AccountEntity) : this.repo;
+    await repo.update(id, { balance: newBalance.toString() });
+  }
+
+  async updateStatus(
+    id: string,
+    status: AccountStatus,
+    em?: EntityManager,
+  ): Promise<void> {
+    const repo = em ? em.getRepository(AccountEntity) : this.repo;
+    await repo.update(id, { status });
   }
 
   /**

@@ -48,6 +48,22 @@ import { UserEntity } from 'src/users/user.entity';
 import { UserRole } from 'src/users/user.enums';
 import { BranchEntity } from 'src/settings/branch.entity';
 import { BranchType } from 'src/settings/branch.enums';
+import {
+  AccountEntity,
+  AccountSequenceEntity,
+} from 'src/accounts/account.entity';
+import { AccountRepository } from 'src/accounts/account.repository';
+import {
+  AccountType,
+  AccountCurrency,
+  AccountStatus,
+} from 'src/accounts/account.enums';
+import {
+  ChartOfAccountsEntity,
+  JournalEntryEntity,
+  JournalLineEntity,
+} from 'src/accounting/accounting.entity';
+import { ChartAccountType } from 'src/accounting/accounting.enums';
 
 // ---------------------------------------------------------------------------
 
@@ -68,6 +84,11 @@ const ds = new DataSource({
     ClientDocumentEntity,
     GuardianDocumentEntity,
     BranchEntity,
+    AccountEntity,
+    AccountSequenceEntity,
+    ChartOfAccountsEntity,
+    JournalEntryEntity,
+    JournalLineEntity,
   ],
   synchronize: false,
 });
@@ -530,6 +551,216 @@ async function seed() {
     );
   } else {
     console.log('  skip client: CL-000004 (already exists)');
+  }
+
+  // -------------------------------------------------------------------------
+  // Accounts
+  // -------------------------------------------------------------------------
+  const accountRepo = ds.getRepository(AccountEntity);
+  const seqRepo = ds.getRepository(AccountSequenceEntity);
+
+  const c1 = await clientRepo.findOne({
+    where: { client_number: 'CL-000001' },
+  });
+  const c2 = await clientRepo.findOne({
+    where: { client_number: 'CL-000002' },
+  });
+  const c4 = await clientRepo.findOne({
+    where: { client_number: 'CL-000004' },
+  });
+
+  async function accountExists(num: string) {
+    return !!(await accountRepo.findOne({ where: { account_number: num } }));
+  }
+
+  // CL-000001 — SAVINGS, seq 1
+  const acc1Number = AccountRepository.formatSavingsNumber(1);
+  if (c1 && !(await accountExists(acc1Number))) {
+    await accountRepo.save(
+      accountRepo.create({
+        id: randomUUID(),
+        account_number: acc1Number,
+        client_id: c1.id,
+        branch_id: gomaBranchId,
+        account_type: AccountType.SAVINGS,
+        currency: AccountCurrency.USD,
+        status: AccountStatus.ACTIVE,
+        balance: '500',
+        opened_by: adminId,
+      }),
+    );
+    console.log(
+      `  created account: ${acc1Number} (CL-000001 SAVINGS ACTIVE $500)`,
+    );
+  } else {
+    console.log(
+      `  skip account: ${acc1Number} (already exists or client missing)`,
+    );
+  }
+
+  // CL-000001 — CHECKING, seq 1
+  const acc2Number = AccountRepository.formatCadecoNumber(
+    1,
+    AccountType.CHECKING,
+    AccountCurrency.USD,
+  );
+  if (c1 && !(await accountExists(acc2Number))) {
+    await accountRepo.save(
+      accountRepo.create({
+        id: randomUUID(),
+        account_number: acc2Number,
+        client_id: c1.id,
+        branch_id: gomaBranchId,
+        account_type: AccountType.CHECKING,
+        currency: AccountCurrency.USD,
+        status: AccountStatus.ACTIVE,
+        balance: '0',
+        opened_by: adminId,
+      }),
+    );
+    console.log(
+      `  created account: ${acc2Number} (CL-000001 CHECKING ACTIVE $0)`,
+    );
+  } else {
+    console.log(
+      `  skip account: ${acc2Number} (already exists or client missing)`,
+    );
+  }
+
+  // CL-000002 — SAVINGS, seq 2
+  const acc3Number = AccountRepository.formatSavingsNumber(2);
+  if (c2 && !(await accountExists(acc3Number))) {
+    await accountRepo.save(
+      accountRepo.create({
+        id: randomUUID(),
+        account_number: acc3Number,
+        client_id: c2.id,
+        branch_id: gomaBranchId,
+        account_type: AccountType.SAVINGS,
+        currency: AccountCurrency.USD,
+        status: AccountStatus.PENDING,
+        balance: '0',
+        opened_by: adminId,
+      }),
+    );
+    console.log(
+      `  created account: ${acc3Number} (CL-000002 SAVINGS PENDING $0)`,
+    );
+  } else {
+    console.log(
+      `  skip account: ${acc3Number} (already exists or client missing)`,
+    );
+  }
+
+  // CL-000004 — BUSINESS_CURRENT, seq 2
+  const acc4Number = AccountRepository.formatCadecoNumber(
+    2,
+    AccountType.BUSINESS_CURRENT,
+    AccountCurrency.USD,
+  );
+  if (c4 && !(await accountExists(acc4Number))) {
+    await accountRepo.save(
+      accountRepo.create({
+        id: randomUUID(),
+        account_number: acc4Number,
+        client_id: c4.id,
+        branch_id: gomaBranchId,
+        account_type: AccountType.BUSINESS_CURRENT,
+        currency: AccountCurrency.USD,
+        status: AccountStatus.PENDING,
+        balance: '0',
+        opened_by: adminId,
+      }),
+    );
+    console.log(
+      `  created account: ${acc4Number} (CL-000004 BUSINESS_CURRENT PENDING $0)`,
+    );
+  } else {
+    console.log(
+      `  skip account: ${acc4Number} (already exists or client missing)`,
+    );
+  }
+
+  // Account sequences
+  const sequences: Array<{ type: AccountType; lastSeq: number }> = [
+    { type: AccountType.SAVINGS, lastSeq: 2 },
+    { type: AccountType.CHECKING, lastSeq: 1 },
+    { type: AccountType.BUSINESS_CURRENT, lastSeq: 2 },
+  ];
+  for (const { type, lastSeq } of sequences) {
+    const existing = await seqRepo.findOne({ where: { type } });
+    if (!existing) {
+      await seqRepo.save(seqRepo.create({ type, last_seq: lastSeq }));
+      console.log(`  created sequence: ${type} last_seq=${lastSeq}`);
+    } else {
+      console.log(`  skip sequence: ${type} (already exists)`);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Chart of accounts — seed standard GL accounts for each branch + currency
+  // -------------------------------------------------------------------------
+  console.log(
+    '\n── Chart of accounts ──────────────────────────────────────────────────────',
+  );
+
+  const coaRepo = ds.getRepository(ChartOfAccountsEntity);
+
+  const coaEntries: Array<{
+    code: string;
+    name: string;
+    type: ChartAccountType;
+  }> = [
+    { code: 'CASH', name: 'Cash', type: ChartAccountType.ASSET },
+    {
+      code: 'MEMBER_DEPOSITS',
+      name: 'Member Deposits',
+      type: ChartAccountType.LIABILITY,
+    },
+    {
+      code: 'LOANS_RECEIVABLE',
+      name: 'Loans Receivable',
+      type: ChartAccountType.ASSET,
+    },
+    {
+      code: 'INTEREST_INCOME',
+      name: 'Interest Income',
+      type: ChartAccountType.INCOME,
+    },
+    { code: 'FEE_INCOME', name: 'Fee Income', type: ChartAccountType.INCOME },
+    {
+      code: 'PENALTY_INCOME',
+      name: 'Penalty Income',
+      type: ChartAccountType.INCOME,
+    },
+  ];
+
+  for (const currency of ['USD', 'FC']) {
+    for (const entry of coaEntries) {
+      const existing = await coaRepo.findOne({
+        where: {
+          code: entry.code,
+          branch_id: gomaBranchId,
+          currency: currency as any,
+        },
+      });
+      if (!existing) {
+        await coaRepo.save(
+          coaRepo.create({
+            id: randomUUID(),
+            code: entry.code,
+            name: `${entry.name} (${currency})`,
+            type: entry.type,
+            currency: currency as any,
+            branch_id: gomaBranchId,
+            is_active: true,
+          }),
+        );
+        console.log(`  created: ${entry.code} / ${currency}`);
+      } else {
+        console.log(`  skip: ${entry.code} / ${currency} (already exists)`);
+      }
+    }
   }
 
   await ds.destroy();

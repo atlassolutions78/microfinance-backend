@@ -1,4 +1,10 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
+import { EntityManager } from 'typeorm';
 import { randomUUID } from 'crypto';
 import { AccountRepository } from './account.repository';
 import { AccountPolicy } from './account.policy';
@@ -70,37 +76,89 @@ export class AccountService {
     return this.accountRepository.findByClientId(clientId);
   }
 
+  async findByAccountNumber(accountNumber: string): Promise<AccountModel> {
+    const account =
+      await this.accountRepository.findByAccountNumber(accountNumber);
+    if (!account)
+      throw new NotFoundException(`Account not found: ${accountNumber}`);
+    return account;
+  }
+
+  /**
+   * Updates the stored balance on the accounts table after a transaction.
+   * Also activates the account (story 2.2) if it is PENDING and the new
+   * balance is at least $20 (first deposit rule).
+   */
+  async recordBalance(
+    accountId: string,
+    newBalance: number,
+    em?: EntityManager,
+  ): Promise<void> {
+    await this.accountRepository.updateBalance(accountId, newBalance, em);
+    const account = await this.accountRepository.findById(accountId);
+    if (
+      account?.status === AccountStatus.PENDING &&
+      AccountPolicy.meetsActivationThreshold(newBalance)
+    ) {
+      await this.accountRepository.updateStatus(
+        accountId,
+        AccountStatus.ACTIVE,
+        em,
+      );
+    }
+  }
+
   async activate(id: string): Promise<AccountModel> {
     const account = await this.findOrFail(id);
-    try { account.activate(); } catch (e) { throw new BadRequestException((e as Error).message); }
+    try {
+      account.activate();
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
     await this.accountRepository.save(account);
     return account;
   }
 
   async suspend(id: string): Promise<AccountModel> {
     const account = await this.findOrFail(id);
-    try { account.suspend(); } catch (e) { throw new BadRequestException((e as Error).message); }
+    try {
+      account.suspend();
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
     await this.accountRepository.save(account);
     return account;
   }
 
   async markDormant(id: string): Promise<AccountModel> {
     const account = await this.findOrFail(id);
-    try { account.markDormant(); } catch (e) { throw new BadRequestException((e as Error).message); }
+    try {
+      account.markDormant();
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
     await this.accountRepository.save(account);
     return account;
   }
 
   async reactivate(id: string): Promise<AccountModel> {
     const account = await this.findOrFail(id);
-    try { account.reactivate(); } catch (e) { throw new BadRequestException((e as Error).message); }
+    try {
+      account.reactivate();
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
     await this.accountRepository.save(account);
     return account;
   }
 
   async close(id: string): Promise<AccountModel> {
     const account = await this.findOrFail(id);
-    try { account.close(); } catch (e) { throw new BadRequestException((e as Error).message); }
+    try {
+      account.close();
+    } catch (e) {
+      throw new BadRequestException((e as Error).message);
+    }
     await this.accountRepository.save(account);
     return account;
   }

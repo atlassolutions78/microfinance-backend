@@ -59,7 +59,10 @@ export class AccountModel {
   }
 
   suspend(): void {
-    if (this.status !== AccountStatus.ACTIVE && this.status !== AccountStatus.DORMANT) {
+    if (
+      this.status !== AccountStatus.ACTIVE &&
+      this.status !== AccountStatus.DORMANT
+    ) {
       throw new Error(`Cannot suspend account in status: ${this.status}`);
     }
     this.status = AccountStatus.SUSPENDED;
@@ -75,7 +78,10 @@ export class AccountModel {
   }
 
   reactivate(): void {
-    if (this.status !== AccountStatus.SUSPENDED && this.status !== AccountStatus.DORMANT) {
+    if (
+      this.status !== AccountStatus.SUSPENDED &&
+      this.status !== AccountStatus.DORMANT
+    ) {
       throw new Error(`Cannot reactivate account in status: ${this.status}`);
     }
     this.status = AccountStatus.ACTIVE;
