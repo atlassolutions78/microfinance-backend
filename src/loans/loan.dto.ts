@@ -1,47 +1,117 @@
-import {
+﻿import {
+  IsArray,
   IsEnum,
+  IsInt,
   IsNumber,
+  IsOptional,
   IsString,
   IsUUID,
   Max,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
-import { LoanType } from './loan.enums';
+import { Type } from 'class-transformer';
+import { LoanCurrency, LoanDocumentType, LoanStatus, LoanType } from './loan.enums';
 
-export class CreateLoanDto {
+// ---------------------------------------------------------------------------
+// Loan application
+// ---------------------------------------------------------------------------
+
+export class LoanDocumentInputDto {
+  @IsEnum(LoanDocumentType)
+  documentType: LoanDocumentType;
+
+  @IsString()
+  fileName: string;
+
+  @IsString()
+  fileUrl: string;
+}
+
+export class ApplyLoanDto {
   @IsUUID()
-  memberId: string;
+  clientId: string;
 
-  @IsNumber()
-  @Min(10_000)
-  amount: number;
-
-  @IsNumber()
-  @Min(0.01)
-  @Max(1)
-  interestRate: number;
-
-  @IsNumber()
-  @Min(1)
-  @Max(60)
-  termMonths: number;
+  /** Account to receive the disbursement. Must belong to the client. */
+  @IsUUID()
+  accountId: string;
 
   @IsEnum(LoanType)
   type: LoanType;
 
+  @IsEnum(LoanCurrency)
+  currency: LoanCurrency;
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  principalAmount: number;
+
+  /**
+   * Required for PERSONAL_LOAN (10 or 12 months).
+   * Ignored for SALARY_ADVANCE (fixed 1 month) and OVERDRAFT (fixed 3 months).
+   */
+  @IsInt()
+  @Min(1)
+  @Max(60)
+  @IsOptional()
+  termMonths?: number;
+
   @IsString()
-  @MinLength(10)
-  purpose: string;
+  @IsOptional()
+  purpose?: string;
+
+  /** Supporting documents: MOU, Commitment Letter, Request Letter */
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => LoanDocumentInputDto)
+  documents: LoanDocumentInputDto[];
 }
 
-export class ApproveLoanDto {
-  @IsUUID()
-  approverId: string;
-}
+// ---------------------------------------------------------------------------
+// Review actions
+// ---------------------------------------------------------------------------
 
 export class RejectLoanDto {
   @IsString()
   @MinLength(5)
   reason: string;
 }
+
+// ---------------------------------------------------------------------------
+// Repayment recording
+// ---------------------------------------------------------------------------
+
+export class RecordPaymentDto {
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  amount: number;
+
+  /** Target a specific installment. If omitted, the next unpaid installment is used. */
+  @IsUUID()
+  @IsOptional()
+  scheduleId?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Query filters (for GET /loans)
+// ---------------------------------------------------------------------------
+
+export class QueryLoansDto {
+  @IsEnum(LoanStatus)
+  @IsOptional()
+  status?: LoanStatus;
+
+  @IsEnum(LoanType)
+  @IsOptional()
+  type?: LoanType;
+
+  @IsUUID()
+  @IsOptional()
+  clientId?: string;
+}
+

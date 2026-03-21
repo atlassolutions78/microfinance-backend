@@ -107,4 +107,12 @@ export class AccountRepository {
     const currencySymbol = currency === AccountCurrency.USD ? '$' : 'FC';
     return `${base} ${series}/${currencySymbol}`;
   }
+
+  /** Atomically add `amount` to the account's balance. */
+  async credit(id: string, amount: number): Promise<void> {
+    await this.dataSource.query(
+      `UPDATE accounts SET balance = balance + $1, updated_at = NOW() WHERE id = $2`,
+      [amount, id],
+    );
+  }
 }
