@@ -532,6 +532,80 @@ async function seed() {
     console.log('  skip client: CL-000004 (already exists)');
   }
 
+  // -------------------------------------------------------------------------
+  // Client 5 — Honoré Bwira Amani (adult man, KYC APPROVED, created 2023)
+  // -------------------------------------------------------------------------
+  if (!(await clientExists('CL-000005'))) {
+    const c5Id = randomUUID();
+
+    const c5 = clientRepo.create({
+      id: c5Id,
+      client_number: 'CL-000005',
+      type: ClientType.INDIVIDUAL,
+      kyc_status: KycStatus.APPROVED,
+      kyc_reviewed_by: officerId,
+      kyc_reviewed_at: new Date('2023-04-10'),
+      kyc_notes: null,
+      branch_id: gomaBranchId,
+      created_by: adminId,
+    });
+    await clientRepo.save(c5);
+
+    // Override the auto-generated created_at to 2023
+    await ds.query(
+      `UPDATE clients SET created_at = $1 WHERE id = $2`,
+      [new Date('2023-03-15T09:30:00Z'), c5Id],
+    );
+
+    await profileRepo.save(
+      profileRepo.create({
+        client_id: c5Id,
+        first_name: 'Honoré',
+        middle_name: 'Bwira',
+        last_name: 'Amani',
+        date_of_birth: new Date('1985-07-21'),
+        place_of_birth: 'Goma',
+        province_of_origin: 'Nord-Kivu',
+        gender: Gender.MALE,
+        nationality: 'Congolais',
+        marital_status: MaritalStatus.MARRIED,
+        profession: 'Mécanicien',
+        province: 'Nord-Kivu',
+        municipality: 'Goma',
+        neighborhood: 'Virunga',
+        street: 'Avenue Kiwanja',
+        plot_number: '8',
+        phone: '+243850000005',
+        email: null,
+        id_type: IdType.NATIONAL_ID,
+        id_number: 'NK-NID-009999',
+        matriculation_number: null,
+        is_minor: false,
+      }),
+    );
+
+    await clientDocRepo.save(
+      clientDocRepo.create({
+        id: randomUUID(),
+        client_id: c5Id,
+        document_type: ClientDocumentType.ID_DOCUMENT,
+        file_name: 'honore-id.jpg',
+        file_url: 'uploads/clients/CL-000005/honore-id.jpg',
+        status: DocumentStatus.ACCEPTED,
+        rejection_reason: null,
+        uploaded_by: adminId,
+        reviewed_by: officerId,
+        reviewed_at: new Date('2023-04-10'),
+      }),
+    );
+
+    console.log(
+      '  created client: CL-000005 Honoré Bwira Amani (INDIVIDUAL, APPROVED, created 2023-03-15)',
+    );
+  } else {
+    console.log('  skip client: CL-000005 (already exists)');
+  }
+
   await ds.destroy();
   console.log('\nSeed complete.');
 }

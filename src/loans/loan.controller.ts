@@ -5,53 +5,117 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { UserModel } from '../users/user.model';
 import { LoanService } from './loan.service';
-import { CreateLoanDto, ApproveLoanDto, RejectLoanDto } from './loan.dto';
+import {
+  ApplyLoanDto,
+  QueryLoansDto,
+  RecordPaymentDto,
+  RejectLoanDto,
+} from './loan.dto';
 
-/**
- * HTTP layer only — parse the request, call the service, return the result.
- * No business logic lives here.
- */
 @ApiTags('Loans')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('loans')
 export class LoanController {
   constructor(private readonly loanService: LoanService) {}
 
+  // ---------------------------------------------------------------------------
+  // Application
+  // ---------------------------------------------------------------------------
+
   @Post()
-  apply(@Body() dto: CreateLoanDto) {
-    return this.loanService.apply(dto);
-  }
-
-  @Post(':id/approve')
-  approve(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ApproveLoanDto) {
-    return this.loanService.approve(id, dto);
-  }
-
-  @Post(':id/reject')
-  reject(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RejectLoanDto) {
-    return this.loanService.reject(id, dto);
-  }
-
-  @Post(':id/disburse')
-  disburse(@Param('id', ParseUUIDPipe) id: string) {
-    return this.loanService.disburse(id);
-  }
-
-  @Post(':id/close')
-  close(@Param('id', ParseUUIDPipe) id: string) {
-    return this.loanService.close(id);
+  apply(@Body() dto: ApplyLoanDto, @CurrentUser() user: UserModel) {
+    return this.loanService.apply(dto, user);
   }
 
   @Get()
-  findAll() {
-    return this.loanService.findAll();
+  findAll(@Query() query: QueryLoansDto) {
+    return this.loanService.findAll(query);
   }
 
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.loanService.findById(id);
   }
+
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
+
+  @Post(':id/approve')
+  approve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.loanService.approve(id, user);
+  }
+
+  @Post(':id/reject')
+  reject(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RejectLoanDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.loanService.reject(id, dto, user);
+  }
+
+  @Post(':id/disburse')
+  disburse(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.loanService.disburse(id, user);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Schedule & payments
+  // ---------------------------------------------------------------------------
+
+  @Get(':id/schedule')
+  getSchedule(@Param('id', ParseUUIDPipe) id: string) {
+    return this.loanService.getSchedule(id);
+  }
+
+  @Post(':id/payments')
+  recordPayment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RecordPaymentDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.loanService.recordPayment(id, dto, user);
+  }
+
+  @Get(':id/payments')
+  getPayments(@Param('id', ParseUUIDPipe) id: string) {
+    return this.loanService.getPayments(id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Penalties & documents
+  // ---------------------------------------------------------------------------
+
+  @Get(':id/penalties')
+  getPenalties(@Param('id', ParseUUIDPipe) id: string) {
+    return this.loanService.getPenalties(id);
+  }
+
+  @Get(':id/documents')
+  getDocuments(@Param('id', ParseUUIDPipe) id: string) {
+    return this.loanService.getDocuments(id);
+  }
+
+  /** Trigger the penalty processing cycle (admin / cron endpoint). */
+  @Post('admin/process-penalties')
+  processLatePenalties() {
+    return this.loanService.processLatePenalties();
+  }
 }
+
