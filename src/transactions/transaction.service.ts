@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'crypto';
 import {
   DepositDto,
@@ -11,6 +11,8 @@ import { TransferModel } from './transfer.model';
 import { TransactionRepository } from './transaction.repository';
 import { TransactionPolicy } from './transaction.policy';
 import { TransactionType } from './transaction.enums';
+import { AccountService } from '../accounts/account.service';
+import { AccountStatus } from '../accounts/account.enums';
 
 export interface TransferResult {
   debit: TransactionModel;
@@ -26,7 +28,10 @@ export interface ExternalTransferResult {
 
 @Injectable()
 export class TransactionService {
-  constructor(private readonly repo: TransactionRepository) {}
+  constructor(
+    private readonly repo: TransactionRepository,
+    private readonly accountService: AccountService,
+  ) {}
 
   private generateReference(): string {
     const date = new Date();
@@ -44,7 +49,10 @@ export class TransactionService {
   }
 
   async deposit(dto: DepositDto): Promise<TransactionModel> {
-    TransactionPolicy.assertAccountActive(dto.accountId);
+    const account = await this.accountService.findById(dto.accountId);
+    if (account.status === AccountStatus.SUSPENDED || account.status === AccountStatus.CLOSED || account.status === AccountStatus.DORMANT) {
+      throw new BadRequestException(`Account is ${account.status.toLowerCase()} and cannot accept deposits.`);
+    }
 
     const balance = await this.repo.getBalance(dto.accountId);
     const newBalance = balance + dto.amount;
@@ -64,13 +72,16 @@ export class TransactionService {
     });
 
     await this.repo.save(tx);
-    await this.repo.setBalance(dto.accountId, newBalance);
+    await this.accountService.recordBalance(dto.accountId, newBalance);
 
     return tx;
   }
 
   async withdraw(dto: WithdrawalDto): Promise<TransactionModel> {
-    TransactionPolicy.assertAccountActive(dto.accountId);
+    const account = await this.accountService.findById(dto.accountId);
+    if (account.status !== AccountStatus.ACTIVE) {
+      throw new BadRequestException(`Account is ${account.status.toLowerCase()} and cannot process withdrawals.`);
+    }
 
     if (dto.accountType === 'BUSINESS') {
       TransactionPolicy.assertSignaturePolicy(dto.accountType, dto.accountId);
@@ -96,14 +107,20 @@ export class TransactionService {
     });
 
     await this.repo.save(tx);
-    await this.repo.setBalance(dto.accountId, newBalance);
+    await this.accountService.recordBalance(dto.accountId, newBalance);
 
     return tx;
   }
 
   async internalTransfer(dto: InternalTransferDto): Promise<TransferResult> {
-    TransactionPolicy.assertAccountActive(dto.sourceAccountId);
-    TransactionPolicy.assertAccountActive(dto.destinationAccountId);
+    const source = await this.accountService.findById(dto.sourceAccountId);
+    if (source.status !== AccountStatus.ACTIVE) {
+      throw new BadRequestException(`Source account is ${source.status.toLowerCase()} and cannot process transfers.`);
+    }
+    const dest = await this.accountService.findById(dto.destinationAccountId);
+    if (dest.status !== AccountStatus.ACTIVE) {
+      throw new BadRequestException(`Destination account is ${dest.status.toLowerCase()} and cannot receive transfers.`);
+    }
 
     const sourceBalance = await this.repo.getBalance(dto.sourceAccountId);
     TransactionPolicy.assertSufficientBalance(sourceBalance, dto.amount, dto.sourceAccountId);
@@ -150,18 +167,20 @@ export class TransactionService {
       claimReference: undefined,
     });
 
-    // TODO: wrap the three saves in a DB transaction when TypeORM is wired.
     await this.repo.save(debit);
-    await this.repo.setBalance(dto.sourceAccountId, sourceNewBalance);
     await this.repo.save(credit);
-    await this.repo.setBalance(dto.destinationAccountId, destNewBalance);
     await this.repo.saveTransfer(transfer);
+    await this.accountService.recordBalance(dto.sourceAccountId, sourceNewBalance);
+    await this.accountService.recordBalance(dto.destinationAccountId, destNewBalance);
 
     return { debit, credit, transfer };
   }
 
   async externalTransfer(dto: ExternalTransferDto): Promise<ExternalTransferResult> {
-    TransactionPolicy.assertAccountActive(dto.sourceAccountId);
+    const account = await this.accountService.findById(dto.sourceAccountId);
+    if (account.status !== AccountStatus.ACTIVE) {
+      throw new BadRequestException(`Account is ${account.status.toLowerCase()} and cannot process transfers.`);
+    }
 
     const balance = await this.repo.getBalance(dto.sourceAccountId);
     const feeAmount = Math.round(dto.amount * 0.01 * 10000) / 10000;
@@ -210,11 +229,10 @@ export class TransactionService {
       claimReference: dto.claimReference,
     });
 
-    // TODO: wrap the three saves in a DB transaction when TypeORM is wired.
     await this.repo.save(debit);
     await this.repo.save(fee);
-    await this.repo.setBalance(dto.sourceAccountId, balanceAfterFee);
     await this.repo.saveTransfer(transfer);
+    await this.accountService.recordBalance(dto.sourceAccountId, balanceAfterFee);
 
     return { debit, fee, transfer };
   }

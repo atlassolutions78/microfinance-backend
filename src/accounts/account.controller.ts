@@ -40,6 +40,11 @@ export class AccountController {
     return this.accountService.findByClientId(clientId);
   }
 
+  @Get('by-number/:accountNumber')
+  findByNumber(@Param('accountNumber') accountNumber: string) {
+    return this.accountService.findByAccountNumber(accountNumber);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.accountService.findById(id);

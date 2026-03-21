@@ -9,6 +9,20 @@ const ALLOWED_ACCOUNT_TYPES: Record<ClientType, AccountType[]> = {
 
 export class AccountPolicy {
   /**
+   * Minimum deposit amount (in USD) required to activate a PENDING account.
+   * Story 2.2: first deposit ≥ MIN_ACTIVATION_BALANCE flips status to ACTIVE.
+   */
+  static readonly MIN_ACTIVATION_BALANCE = 20;
+
+  /**
+   * Asserts that a deposit amount is sufficient to activate a PENDING account.
+   * Called by the transaction service before applying the activation rule.
+   */
+  static meetsActivationThreshold(newBalance: number): boolean {
+    return newBalance >= AccountPolicy.MIN_ACTIVATION_BALANCE;
+  }
+
+  /**
    * Validates that the requested account type is permitted for the given
    * client type. Individual clients may open savings or checking accounts;
    * organization clients may only open business current accounts.

@@ -70,6 +70,25 @@ export class AccountService {
     return this.accountRepository.findByClientId(clientId);
   }
 
+  async findByAccountNumber(accountNumber: string): Promise<AccountModel> {
+    const account = await this.accountRepository.findByAccountNumber(accountNumber);
+    if (!account) throw new NotFoundException(`Account not found: ${accountNumber}`);
+    return account;
+  }
+
+  /**
+   * Updates the stored balance on the accounts table after a transaction.
+   * Also activates the account (story 2.2) if it is PENDING and the new
+   * balance is at least $20 (first deposit rule).
+   */
+  async recordBalance(accountId: string, newBalance: number): Promise<void> {
+    await this.accountRepository.updateBalance(accountId, newBalance);
+    const account = await this.accountRepository.findById(accountId);
+    if (account?.status === AccountStatus.PENDING && AccountPolicy.meetsActivationThreshold(newBalance)) {
+      await this.accountRepository.updateStatus(accountId, AccountStatus.ACTIVE);
+    }
+  }
+
   async activate(id: string): Promise<AccountModel> {
     const account = await this.findOrFail(id);
     try { account.activate(); } catch (e) { throw new BadRequestException((e as Error).message); }
