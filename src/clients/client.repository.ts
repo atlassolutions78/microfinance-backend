@@ -23,6 +23,10 @@ export class ClientRepository {
     private readonly guardianRepo: Repository<MinorGuardianEntity>,
     @InjectRepository(OrganizationRepresentativeEntity)
     private readonly orgRepRepo: Repository<OrganizationRepresentativeEntity>,
+    @InjectRepository(IndividualProfileEntity)
+    private readonly individualProfileRepo: Repository<IndividualProfileEntity>,
+    @InjectRepository(OrganizationProfileEntity)
+    private readonly organizationProfileRepo: Repository<OrganizationProfileEntity>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -98,5 +102,56 @@ export class ClientRepository {
     clientId: string,
   ): Promise<MinorGuardianEntity | null> {
     return this.guardianRepo.findOne({ where: { client_id: clientId } });
+  }
+
+  async findIndividualProfileByClientId(clientId: string): Promise<IndividualProfileEntity | null> {
+    return this.individualProfileRepo.findOne({ where: { client_id: clientId } });
+  }
+
+  async findOrganizationProfileByClientId(clientId: string): Promise<OrganizationProfileEntity | null> {
+    return this.organizationProfileRepo.findOne({ where: { client_id: clientId } });
+  }
+
+  async updateIndividualProfile(profile: IndividualProfileEntity): Promise<void> {
+    await this.individualProfileRepo.save(profile);
+  }
+
+  async updateOrganizationProfile(profile: OrganizationProfileEntity): Promise<void> {
+    await this.organizationProfileRepo.save(profile);
+  }
+
+  async findByIdFull(id: string): Promise<{
+    client: ClientEntity;
+    individualProfile?: IndividualProfileEntity;
+    orgProfile?: OrganizationProfileEntity;
+  } | null> {
+    const client = await this.repo.findOne({ where: { id } });
+    if (!client) return null;
+    if (client.type === 'INDIVIDUAL') {
+      const individualProfile = await this.individualProfileRepo.findOne({ where: { client_id: id } });
+      return { client, individualProfile: individualProfile ?? undefined };
+    } else {
+      const orgProfile = await this.organizationProfileRepo.findOne({ where: { client_id: id } });
+      return { client, orgProfile: orgProfile ?? undefined };
+    }
+  }
+
+  async findAllFull(): Promise<{
+    client: ClientEntity;
+    individualProfile?: IndividualProfileEntity;
+    orgProfile?: OrganizationProfileEntity;
+  }[]> {
+    const clients = await this.repo.find({ order: { created_at: 'DESC' } });
+    return Promise.all(
+      clients.map(async (client) => {
+        if (client.type === 'INDIVIDUAL') {
+          const individualProfile = await this.individualProfileRepo.findOne({ where: { client_id: client.id } });
+          return { client, individualProfile: individualProfile ?? undefined };
+        } else {
+          const orgProfile = await this.organizationProfileRepo.findOne({ where: { client_id: client.id } });
+          return { client, orgProfile: orgProfile ?? undefined };
+        }
+      }),
+    );
   }
 }

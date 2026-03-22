@@ -1,7 +1,7 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { UploadsService } from './uploads.service';
-import { PresignDto } from './uploads.dto';
+import { DownloadKeyDto, PresignDto } from './uploads.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('Uploads')
@@ -14,5 +14,10 @@ export class UploadsController {
   @Post('presign')
   presign(@Body() dto: PresignDto) {
     return this.uploadsService.presign(dto);
+  }
+
+  @Get('download')
+  download(@Query() dto: DownloadKeyDto) {
+    return this.uploadsService.getDownloadUrl(dto.key);
   }
 }
