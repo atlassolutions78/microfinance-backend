@@ -18,6 +18,7 @@ import {
   CreateOrganizationClientDto,
   RejectKycDto,
   RequestUpdateDto,
+  UpdateClientDto,
 } from './client.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -134,6 +135,24 @@ export class ClientController {
     @CurrentUser() user: UserModel,
   ) {
     return this.clientService.requestUpdate(id, dto, user.id);
+  }
+
+  // --- Updates ---
+
+  @Patch(':id')
+  @HttpCode(HttpStatus.OK)
+  @Roles(
+    UserRole.TELLER,
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.HQ_MANAGER,
+    UserRole.ADMIN,
+  )
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateClientDto,
+  ) {
+    return this.clientService.updateClient(id, dto);
   }
 
   // --- Queries ---

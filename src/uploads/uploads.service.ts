@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { extname } from 'path';
 import { randomUUID } from 'crypto';
-import { PresignDto, PresignResponseDto } from './uploads.dto';
+import { PresignDto, PresignResponseDto, DownloadUrlResponseDto } from './uploads.dto';
 
 @Injectable()
 export class UploadsService {
@@ -34,5 +34,14 @@ export class UploadsService {
 
     const url = await getSignedUrl(this.s3, command, { expiresIn: 300 });
     return { url, key };
+  }
+
+  async getDownloadUrl(key: string): Promise<DownloadUrlResponseDto> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    });
+    const url = await getSignedUrl(this.s3, command, { expiresIn: 900 });
+    return { url };
   }
 }

@@ -181,6 +181,9 @@ export class OrganizationProfileEntity {
 
   @Column({ name: 'organization_name', type: 'text' })
   organization_name: string;
+
+  @Column({ type: 'text', nullable: true })
+  industry: string | null;
 }
 
 // ---------------------------------------------------------------------------
