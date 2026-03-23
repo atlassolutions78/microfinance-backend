@@ -38,8 +38,12 @@ export class UploadsController {
    */
   @Post('file')
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
-  uploadFile(@UploadedFile() file: Express.Multer.File) {
-    const { key } = this.uploadsService.saveLocalFile(file.buffer, file.originalname);
+  async uploadFile(@UploadedFile() file: Express.Multer.File) {
+    const { key } = await this.uploadsService.saveFile(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+    );
     return { key };
   }
 }

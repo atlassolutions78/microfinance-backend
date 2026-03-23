@@ -120,6 +120,10 @@ export class ClientRepository {
     await this.organizationProfileRepo.save(profile);
   }
 
+  async updateClientEntity(id: string, fields: Partial<Pick<ClientEntity, 'segment'>>): Promise<void> {
+    await this.repo.update(id, fields);
+  }
+
   async findByIdFull(id: string): Promise<{
     client: ClientEntity;
     individualProfile?: IndividualProfileEntity;

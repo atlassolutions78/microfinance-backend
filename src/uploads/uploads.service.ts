@@ -68,6 +68,33 @@ export class UploadsService {
     return { url };
   }
 
+  async saveFile(
+    buffer: Buffer,
+    originalName: string,
+    contentType: string,
+  ): Promise<{ key: string }> {
+    const ext = extname(originalName);
+    const filename = `${randomUUID()}${ext}`;
+    const key = `uploads/${filename}`;
+
+    if (this.isS3Configured) {
+      await this.s3.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Body: buffer,
+          ContentType: contentType,
+        }),
+      );
+    } else {
+      const filePath = join(this.localUploadDir, filename);
+      writeFileSync(filePath, buffer);
+    }
+
+    return { key };
+  }
+
+  /** @deprecated kept for backwards compatibility — prefer saveFile() */
   saveLocalFile(buffer: Buffer, originalName: string): { key: string } {
     const ext = extname(originalName);
     const filename = `${randomUUID()}${ext}`;

@@ -47,6 +47,8 @@ export interface ClientApiResponse {
   // Organization
   companyName?: string;
   industry?: string;
+  // Common
+  segment?: string;
 }
 
 function kycStatusToClientStatus(kycStatus: KycStatus): string {
@@ -87,6 +89,7 @@ export class ClientMapper {
       type: entity.type,
       status: kycStatusToClientStatus(entity.kyc_status),
       kycStatus: entity.kyc_status,
+      segment: entity.segment ?? 'RETAIL',
       createdAt: entity.created_at,
       updatedAt: entity.updated_at,
     };
@@ -97,8 +100,11 @@ export class ClientMapper {
       base.lastName = individualProfile.last_name;
       base.gender = individualProfile.gender;
       base.nationality = individualProfile.nationality;
-      base.dateOfBirth = individualProfile.date_of_birth
-        ? new Date(individualProfile.date_of_birth).toISOString().slice(0, 10)
+      base.dateOfBirth = individualProfile.date_of_birth != null
+        ? (individualProfile.date_of_birth instanceof Date
+            ? individualProfile.date_of_birth
+            : new Date(String(individualProfile.date_of_birth))
+          ).toISOString().slice(0, 10)
         : undefined;
       base.placeOfBirth = individualProfile.place_of_birth ?? undefined;
       base.maritalStatus = individualProfile.marital_status;
@@ -117,6 +123,12 @@ export class ClientMapper {
     if (orgProfile) {
       base.companyName = orgProfile.organization_name;
       base.industry = orgProfile.industry ?? undefined;
+      base.phone = orgProfile.phone ?? undefined;
+      base.email = orgProfile.email ?? undefined;
+      base.province = orgProfile.province ?? undefined;
+      base.municipality = orgProfile.municipality ?? undefined;
+      base.identificationType = orgProfile.registration_type ?? undefined;
+      base.identificationNumber = orgProfile.registration_number ?? undefined;
     }
 
     return base;

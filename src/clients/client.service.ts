@@ -256,6 +256,12 @@ export class ClientService {
   async updateClient(clientId: string, dto: UpdateClientDto): Promise<ClientApiResponse> {
     const client = await this.findOrFail(clientId);
 
+    // Segment applies to both client types — stored on the clients table
+    if (dto.segment !== undefined) {
+      const normalized = dto.segment.toUpperCase();
+      await this.clientRepository.updateClientEntity(clientId, { segment: normalized });
+    }
+
     if (client.type === ClientType.INDIVIDUAL) {
       const profile = await this.clientRepository.findIndividualProfileByClientId(clientId);
       if (profile) {
@@ -281,6 +287,12 @@ export class ClientService {
       if (profile) {
         if (dto.organizationName !== undefined) profile.organization_name = dto.organizationName;
         if (dto.profession !== undefined) profile.industry = dto.profession;
+        if (dto.phoneNumber !== undefined) profile.phone = dto.phoneNumber;
+        if (dto.email !== undefined) profile.email = dto.email;
+        if (dto.province !== undefined) profile.province = dto.province;
+        if (dto.municipality !== undefined) profile.municipality = dto.municipality;
+        if (dto.identificationType !== undefined) profile.registration_type = dto.identificationType;
+        if (dto.identificationNumber !== undefined) profile.registration_number = dto.identificationNumber;
         await this.clientRepository.updateOrganizationProfile(profile);
         return this.findById(clientId);
       }

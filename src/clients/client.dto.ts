@@ -310,4 +310,9 @@ export class UpdateClientDto {
   @IsOptional()
   @IsString()
   organizationName?: string;
+
+  // Segment (both client types)
+  @IsOptional()
+  @IsString()
+  segment?: string;
 }
