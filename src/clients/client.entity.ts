@@ -56,6 +56,9 @@ export class ClientEntity {
   @Column({ name: 'kyc_notes', type: 'text', nullable: true })
   kyc_notes: string | null;
 
+  @Column({ name: 'segment', type: 'text', default: 'RETAIL' })
+  segment: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   created_at: Date;
 
@@ -181,6 +184,27 @@ export class OrganizationProfileEntity {
 
   @Column({ name: 'organization_name', type: 'text' })
   organization_name: string;
+
+  @Column({ type: 'text', nullable: true })
+  industry: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  phone: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  email: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  province: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  municipality: string | null;
+
+  @Column({ name: 'registration_type', type: 'text', nullable: true })
+  registration_type: string | null;
+
+  @Column({ name: 'registration_number', type: 'text', nullable: true })
+  registration_number: string | null;
 }
 
 // ---------------------------------------------------------------------------
