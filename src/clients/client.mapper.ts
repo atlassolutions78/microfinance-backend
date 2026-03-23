@@ -98,7 +98,7 @@ export class ClientMapper {
       base.gender = individualProfile.gender;
       base.nationality = individualProfile.nationality;
       base.dateOfBirth = individualProfile.date_of_birth
-        ? individualProfile.date_of_birth.toISOString().slice(0, 10)
+        ? new Date(individualProfile.date_of_birth).toISOString().slice(0, 10)
         : undefined;
       base.placeOfBirth = individualProfile.place_of_birth ?? undefined;
       base.maritalStatus = individualProfile.marital_status;
