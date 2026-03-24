@@ -10,7 +10,10 @@ import { COA_CODES, JournalEntryStatus } from './accounting.enums';
 import { JournalEntryDraft, JournalLineSpec } from './accounting.model';
 import { AccountingRepository } from './accounting.repository';
 import {
+  BalanceSheetRecord,
   ChartOfAccountsRecord,
+  GeneralLedgerAccountRecord,
+  IncomeStatementRecord,
   JournalEntryGroupRecord,
   JournalEntryRecord,
 } from './accounting.mapper';
@@ -154,7 +157,12 @@ export class AccountingService {
         currency,
       });
     }
-    const draft = new JournalEntryDraft(branchId, createdBy, description, lines);
+    const draft = new JournalEntryDraft(
+      branchId,
+      createdBy,
+      description,
+      lines,
+    );
     return this.post(draft, em);
   }
 
@@ -273,6 +281,27 @@ export class AccountingService {
 
   async findChartAccounts(): Promise<ChartOfAccountsRecord[]> {
     return this.repo.findChartAccounts();
+  }
+
+  async getGeneralLedger(
+    branchId?: string,
+  ): Promise<GeneralLedgerAccountRecord[]> {
+    return this.repo.getGeneralLedger(branchId);
+  }
+
+  async getBalanceSheet(
+    asOf: Date,
+    branchId?: string,
+  ): Promise<BalanceSheetRecord> {
+    return this.repo.getBalanceSheet(asOf, branchId);
+  }
+
+  async getIncomeStatement(
+    from: Date,
+    to: Date,
+    branchId?: string,
+  ): Promise<IncomeStatementRecord> {
+    return this.repo.getIncomeStatement(from, to, branchId);
   }
 
   // ─── Core private method ─────────────────────────────────────────────────────

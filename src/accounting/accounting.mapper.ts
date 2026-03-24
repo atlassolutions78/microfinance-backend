@@ -23,6 +23,7 @@ export interface JournalEntryRecord {
   status: JournalEntryStatus;
   reversalOf: string | null;
   postedBy: string | null;
+  postedByName: string | null;
   postedAt: Date | null;
   transactionId: string | null;
   createdBy: string;
@@ -36,6 +37,8 @@ export interface JournalLineRecord {
   id: string;
   journalEntryId: string;
   accountId: string;
+  accountCode?: string;
+  accountName?: string;
   clientAccountId: string | null;
   debit: number;
   credit: number;
@@ -46,6 +49,72 @@ export interface JournalLineRecord {
 export interface JournalEntryGroupRecord {
   entry: JournalEntryRecord;
   reversals: JournalEntryRecord[];
+}
+
+// ── General Ledger ────────────────────────────────────────────────────────────
+
+export interface GeneralLedgerLineRecord {
+  journalEntryId: string;
+  reference: string;
+  date: Date;
+  description: string | null;
+  debit: number;
+  credit: number;
+  currency: string;
+  /** Running balance in account's normal direction (positive = healthy). */
+  runningBalance: number;
+}
+
+export interface GeneralLedgerAccountRecord {
+  accountId: string;
+  code: string;
+  name: string;
+  type: ChartAccountType;
+  totalDebit: number;
+  totalCredit: number;
+  closingBalance: number;
+  lines: GeneralLedgerLineRecord[];
+}
+
+// ── Balance Sheet ─────────────────────────────────────────────────────────────
+
+export interface BalanceSheetLineRecord {
+  accountId: string;
+  code: string;
+  name: string;
+  balance: number;
+}
+
+export interface BalanceSheetSectionRecord {
+  type: ChartAccountType;
+  accounts: BalanceSheetLineRecord[];
+  total: number;
+}
+
+export interface BalanceSheetRecord {
+  asOf: Date;
+  assets: BalanceSheetSectionRecord;
+  liabilities: BalanceSheetSectionRecord;
+  equity: BalanceSheetSectionRecord;
+  totalLiabilitiesAndEquity: number;
+  isBalanced: boolean;
+}
+
+// ── Income Statement ──────────────────────────────────────────────────────────
+
+export interface IncomeStatementLineRecord {
+  accountId: string;
+  code: string;
+  name: string;
+  amount: number;
+}
+
+export interface IncomeStatementRecord {
+  from: Date;
+  to: Date;
+  income: { accounts: IncomeStatementLineRecord[]; total: number };
+  expenses: { accounts: IncomeStatementLineRecord[]; total: number };
+  netProfit: number;
 }
 
 export class AccountingMapper {
@@ -65,6 +134,7 @@ export class AccountingMapper {
   static entryToDomain(
     entity: JournalEntryEntity,
     createdByName?: string,
+    postedByName?: string | null,
   ): JournalEntryRecord {
     return {
       id: entity.id,
@@ -73,6 +143,7 @@ export class AccountingMapper {
       status: entity.status,
       reversalOf: entity.reversal_of,
       postedBy: entity.posted_by,
+      postedByName: postedByName ?? null,
       postedAt: entity.posted_at,
       transactionId: entity.transaction_id,
       createdBy: entity.created_by,
@@ -88,6 +159,8 @@ export class AccountingMapper {
       id: entity.id,
       journalEntryId: entity.journal_entry_id,
       accountId: entity.account_id,
+      accountCode: entity.chartAccount?.code,
+      accountName: entity.chartAccount?.name,
       clientAccountId: entity.client_account_id,
       debit: Number(entity.debit),
       credit: Number(entity.credit),
