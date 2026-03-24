@@ -12,6 +12,7 @@ import { AccountModel } from './account.model';
 import { AccountCurrency, AccountStatus, AccountType } from './account.enums';
 import { OpenAccountDto } from './account.dto';
 import { ClientService } from '../clients/client.service';
+import { ClientType } from '../clients/client.enums';
 import { UserModel } from '../users/user.model';
 
 /**
@@ -37,7 +38,7 @@ export class AccountService {
 
     const client = await this.clientService.findById(dto.clientId);
 
-    AccountPolicy.assertTypeAllowed(client.type, dto.accountType);
+    AccountPolicy.assertTypeAllowed(client.type as ClientType, dto.accountType);
 
     const seq = await this.accountRepository.nextSequence(dto.accountType);
     const accountNumber = AccountService.formatAccountNumber(

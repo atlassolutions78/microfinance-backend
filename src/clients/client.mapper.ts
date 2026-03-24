@@ -13,6 +13,49 @@ import {
   CreateOrganizationClientDto,
   CreateOrgRepresentativeDto,
 } from './client.dto';
+import { KycStatus } from './client.enums';
+
+// ── Full API response shape (client + profile combined) ─────────────────────
+
+export interface ClientApiResponse {
+  id: string;
+  clientNumber: string;
+  type: string;
+  status: string;
+  kycStatus: string;
+  createdAt: Date;
+  updatedAt: Date;
+  // Individual
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  gender?: string;
+  nationality?: string;
+  dateOfBirth?: string;
+  placeOfBirth?: string;
+  maritalStatus?: string;
+  profession?: string;
+  province?: string;
+  municipality?: string;
+  neighborhood?: string;
+  street?: string;
+  plotNumber?: string;
+  phone?: string;
+  email?: string;
+  identificationType?: string;
+  identificationNumber?: string;
+  // Organization
+  companyName?: string;
+  industry?: string;
+  // Common
+  segment?: string;
+}
+
+function kycStatusToClientStatus(kycStatus: KycStatus): string {
+  if (kycStatus === KycStatus.APPROVED) return 'ACTIVE';
+  if (kycStatus === KycStatus.REJECTED) return 'REJECTED';
+  return 'KYC_PENDING';
+}
 
 /**
  * Translates between entities (DB) and domain models / DTOs.
@@ -33,6 +76,62 @@ export class ClientMapper {
       createdAt: entity.created_at,
       updatedAt: entity.updated_at,
     });
+  }
+
+  static toApiResponse(
+    entity: ClientEntity,
+    individualProfile?: IndividualProfileEntity | null,
+    orgProfile?: OrganizationProfileEntity | null,
+  ): ClientApiResponse {
+    const base: ClientApiResponse = {
+      id: entity.id,
+      clientNumber: entity.client_number,
+      type: entity.type,
+      status: kycStatusToClientStatus(entity.kyc_status),
+      kycStatus: entity.kyc_status,
+      segment: entity.segment ?? 'RETAIL',
+      createdAt: entity.created_at,
+      updatedAt: entity.updated_at,
+    };
+
+    if (individualProfile) {
+      base.firstName = individualProfile.first_name;
+      base.middleName = individualProfile.middle_name ?? undefined;
+      base.lastName = individualProfile.last_name;
+      base.gender = individualProfile.gender;
+      base.nationality = individualProfile.nationality;
+      base.dateOfBirth = individualProfile.date_of_birth != null
+        ? (individualProfile.date_of_birth instanceof Date
+            ? individualProfile.date_of_birth
+            : new Date(String(individualProfile.date_of_birth))
+          ).toISOString().slice(0, 10)
+        : undefined;
+      base.placeOfBirth = individualProfile.place_of_birth ?? undefined;
+      base.maritalStatus = individualProfile.marital_status;
+      base.profession = individualProfile.profession;
+      base.province = individualProfile.province;
+      base.municipality = individualProfile.municipality;
+      base.neighborhood = individualProfile.neighborhood;
+      base.street = individualProfile.street;
+      base.plotNumber = individualProfile.plot_number;
+      base.phone = individualProfile.phone;
+      base.email = individualProfile.email ?? undefined;
+      base.identificationType = individualProfile.id_type;
+      base.identificationNumber = individualProfile.id_number;
+    }
+
+    if (orgProfile) {
+      base.companyName = orgProfile.organization_name;
+      base.industry = orgProfile.industry ?? undefined;
+      base.phone = orgProfile.phone ?? undefined;
+      base.email = orgProfile.email ?? undefined;
+      base.province = orgProfile.province ?? undefined;
+      base.municipality = orgProfile.municipality ?? undefined;
+      base.identificationType = orgProfile.registration_type ?? undefined;
+      base.identificationNumber = orgProfile.registration_number ?? undefined;
+    }
+
+    return base;
   }
 
   static toEntity(model: ClientModel): ClientEntity {

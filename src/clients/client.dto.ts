@@ -375,3 +375,71 @@ export class RequestUpdateDto {
   @MinLength(10)
   notes: string;
 }
+
+export class UpdateClientDto {
+  @IsOptional()
+  @IsString()
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  middleName?: string;
+
+  @IsOptional()
+  @IsString()
+  lastName?: string;
+
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
+
+  @IsOptional()
+  @IsString()
+  nationality?: string;
+
+  @IsOptional()
+  @IsString()
+  profession?: string;
+
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  province?: string;
+
+  @IsOptional()
+  @IsString()
+  municipality?: string;
+
+  @IsOptional()
+  @IsString()
+  neighborhood?: string;
+
+  @IsOptional()
+  @IsString()
+  street?: string;
+
+  @IsOptional()
+  @IsEnum(IdType)
+  identificationType?: IdType;
+
+  @IsOptional()
+  @IsString()
+  identificationNumber?: string;
+
+  // Organization
+  @IsOptional()
+  @IsString()
+  organizationName?: string;
+
+  // Segment (both client types)
+  @IsOptional()
+  @IsString()
+  segment?: string;
+}

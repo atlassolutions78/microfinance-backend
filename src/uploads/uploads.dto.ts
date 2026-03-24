@@ -23,3 +23,12 @@ export class PresignResponseDto {
   })
   key: string;
 }
+
+export class DownloadKeyDto {
+  @IsString()
+  key: string;
+}
+
+export class DownloadUrlResponseDto {
+  url: string;
+}
