@@ -6,26 +6,19 @@ import {
   JournalEntryEntity,
   JournalLineEntity,
 } from './accounting.entity';
-import {
-  COA_CODES,
-  ChartAccountType,
-  JournalLineSide,
-  JournalOperationType,
-} from './accounting.enums';
+import { COA_CODES, ChartAccountType } from './accounting.enums';
 
 const BRANCH_ID = '550e8400-e29b-41d4-a716-446655440001';
-const USER_ID = '550e8400-e29b-41d4-a716-446655440002';
+const USER_ID   = '550e8400-e29b-41d4-a716-446655440002';
 
 // ── In-memory stub repository ─────────────────────────────────────────────────
 
 type SavedEntry = { entry: JournalEntryEntity; lines: JournalLineEntity[] };
 
-function makeStubCoa(code: string, currency = 'USD'): ChartOfAccountsEntity {
+function makeStubCoa(code: string): ChartOfAccountsEntity {
   const e = new ChartOfAccountsEntity();
-  e.id = `coa-${code}-${currency}`;
+  e.id = `coa-${code}`;
   e.code = code;
-  e.currency = currency;
-  e.branch_id = BRANCH_ID;
   e.name = code;
   e.type = ChartAccountType.ASSET;
   e.is_active = true;
@@ -39,22 +32,14 @@ function makeStubRepo(knownCodes: string[] = Object.values(COA_CODES)): {
   const saved: SavedEntry[] = [];
   const coaMap = new Map<string, ChartOfAccountsEntity>();
   for (const code of knownCodes) {
-    for (const currency of ['USD', 'FC']) {
-      coaMap.set(`${code}:${currency}`, makeStubCoa(code, currency));
-    }
+    coaMap.set(code, makeStubCoa(code));
   }
 
   const repo = {
-    findChartAccount: async (
-      code: string,
-      _branchId: string,
-      currency: string,
-    ) => {
-      const entity = coaMap.get(`${code}:${currency}`);
+    findChartAccount: async (code: string) => {
+      const entity = coaMap.get(code);
       if (!entity)
-        throw new NotFoundException(
-          `Chart account not found: ${code}/${currency}`,
-        );
+        throw new NotFoundException(`Chart account not found: ${code}`);
       return entity;
     },
     saveEntry: async (
@@ -74,15 +59,11 @@ function makeStubRepo(knownCodes: string[] = Object.values(COA_CODES)): {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function debitLines(saved: SavedEntry[], entryIndex = 0) {
-  return saved[entryIndex].lines.filter(
-    (l) => l.side === JournalLineSide.DEBIT,
-  );
+  return saved[entryIndex].lines.filter((l) => Number(l.debit) > 0);
 }
 
 function creditLines(saved: SavedEntry[], entryIndex = 0) {
-  return saved[entryIndex].lines.filter(
-    (l) => l.side === JournalLineSide.CREDIT,
-  );
+  return saved[entryIndex].lines.filter((l) => Number(l.credit) > 0);
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -90,227 +71,233 @@ function creditLines(saved: SavedEntry[], entryIndex = 0) {
 describe('AccountingService', () => {
   // ── postDeposit ─────────────────────────────────────────────────────────────
   describe('postDeposit()', () => {
-    it('creates one journal entry with operationType=DEPOSIT', async () => {
+    it('creates one journal entry', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postDeposit(500, 'USD', BRANCH_ID, USER_ID);
+      await svc.postDeposit(
+        500, 'USD',
+        COA_CODES.TELLER1_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        BRANCH_ID, USER_ID,
+      );
       expect(saved).toHaveLength(1);
-      expect(saved[0].entry.operation_type).toBe(JournalOperationType.DEPOSIT);
     });
 
     it('reference matches JE-YYYYMMDD-XXXXXX format', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postDeposit(500, 'USD', BRANCH_ID, USER_ID);
+      await svc.postDeposit(
+        500, 'USD',
+        COA_CODES.TELLER1_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        BRANCH_ID, USER_ID,
+      );
       expect(saved[0].entry.reference).toMatch(/^JE-\d{8}-[0-9A-F]{6}$/);
     });
 
     it('creates exactly 2 lines', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postDeposit(500, 'USD', BRANCH_ID, USER_ID);
+      await svc.postDeposit(
+        500, 'USD',
+        COA_CODES.TELLER1_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        BRANCH_ID, USER_ID,
+      );
       expect(saved[0].lines).toHaveLength(2);
     });
 
-    it('DEBIT line uses CASH account', async () => {
+    it('debit line uses the teller account', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postDeposit(500, 'USD', BRANCH_ID, USER_ID);
-      expect(debitLines(saved)[0].account_id).toBe(`coa-${COA_CODES.CASH}-USD`);
+      await svc.postDeposit(
+        500, 'USD',
+        COA_CODES.TELLER1_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        BRANCH_ID, USER_ID,
+      );
+      expect(debitLines(saved)[0].account_id).toBe(
+        `coa-${COA_CODES.TELLER1_USD}`,
+      );
     });
 
-    it('CREDIT line uses MEMBER_DEPOSITS account', async () => {
+    it('credit line uses the customer savings account', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postDeposit(500, 'USD', BRANCH_ID, USER_ID);
+      await svc.postDeposit(
+        500, 'USD',
+        COA_CODES.TELLER1_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        BRANCH_ID, USER_ID,
+      );
       expect(creditLines(saved)[0].account_id).toBe(
-        `coa-${COA_CODES.MEMBER_DEPOSITS}-USD`,
+        `coa-${COA_CODES.CUSTOMER_SAVINGS_USD}`,
       );
     });
 
     it('both lines carry the correct amount and currency', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postDeposit(500, 'USD', BRANCH_ID, USER_ID);
-      expect(Number(debitLines(saved)[0].amount)).toBe(500);
-      expect(Number(creditLines(saved)[0].amount)).toBe(500);
+      await svc.postDeposit(
+        500, 'USD',
+        COA_CODES.TELLER1_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        BRANCH_ID, USER_ID,
+      );
+      expect(Number(debitLines(saved)[0].debit)).toBe(500);
+      expect(Number(creditLines(saved)[0].credit)).toBe(500);
       expect(saved[0].lines.every((l) => l.currency === 'USD')).toBe(true);
     });
 
     it('entry is balanced', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postDeposit(1000, 'USD', BRANCH_ID, USER_ID);
-      const debits = debitLines(saved).reduce(
-        (s, l) => s + Number(l.amount),
-        0,
+      await svc.postDeposit(
+        1000, 'USD',
+        COA_CODES.TELLER1_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        BRANCH_ID, USER_ID,
       );
-      const credits = creditLines(saved).reduce(
-        (s, l) => s + Number(l.amount),
-        0,
-      );
+      const debits  = saved[0].lines.reduce((s, l) => s + Number(l.debit), 0);
+      const credits = saved[0].lines.reduce((s, l) => s + Number(l.credit), 0);
       expect(debits).toBe(credits);
     });
 
-    it('throws if CASH chart account not found for branch', async () => {
-      const { repo } = makeStubRepo(['MEMBER_DEPOSITS']); // CASH missing
+    it('throws when teller account code is not found', async () => {
+      const { repo } = makeStubRepo([COA_CODES.CUSTOMER_SAVINGS_USD]);
       const svc = new AccountingService(repo);
       await expect(
-        svc.postDeposit(500, 'USD', BRANCH_ID, USER_ID),
+        svc.postDeposit(
+          500, 'USD',
+          COA_CODES.TELLER1_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+          BRANCH_ID, USER_ID,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
   });
 
   // ── postWithdrawal ───────────────────────────────────────────────────────────
   describe('postWithdrawal()', () => {
-    it('DEBIT line uses MEMBER_DEPOSITS', async () => {
+    it('debit line uses customer savings account', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postWithdrawal(200, 'USD', BRANCH_ID, USER_ID);
+      await svc.postWithdrawal(
+        200, 'USD',
+        COA_CODES.TELLER1_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        BRANCH_ID, USER_ID,
+      );
       expect(debitLines(saved)[0].account_id).toBe(
-        `coa-${COA_CODES.MEMBER_DEPOSITS}-USD`,
+        `coa-${COA_CODES.CUSTOMER_SAVINGS_USD}`,
       );
     });
 
-    it('CREDIT line uses CASH', async () => {
+    it('credit line uses teller account', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postWithdrawal(200, 'USD', BRANCH_ID, USER_ID);
+      await svc.postWithdrawal(
+        200, 'USD',
+        COA_CODES.TELLER1_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        BRANCH_ID, USER_ID,
+      );
       expect(creditLines(saved)[0].account_id).toBe(
-        `coa-${COA_CODES.CASH}-USD`,
+        `coa-${COA_CODES.TELLER1_USD}`,
       );
     });
 
     it('entry is balanced', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postWithdrawal(300, 'USD', BRANCH_ID, USER_ID);
-      const debits = debitLines(saved).reduce(
-        (s, l) => s + Number(l.amount),
-        0,
+      await svc.postWithdrawal(
+        300, 'USD',
+        COA_CODES.TELLER1_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        BRANCH_ID, USER_ID,
       );
-      const credits = creditLines(saved).reduce(
-        (s, l) => s + Number(l.amount),
-        0,
-      );
+      const debits  = saved[0].lines.reduce((s, l) => s + Number(l.debit), 0);
+      const credits = saved[0].lines.reduce((s, l) => s + Number(l.credit), 0);
       expect(debits).toBe(credits);
     });
   });
 
-  // ── postInternalTransfer ─────────────────────────────────────────────────────
-  describe('postInternalTransfer()', () => {
-    it('DEBIT line uses MEMBER_DEPOSITS', async () => {
+  // ── postLoanRepaymentFromSavings ─────────────────────────────────────────────
+  describe('postLoanRepaymentFromSavings()', () => {
+    it('creates 3 lines for principal + interest (no penalty)', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postInternalTransfer(100, 'USD', BRANCH_ID, USER_ID);
-      expect(debitLines(saved)[0].account_id).toBe(
-        `coa-${COA_CODES.MEMBER_DEPOSITS}-USD`,
+      await svc.postLoanRepaymentFromSavings(
+        100, 10, 0, 'USD',
+        COA_CODES.CUSTOMER_SAVINGS_USD, COA_CODES.LOANS_STANDARD_USD,
+        COA_CODES.INTEREST_INCOME_USD,  COA_CODES.PENALTY_INCOME_USD,
+        BRANCH_ID, USER_ID,
       );
+      expect(saved[0].lines).toHaveLength(3);
     });
 
-    it('CREDIT line uses MEMBER_DEPOSITS', async () => {
+    it('creates 4 lines when penalty > 0', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postInternalTransfer(100, 'USD', BRANCH_ID, USER_ID);
-      expect(creditLines(saved)[0].account_id).toBe(
-        `coa-${COA_CODES.MEMBER_DEPOSITS}-USD`,
+      await svc.postLoanRepaymentFromSavings(
+        75, 5, 20, 'USD',
+        COA_CODES.CUSTOMER_SAVINGS_USD, COA_CODES.LOANS_STANDARD_USD,
+        COA_CODES.INTEREST_INCOME_USD,  COA_CODES.PENALTY_INCOME_USD,
+        BRANCH_ID, USER_ID,
       );
+      expect(saved[0].lines).toHaveLength(4);
     });
 
-    it('entry is balanced', async () => {
+    it('entry is balanced with penalty', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postInternalTransfer(150, 'USD', BRANCH_ID, USER_ID);
-      const debits = debitLines(saved).reduce(
-        (s, l) => s + Number(l.amount),
-        0,
+      await svc.postLoanRepaymentFromSavings(
+        75, 5, 20, 'USD',
+        COA_CODES.CUSTOMER_SAVINGS_USD, COA_CODES.LOANS_STANDARD_USD,
+        COA_CODES.INTEREST_INCOME_USD,  COA_CODES.PENALTY_INCOME_USD,
+        BRANCH_ID, USER_ID,
       );
-      const credits = creditLines(saved).reduce(
-        (s, l) => s + Number(l.amount),
-        0,
-      );
+      const debits  = saved[0].lines.reduce((s, l) => s + Number(l.debit), 0);
+      const credits = saved[0].lines.reduce((s, l) => s + Number(l.credit), 0);
       expect(debits).toBe(credits);
     });
   });
 
-  // ── postExternalTransfer ─────────────────────────────────────────────────────
-  describe('postExternalTransfer()', () => {
-    it('creates 2 journal entries (one TRANSFER, one FEE_PENALTY)', async () => {
+  // ── postVaultToTeller ────────────────────────────────────────────────────────
+  describe('postVaultToTeller()', () => {
+    it('creates one balanced entry', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postExternalTransfer(1000, 10, 'USD', BRANCH_ID, USER_ID);
-      expect(saved).toHaveLength(2);
-      expect(saved[0].entry.operation_type).toBe(JournalOperationType.TRANSFER);
-      expect(saved[1].entry.operation_type).toBe(
-        JournalOperationType.FEE_PENALTY,
+      await svc.postVaultToTeller(
+        2000, 'USD',
+        COA_CODES.TELLER1_USD, COA_CODES.VAULT_USD,
+        BRANCH_ID, USER_ID,
       );
-    });
-
-    it('transfer entry: DEBIT MEMBER_DEPOSITS, CREDIT CASH', async () => {
-      const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
-      await svc.postExternalTransfer(1000, 10, 'USD', BRANCH_ID, USER_ID);
-      expect(debitLines(saved, 0)[0].account_id).toBe(
-        `coa-${COA_CODES.MEMBER_DEPOSITS}-USD`,
-      );
-      expect(creditLines(saved, 0)[0].account_id).toBe(
-        `coa-${COA_CODES.CASH}-USD`,
-      );
-    });
-
-    it('fee entry: DEBIT CASH, CREDIT FEE_INCOME', async () => {
-      const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
-      await svc.postExternalTransfer(1000, 10, 'USD', BRANCH_ID, USER_ID);
-      expect(debitLines(saved, 1)[0].account_id).toBe(
-        `coa-${COA_CODES.CASH}-USD`,
-      );
-      expect(creditLines(saved, 1)[0].account_id).toBe(
-        `coa-${COA_CODES.FEE_INCOME}-USD`,
-      );
-    });
-
-    it('both entries are individually balanced', async () => {
-      const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
-      await svc.postExternalTransfer(1000, 10, 'USD', BRANCH_ID, USER_ID);
-      for (const s of saved) {
-        const debits = s.lines
-          .filter((l) => l.side === JournalLineSide.DEBIT)
-          .reduce((a, l) => a + Number(l.amount), 0);
-        const credits = s.lines
-          .filter((l) => l.side === JournalLineSide.CREDIT)
-          .reduce((a, l) => a + Number(l.amount), 0);
-        expect(debits).toBe(credits);
-      }
-    });
-
-    it('skips fee entry when feeAmount is 0', async () => {
-      const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
-      await svc.postExternalTransfer(1000, 0, 'USD', BRANCH_ID, USER_ID);
       expect(saved).toHaveLength(1);
+      const debits  = saved[0].lines.reduce((s, l) => s + Number(l.debit), 0);
+      const credits = saved[0].lines.reduce((s, l) => s + Number(l.credit), 0);
+      expect(debits).toBe(credits);
     });
   });
 
-  // ── postFeePenalty ───────────────────────────────────────────────────────────
-  describe('postFeePenalty()', () => {
-    it('CREDIT uses FEE_INCOME when isPenalty=false', async () => {
+  // ── postReversal ─────────────────────────────────────────────────────────────
+  describe('postReversal()', () => {
+    it('flips debit and credit of original lines', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postFeePenalty(50, false, 'USD', BRANCH_ID, USER_ID);
+      const originalLines = [
+        { accountCode: COA_CODES.TELLER1_USD,          debit: 300, credit: 0,   currency: 'USD' },
+        { accountCode: COA_CODES.CUSTOMER_SAVINGS_USD, debit: 0,   credit: 300, currency: 'USD' },
+      ];
+      await svc.postReversal(originalLines, 'JE-2026-022', BRANCH_ID, USER_ID);
+      expect(Number(debitLines(saved)[0].debit)).toBe(300);
+      expect(Number(creditLines(saved)[0].credit)).toBe(300);
+      expect(debitLines(saved)[0].account_id).toBe(
+        `coa-${COA_CODES.CUSTOMER_SAVINGS_USD}`,
+      );
       expect(creditLines(saved)[0].account_id).toBe(
-        `coa-${COA_CODES.FEE_INCOME}-USD`,
+        `coa-${COA_CODES.TELLER1_USD}`,
       );
     });
 
-    it('CREDIT uses PENALTY_INCOME when isPenalty=true', async () => {
+    it('sets reversal_of on the saved entry', async () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
-      await svc.postFeePenalty(50, true, 'USD', BRANCH_ID, USER_ID);
-      expect(creditLines(saved)[0].account_id).toBe(
-        `coa-${COA_CODES.PENALTY_INCOME}-USD`,
-      );
+      const originalLines = [
+        { accountCode: COA_CODES.TELLER1_USD,          debit: 300, credit: 0,   currency: 'USD' },
+        { accountCode: COA_CODES.CUSTOMER_SAVINGS_USD, debit: 0,   credit: 300, currency: 'USD' },
+      ];
+      await svc.postReversal(originalLines, 'JE-2026-022', BRANCH_ID, USER_ID);
+      expect(saved[0].entry.reversal_of).toBe('JE-2026-022');
     });
   });
 });

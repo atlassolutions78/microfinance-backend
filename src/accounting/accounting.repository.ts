@@ -27,28 +27,22 @@ export class AccountingRepository {
   ) {}
 
   /**
-   * Looks up a chart-of-accounts entry by its standard code, branch, and currency.
-   * Throws NotFoundException if the account has not been seeded for this branch.
+   * Looks up a chart-of-accounts entry by its numeric code.
+   * COA is institution-wide — no branch or currency filter needed.
+   * Throws NotFoundException if the account has not been seeded.
    */
   async findChartAccount(
     code: string,
-    branchId: string,
-    currency: string,
     em?: EntityManager,
   ): Promise<ChartOfAccountsEntity> {
     const repo = em ? em.getRepository(ChartOfAccountsEntity) : this.coaRepo;
     const entity = await repo.findOne({
-      where: {
-        code,
-        branch_id: branchId,
-        currency: currency as any,
-        is_active: true,
-      },
+      where: { code, is_active: true },
     });
     if (!entity) {
       throw new NotFoundException(
-        `Chart of accounts entry not found: code="${code}", branch="${branchId}", currency="${currency}". ` +
-          `Ensure chart_of_accounts is seeded for this branch before processing transactions.`,
+        `Chart of accounts entry not found: code="${code}". ` +
+          `Ensure chart_of_accounts is seeded before processing transactions.`,
       );
     }
     return entity;
@@ -79,13 +73,9 @@ export class AccountingRepository {
     }
   }
 
-  async findAll(
-    branchId?: string,
-    operationType?: string,
-  ): Promise<JournalEntryRecord[]> {
+  async findAll(branchId?: string): Promise<JournalEntryRecord[]> {
     const where: Record<string, any> = {};
     if (branchId) where.branch_id = branchId;
-    if (operationType) where.operation_type = operationType;
 
     const entities = await this.entryRepo.find({
       where,
@@ -102,23 +92,20 @@ export class AccountingRepository {
     });
     if (!entity) return null;
 
-    // Resolve performer name — performed_by stores the user UUID
-    let performedByName: string | undefined;
+    let createdByName: string | undefined;
     const user = await this.userRepo.findOne({
-      where: { id: entity.performed_by },
+      where: { id: entity.created_by },
       select: { id: true, first_name: true, last_name: true },
     });
     if (user) {
-      performedByName = `${user.first_name} ${user.last_name}`;
+      createdByName = `${user.first_name} ${user.last_name}`;
     }
 
-    return AccountingMapper.entryToDomain(entity, performedByName);
+    return AccountingMapper.entryToDomain(entity, createdByName);
   }
 
-  async findChartAccounts(branchId?: string): Promise<ChartOfAccountsRecord[]> {
-    const where: Record<string, any> = {};
-    if (branchId) where.branch_id = branchId;
-    const entities = await this.coaRepo.find({ where });
+  async findChartAccounts(): Promise<ChartOfAccountsRecord[]> {
+    const entities = await this.coaRepo.find({ order: { code: 'ASC' } });
     return entities.map(AccountingMapper.coaToDomain);
   }
 }

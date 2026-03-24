@@ -6,19 +6,19 @@ import {
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
-import {
-  ChartAccountType,
-  JournalLineSide,
-  JournalOperationType,
-} from './accounting.enums';
+import { ChartAccountType, JournalEntryStatus } from './accounting.enums';
 
 @Entity('chart_of_accounts')
 export class ChartOfAccountsEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'uuid', name: 'parent_id', nullable: true })
+  parent_id: string | null;
+
+  @Column({ type: 'varchar', unique: true })
   code: string;
 
   @Column({ type: 'varchar' })
@@ -31,18 +31,26 @@ export class ChartOfAccountsEntity {
   })
   type: ChartAccountType;
 
-  @Column({
-    type: 'enum',
-    enum: ['USD', 'FC'],
-    enumName: 'transactions_currency_enum',
-  })
-  currency: string;
-
-  @Column({ type: 'uuid', name: 'branch_id' })
-  branch_id: string;
-
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
+
+  @Column({ type: 'uuid', name: 'created_by' })
+  created_by: string;
+
+  @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
+  created_at: Date;
+
+  @UpdateDateColumn({ type: 'timestamptz', name: 'updated_at' })
+  updated_at: Date;
+
+  @ManyToOne(() => ChartOfAccountsEntity, (coa) => coa.children, {
+    nullable: true,
+  })
+  @JoinColumn({ name: 'parent_id' })
+  parent: ChartOfAccountsEntity | null;
+
+  @OneToMany(() => ChartOfAccountsEntity, (coa) => coa.parent)
+  children: ChartOfAccountsEntity[];
 
   @OneToMany(() => JournalLineEntity, (line) => line.chartAccount)
   lines: JournalLineEntity[];
@@ -56,25 +64,34 @@ export class JournalEntryEntity {
   @Column({ type: 'varchar', unique: true })
   reference: string;
 
-  @Column({
-    type: 'enum',
-    enum: JournalOperationType,
-    enumName: 'journal_operation_type_enum',
-    name: 'operation_type',
-  })
-  operation_type: JournalOperationType;
-
   @Column({ type: 'uuid', name: 'branch_id' })
   branch_id: string;
 
-  @Column({ type: 'uuid', name: 'performed_by' })
-  performed_by: string;
+  @Column({
+    type: 'enum',
+    enum: JournalEntryStatus,
+    enumName: 'journal_entry_status_enum',
+    default: JournalEntryStatus.POSTED,
+  })
+  status: JournalEntryStatus;
+
+  @Column({ type: 'uuid', name: 'reversal_of', nullable: true })
+  reversal_of: string | null;
+
+  @Column({ type: 'uuid', name: 'posted_by', nullable: true })
+  posted_by: string | null;
+
+  @Column({ type: 'timestamptz', name: 'posted_at', nullable: true })
+  posted_at: Date | null;
+
+  @Column({ type: 'uuid', name: 'transaction_id', nullable: true })
+  transaction_id: string | null;
+
+  @Column({ type: 'uuid', name: 'created_by' })
+  created_by: string;
 
   @Column({ type: 'text', nullable: true })
   description: string | null;
-
-  @Column({ type: 'varchar', nullable: true, name: 'related_reference' })
-  related_reference: string | null;
 
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   created_at: Date;
@@ -96,15 +113,14 @@ export class JournalLineEntity {
   @Column({ type: 'uuid', name: 'account_id' })
   account_id: string;
 
-  @Column({
-    type: 'enum',
-    enum: JournalLineSide,
-    enumName: 'journal_line_side_enum',
-  })
-  side: JournalLineSide;
+  @Column({ type: 'uuid', name: 'client_account_id', nullable: true })
+  client_account_id: string | null;
 
-  @Column({ type: 'numeric', precision: 18, scale: 4 })
-  amount: string; // PostgreSQL returns numeric as string
+  @Column({ type: 'numeric', precision: 18, scale: 4, default: 0 })
+  debit: string;
+
+  @Column({ type: 'numeric', precision: 18, scale: 4, default: 0 })
+  credit: string;
 
   @Column({
     type: 'enum',
@@ -112,6 +128,9 @@ export class JournalLineEntity {
     enumName: 'transactions_currency_enum',
   })
   currency: string;
+
+  @Column({ type: 'text', nullable: true })
+  description: string | null;
 
   @ManyToOne(() => JournalEntryEntity, (entry) => entry.lines)
   @JoinColumn({ name: 'journal_entry_id' })

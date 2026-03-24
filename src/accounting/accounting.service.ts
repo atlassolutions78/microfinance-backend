@@ -6,11 +6,7 @@ import {
   JournalEntryEntity,
   JournalLineEntity,
 } from './accounting.entity';
-import {
-  COA_CODES,
-  JournalLineSide,
-  JournalOperationType,
-} from './accounting.enums';
+import { COA_CODES, JournalEntryStatus } from './accounting.enums';
 import { JournalEntryDraft, JournalLineSpec } from './accounting.model';
 import { AccountingRepository } from './accounting.repository';
 import {
@@ -23,319 +19,251 @@ import {
 export class AccountingService {
   constructor(private readonly repo: AccountingRepository) {}
 
-  // ─── Public posting helpers ──────────────────────────────────────────────────
+  // ─── Posting helpers ─────────────────────────────────────────────────────────
 
   async postDeposit(
     amount: number,
     currency: string,
+    tellerCode: string,
+    clientSavingsCode: string,
     branchId: string,
-    performedBy: string,
+    createdBy: string,
+    clientAccountId?: string,
     description?: string,
     em?: EntityManager,
-  ): Promise<void> {
-    const draft = new JournalEntryDraft(
-      JournalOperationType.DEPOSIT,
-      branchId,
-      performedBy,
-      description,
-      [
-        {
-          accountCode: COA_CODES.CASH,
-          side: JournalLineSide.DEBIT,
-          amount,
-          currency,
-        },
-        {
-          accountCode: COA_CODES.MEMBER_DEPOSITS,
-          side: JournalLineSide.CREDIT,
-          amount,
-          currency,
-        },
-      ],
-    );
-    await this.post(draft, em);
+  ): Promise<string> {
+    const draft = new JournalEntryDraft(branchId, createdBy, description, [
+      { accountCode: tellerCode, debit: amount, credit: 0, currency },
+      {
+        accountCode: clientSavingsCode,
+        debit: 0,
+        credit: amount,
+        currency,
+        clientAccountId,
+      },
+    ]);
+    return this.post(draft, em);
   }
 
   async postWithdrawal(
     amount: number,
     currency: string,
+    tellerCode: string,
+    clientSavingsCode: string,
     branchId: string,
-    performedBy: string,
+    createdBy: string,
+    clientAccountId?: string,
     description?: string,
     em?: EntityManager,
-  ): Promise<void> {
-    const draft = new JournalEntryDraft(
-      JournalOperationType.WITHDRAWAL,
-      branchId,
-      performedBy,
-      description,
-      [
-        {
-          accountCode: COA_CODES.MEMBER_DEPOSITS,
-          side: JournalLineSide.DEBIT,
-          amount,
-          currency,
-        },
-        {
-          accountCode: COA_CODES.CASH,
-          side: JournalLineSide.CREDIT,
-          amount,
-          currency,
-        },
-      ],
-    );
-    await this.post(draft, em);
-  }
-
-  async postInternalTransfer(
-    amount: number,
-    currency: string,
-    branchId: string,
-    performedBy: string,
-    description?: string,
-    em?: EntityManager,
-  ): Promise<void> {
-    const draft = new JournalEntryDraft(
-      JournalOperationType.TRANSFER,
-      branchId,
-      performedBy,
-      description,
-      [
-        {
-          accountCode: COA_CODES.MEMBER_DEPOSITS,
-          side: JournalLineSide.DEBIT,
-          amount,
-          currency,
-        },
-        {
-          accountCode: COA_CODES.MEMBER_DEPOSITS,
-          side: JournalLineSide.CREDIT,
-          amount,
-          currency,
-        },
-      ],
-    );
-    await this.post(draft, em);
+  ): Promise<string> {
+    const draft = new JournalEntryDraft(branchId, createdBy, description, [
+      {
+        accountCode: clientSavingsCode,
+        debit: amount,
+        credit: 0,
+        currency,
+        clientAccountId,
+      },
+      { accountCode: tellerCode, debit: 0, credit: amount, currency },
+    ]);
+    return this.post(draft, em);
   }
 
   /**
-   * External transfer produces two separate journal entries:
-   * 1. The transfer itself (Member Deposits → Cash)
-   * 2. The fee (Cash → Fee Income)
+   * Step 1 of loan disbursement: credit the client's savings account.
+   * Step 2 is a normal withdrawal by the client.
    */
-  async postExternalTransfer(
-    amount: number,
-    feeAmount: number,
-    currency: string,
-    branchId: string,
-    performedBy: string,
-    description?: string,
-    em?: EntityManager,
-  ): Promise<void> {
-    const transferDraft = new JournalEntryDraft(
-      JournalOperationType.TRANSFER,
-      branchId,
-      performedBy,
-      description,
-      [
-        {
-          accountCode: COA_CODES.MEMBER_DEPOSITS,
-          side: JournalLineSide.DEBIT,
-          amount,
-          currency,
-        },
-        {
-          accountCode: COA_CODES.CASH,
-          side: JournalLineSide.CREDIT,
-          amount,
-          currency,
-        },
-      ],
-    );
-    const transferRef = await this.post(transferDraft, em);
-
-    if (feeAmount > 0) {
-      const feeDraft = new JournalEntryDraft(
-        JournalOperationType.FEE_PENALTY,
-        branchId,
-        performedBy,
-        description,
-        [
-          {
-            accountCode: COA_CODES.CASH,
-            side: JournalLineSide.DEBIT,
-            amount: feeAmount,
-            currency,
-          },
-          {
-            accountCode: COA_CODES.FEE_INCOME,
-            side: JournalLineSide.CREDIT,
-            amount: feeAmount,
-            currency,
-          },
-        ],
-        transferRef,
-      );
-      await this.post(feeDraft, em);
-    }
-  }
-
-  async postFeePenalty(
-    amount: number,
-    isPenalty: boolean,
-    currency: string,
-    branchId: string,
-    performedBy: string,
-    description?: string,
-    em?: EntityManager,
-  ): Promise<void> {
-    const creditCode = isPenalty
-      ? COA_CODES.PENALTY_INCOME
-      : COA_CODES.FEE_INCOME;
-    const draft = new JournalEntryDraft(
-      JournalOperationType.FEE_PENALTY,
-      branchId,
-      performedBy,
-      description,
-      [
-        {
-          accountCode: COA_CODES.CASH,
-          side: JournalLineSide.DEBIT,
-          amount,
-          currency,
-        },
-        {
-          accountCode: creditCode,
-          side: JournalLineSide.CREDIT,
-          amount,
-          currency,
-        },
-      ],
-    );
-    await this.post(draft, em);
-  }
-
-  /** Stub — wired when Epic 4 (Loan Module) is implemented. */
-  async postLoanDisbursement(
+  async postLoanDisbursementToSavings(
     amount: number,
     currency: string,
+    loanReceivableCode: string,
+    clientSavingsCode: string,
     branchId: string,
-    performedBy: string,
+    createdBy: string,
+    clientAccountId?: string,
     description?: string,
     em?: EntityManager,
-  ): Promise<void> {
-    const draft = new JournalEntryDraft(
-      JournalOperationType.LOAN_DISBURSEMENT,
-      branchId,
-      performedBy,
-      description,
-      [
-        {
-          accountCode: COA_CODES.LOANS_RECEIVABLE,
-          side: JournalLineSide.DEBIT,
-          amount,
-          currency,
-        },
-        {
-          accountCode: COA_CODES.CASH,
-          side: JournalLineSide.CREDIT,
-          amount,
-          currency,
-        },
-      ],
-    );
-    await this.post(draft, em);
-  }
-
-  /** Stub — wired when Epic 4 (Loan Module) is implemented. */
-  async postLoanRepayment(
-    principal: number,
-    interest: number,
-    currency: string,
-    branchId: string,
-    performedBy: string,
-    description?: string,
-    em?: EntityManager,
-  ): Promise<void> {
-    const total = principal + interest;
-    const lines: JournalLineSpec[] = [
+  ): Promise<string> {
+    const draft = new JournalEntryDraft(branchId, createdBy, description, [
       {
-        accountCode: COA_CODES.CASH,
-        side: JournalLineSide.DEBIT,
-        amount: total,
+        accountCode: loanReceivableCode,
+        debit: amount,
+        credit: 0,
         currency,
       },
       {
-        accountCode: COA_CODES.LOANS_RECEIVABLE,
-        side: JournalLineSide.CREDIT,
-        amount: principal,
+        accountCode: clientSavingsCode,
+        debit: 0,
+        credit: amount,
+        currency,
+        clientAccountId,
+      },
+    ]);
+    return this.post(draft, em);
+  }
+
+  /**
+   * Loan repayment: client deposits cash (step 1), then the repayment
+   * is deducted from their savings (step 2), split into principal + interest
+   * and optionally + penalty.
+   */
+  async postLoanRepaymentFromSavings(
+    principal: number,
+    interest: number,
+    penalty: number,
+    currency: string,
+    clientSavingsCode: string,
+    loanReceivableCode: string,
+    interestIncomeCode: string,
+    penaltyIncomeCode: string,
+    branchId: string,
+    createdBy: string,
+    clientAccountId?: string,
+    description?: string,
+    em?: EntityManager,
+  ): Promise<string> {
+    const total = principal + interest + penalty;
+    const lines: JournalLineSpec[] = [
+      {
+        accountCode: clientSavingsCode,
+        debit: total,
+        credit: 0,
+        currency,
+        clientAccountId,
+      },
+      {
+        accountCode: loanReceivableCode,
+        debit: 0,
+        credit: principal,
         currency,
       },
     ];
     if (interest > 0) {
       lines.push({
-        accountCode: COA_CODES.INTEREST_INCOME,
-        side: JournalLineSide.CREDIT,
-        amount: interest,
+        accountCode: interestIncomeCode,
+        debit: 0,
+        credit: interest,
         currency,
       });
     }
+    if (penalty > 0) {
+      lines.push({
+        accountCode: penaltyIncomeCode,
+        debit: 0,
+        credit: penalty,
+        currency,
+      });
+    }
+    const draft = new JournalEntryDraft(branchId, createdBy, description, lines);
+    return this.post(draft, em);
+  }
+
+  async postVaultToTeller(
+    amount: number,
+    currency: string,
+    tellerCode: string,
+    vaultCode: string,
+    branchId: string,
+    createdBy: string,
+    description?: string,
+    em?: EntityManager,
+  ): Promise<string> {
+    const draft = new JournalEntryDraft(branchId, createdBy, description, [
+      { accountCode: tellerCode, debit: amount, credit: 0, currency },
+      { accountCode: vaultCode, debit: 0, credit: amount, currency },
+    ]);
+    return this.post(draft, em);
+  }
+
+  async postExpense(
+    amount: number,
+    currency: string,
+    expenseCode: string,
+    cashCode: string,
+    branchId: string,
+    createdBy: string,
+    description?: string,
+    em?: EntityManager,
+  ): Promise<string> {
+    const draft = new JournalEntryDraft(branchId, createdBy, description, [
+      { accountCode: expenseCode, debit: amount, credit: 0, currency },
+      { accountCode: cashCode, debit: 0, credit: amount, currency },
+    ]);
+    return this.post(draft, em);
+  }
+
+  /**
+   * Posts a reversal of an existing entry.
+   * The reversal flips every debit/credit on the original lines.
+   * The original entry is NOT automatically marked as REVERSED here —
+   * that update must be done separately by the caller.
+   */
+  async postReversal(
+    originalLines: JournalLineSpec[],
+    reversalOf: string,
+    branchId: string,
+    createdBy: string,
+    description?: string,
+    em?: EntityManager,
+  ): Promise<string> {
+    const reversedLines: JournalLineSpec[] = originalLines.map((l) => ({
+      accountCode: l.accountCode,
+      clientAccountId: l.clientAccountId,
+      debit: l.credit,
+      credit: l.debit,
+      currency: l.currency,
+      description: l.description,
+    }));
     const draft = new JournalEntryDraft(
-      JournalOperationType.LOAN_REPAYMENT,
       branchId,
-      performedBy,
+      createdBy,
       description,
-      lines,
+      reversedLines,
+      reversalOf,
     );
-    await this.post(draft, em);
+    return this.post(draft, em);
   }
 
   // ─── Query helpers ───────────────────────────────────────────────────────────
 
-  async findEntries(
-    branchId?: string,
-    operationType?: string,
-  ): Promise<JournalEntryRecord[]> {
-    return this.repo.findAll(branchId, operationType);
+  async findEntries(branchId?: string): Promise<JournalEntryRecord[]> {
+    return this.repo.findAll(branchId);
   }
 
   /**
-   * Returns entries grouped so that child entries (those with a relatedReference)
-   * are nested under their parent entry. Standalone entries appear with an empty
-   * related array.
+   * Returns entries grouped so that reversal entries are nested under
+   * the original entry they reverse. Standalone entries appear with an
+   * empty reversals array.
    */
   async findGroupedEntries(
     branchId?: string,
-    operationType?: string,
   ): Promise<JournalEntryGroupRecord[]> {
-    const entries = await this.repo.findAll(branchId, operationType);
+    const entries = await this.repo.findAll(branchId);
 
-    const byRef = new Map<string, JournalEntryRecord>();
-    const children = new Map<string, JournalEntryRecord[]>();
+    const byId = new Map<string, JournalEntryRecord>();
+    const reversalsMap = new Map<string, JournalEntryRecord[]>();
 
     for (const entry of entries) {
-      byRef.set(entry.reference, entry);
-      if (!children.has(entry.reference)) {
-        children.set(entry.reference, []);
+      byId.set(entry.id, entry);
+      if (!reversalsMap.has(entry.id)) {
+        reversalsMap.set(entry.id, []);
       }
     }
 
     for (const entry of entries) {
-      if (entry.relatedReference && byRef.has(entry.relatedReference)) {
-        const list = children.get(entry.relatedReference)!;
-        if (!list.some((c) => c.id === entry.id)) {
+      if (entry.reversalOf && byId.has(entry.reversalOf)) {
+        const list = reversalsMap.get(entry.reversalOf)!;
+        if (!list.some((r) => r.id === entry.id)) {
           list.push(entry);
         }
       }
     }
 
-    // Only return parent-level entries (those without a relatedReference,
-    // or whose relatedReference doesn't match any known entry)
     return entries
-      .filter((e) => !e.relatedReference || !byRef.has(e.relatedReference))
+      .filter((e) => !e.reversalOf || !byId.has(e.reversalOf))
       .map((e) => ({
         entry: e,
-        related: children.get(e.reference) ?? [],
+        reversals: reversalsMap.get(e.id) ?? [],
       }));
   }
 
@@ -343,8 +271,8 @@ export class AccountingService {
     return this.repo.findById(id);
   }
 
-  async findChartAccounts(branchId?: string): Promise<ChartOfAccountsRecord[]> {
-    return this.repo.findChartAccounts(branchId);
+  async findChartAccounts(): Promise<ChartOfAccountsRecord[]> {
+    return this.repo.findChartAccounts();
   }
 
   // ─── Core private method ─────────────────────────────────────────────────────
@@ -355,36 +283,34 @@ export class AccountingService {
   ): Promise<string> {
     draft.assertBalanced();
 
-    // Resolve each line's accountCode → ChartOfAccountsEntity.id
     const resolvedAccounts = new Map<string, ChartOfAccountsEntity>();
     for (const line of draft.lines) {
-      const key = `${line.accountCode}:${line.currency}`;
-      if (!resolvedAccounts.has(key)) {
-        const coa = await this.repo.findChartAccount(
-          line.accountCode,
-          draft.branchId,
-          line.currency,
-          em,
-        );
-        resolvedAccounts.set(key, coa);
+      if (!resolvedAccounts.has(line.accountCode)) {
+        const coa = await this.repo.findChartAccount(line.accountCode, em);
+        resolvedAccounts.set(line.accountCode, coa);
       }
     }
 
     const entry = new JournalEntryEntity();
     entry.reference = this.generateReference();
-    entry.operation_type = draft.operationType;
     entry.branch_id = draft.branchId;
-    entry.performed_by = draft.performedBy;
+    entry.created_by = draft.createdBy;
     entry.description = draft.description ?? null;
-    entry.related_reference = draft.relatedReference ?? null;
+    entry.status = JournalEntryStatus.POSTED;
+    entry.reversal_of = draft.reversalOf ?? null;
+    entry.posted_by = draft.createdBy;
+    entry.posted_at = new Date();
+    entry.transaction_id = null;
 
     const lines: JournalLineEntity[] = draft.lines.map((spec) => {
-      const coa = resolvedAccounts.get(`${spec.accountCode}:${spec.currency}`)!;
+      const coa = resolvedAccounts.get(spec.accountCode)!;
       const line = new JournalLineEntity();
       line.account_id = coa.id;
-      line.side = spec.side;
-      line.amount = String(spec.amount);
+      line.client_account_id = spec.clientAccountId ?? null;
+      line.debit = String(spec.debit);
+      line.credit = String(spec.credit);
       line.currency = spec.currency;
+      line.description = spec.description ?? null;
       return line;
     });
 

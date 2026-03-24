@@ -25,25 +25,22 @@ export class AccountingController {
 
   @Get('accounts')
   @ApiOperation({ summary: 'List chart of accounts' })
-  @ApiQuery({ name: 'branchId', required: false })
-  findChartAccounts(@Query('branchId') branchId?: string) {
-    return this.accountingService.findChartAccounts(branchId);
+  findChartAccounts() {
+    return this.accountingService.findChartAccounts();
   }
 
   @Get('entries')
   @ApiOperation({ summary: 'List journal entries' })
   @ApiQuery({ name: 'branchId', required: false })
-  @ApiQuery({ name: 'operationType', required: false })
   @ApiQuery({ name: 'grouped', required: false, type: Boolean })
   findEntries(
     @Query('branchId') branchId?: string,
-    @Query('operationType') operationType?: string,
     @Query('grouped') grouped?: string,
   ) {
     if (grouped === 'true') {
-      return this.accountingService.findGroupedEntries(branchId, operationType);
+      return this.accountingService.findGroupedEntries(branchId);
     }
-    return this.accountingService.findEntries(branchId, operationType);
+    return this.accountingService.findEntries(branchId);
   }
 
   @Get('entries/:id')
