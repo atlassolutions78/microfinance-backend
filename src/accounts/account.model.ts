@@ -10,6 +10,7 @@ export interface AccountModelProps {
   status: AccountStatus;
   balance: number;
   openedBy: string;
+  openedByName?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,6 +35,9 @@ export class AccountModel {
   balance: number;
   updatedAt: Date;
 
+  /** Resolved display name — populated at read time, not persisted. */
+  openedByName?: string;
+
   constructor(props: AccountModelProps) {
     this.id = props.id;
     this.accountNumber = props.accountNumber;
@@ -44,6 +48,7 @@ export class AccountModel {
     this.status = props.status;
     this.balance = props.balance;
     this.openedBy = props.openedBy;
+    this.openedByName = props.openedByName;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
   }

@@ -1,7 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
 import { AccountingController } from './accounting.controller';
 import { AccountingService } from './accounting.service';
-import { JournalOperationType } from './accounting.enums';
 
 const BRANCH_ID = '550e8400-e29b-41d4-a716-446655440001';
 
@@ -16,24 +15,11 @@ function makeService(
 describe('AccountingController', () => {
   describe('findChartAccounts()', () => {
     it('calls service.findChartAccounts() and returns result', async () => {
-      const accounts = [{ id: '1', code: 'CASH' }] as any[];
+      const accounts = [{ id: '1', code: '1101' }] as any[];
       const svc = makeService({ findChartAccounts: async () => accounts });
       const ctrl = new AccountingController(svc);
-      const result = await ctrl.findChartAccounts(BRANCH_ID);
+      const result = await ctrl.findChartAccounts();
       expect(result).toBe(accounts);
-    });
-
-    it('passes branchId to service', async () => {
-      let captured: string | undefined;
-      const svc = makeService({
-        findChartAccounts: async (branchId) => {
-          captured = branchId;
-          return [];
-        },
-      });
-      const ctrl = new AccountingController(svc);
-      await ctrl.findChartAccounts(BRANCH_ID);
-      expect(captured).toBe(BRANCH_ID);
     });
   });
 
@@ -46,17 +32,12 @@ describe('AccountingController', () => {
       expect(result).toBe(entries);
     });
 
-    it('passes operationType filter to service', async () => {
-      let capturedType: string | undefined;
-      const svc = makeService({
-        findEntries: async (_branchId, operationType) => {
-          capturedType = operationType;
-          return [];
-        },
-      });
+    it('calls findGroupedEntries when grouped=true', async () => {
+      const grouped = [{ entry: { id: 'e1' }, reversals: [] }] as any[];
+      const svc = makeService({ findGroupedEntries: async () => grouped });
       const ctrl = new AccountingController(svc);
-      await ctrl.findEntries(undefined, JournalOperationType.DEPOSIT);
-      expect(capturedType).toBe(JournalOperationType.DEPOSIT);
+      const result = await ctrl.findEntries(BRANCH_ID, 'true');
+      expect(result).toBe(grouped);
     });
   });
 

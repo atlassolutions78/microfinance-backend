@@ -36,6 +36,10 @@ export class BranchEntity {
   @Column({ name: 'updated_by', type: 'uuid', nullable: true })
   updated_by: string | null;
 
+  /** Resolved display names — populated at read time, not persisted. */
+  createdByName?: string;
+  updatedByName?: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   created_at: Date;
 

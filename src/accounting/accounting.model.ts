@@ -1,10 +1,14 @@
-import { JournalLineSide, JournalOperationType } from './accounting.enums';
-
+/**
+ * Specification for a single line in a journal entry draft.
+ * Exactly one of debit or credit must be non-zero per line.
+ */
 export type JournalLineSpec = {
   accountCode: string;
-  side: JournalLineSide;
-  amount: number;
+  clientAccountId?: string;
+  debit: number;
+  credit: number;
   currency: string;
+  description?: string;
 };
 
 /**
@@ -16,26 +20,20 @@ export type JournalLineSpec = {
  */
 export class JournalEntryDraft {
   constructor(
-    public readonly operationType: JournalOperationType,
     public readonly branchId: string,
-    public readonly performedBy: string,
+    public readonly createdBy: string,
     public readonly description: string | undefined,
     public readonly lines: JournalLineSpec[],
-    public readonly relatedReference?: string,
+    public readonly reversalOf?: string,
   ) {}
 
   assertBalanced(): void {
-    const sum = (side: JournalLineSide) =>
-      this.lines
-        .filter((l) => l.side === side)
-        .reduce((s, l) => s + l.amount, 0);
+    const totalDebit = this.lines.reduce((s, l) => s + l.debit, 0);
+    const totalCredit = this.lines.reduce((s, l) => s + l.credit, 0);
 
-    const debits = sum(JournalLineSide.DEBIT);
-    const credits = sum(JournalLineSide.CREDIT);
-
-    if (Math.abs(debits - credits) > 0.0001) {
+    if (Math.abs(totalDebit - totalCredit) > 0.0001) {
       throw new Error(
-        `Unbalanced journal entry (${this.operationType}): debits=${debits} credits=${credits}`,
+        `Unbalanced journal entry: debits=${totalDebit} credits=${totalCredit}`,
       );
     }
   }

@@ -19,6 +19,7 @@ import { TransactionType } from './transaction.enums';
 import { AccountService } from '../accounts/account.service';
 import { AccountStatus } from '../accounts/account.enums';
 import { AccountingService } from '../accounting/accounting.service';
+import { COA_CODES } from '../accounting/accounting.enums';
 
 export interface TransferResult {
   debit: TransactionModel;
@@ -88,11 +89,20 @@ export class TransactionService {
     await this.dataSource.transaction(async (em) => {
       await this.repo.save(tx, em);
       await this.accountService.recordBalance(dto.accountId, newBalance, em);
+      const tellerCode =
+        dto.currency === 'FC' ? COA_CODES.TELLER1_FC : COA_CODES.TELLER1_USD;
+      const savingsCode =
+        dto.currency === 'FC'
+          ? COA_CODES.CUSTOMER_SAVINGS_FC
+          : COA_CODES.CUSTOMER_SAVINGS_USD;
       await this.accountingService.postDeposit(
         dto.amount,
         dto.currency,
+        tellerCode,
+        savingsCode,
         dto.branchId,
         dto.performedBy,
+        dto.accountId,
         dto.description,
         em,
       );
@@ -141,11 +151,20 @@ export class TransactionService {
     await this.dataSource.transaction(async (em) => {
       await this.repo.save(tx, em);
       await this.accountService.recordBalance(dto.accountId, newBalance, em);
+      const tellerCode =
+        dto.currency === 'FC' ? COA_CODES.TELLER1_FC : COA_CODES.TELLER1_USD;
+      const savingsCode =
+        dto.currency === 'FC'
+          ? COA_CODES.CUSTOMER_SAVINGS_FC
+          : COA_CODES.CUSTOMER_SAVINGS_USD;
       await this.accountingService.postWithdrawal(
         dto.amount,
         dto.currency,
+        tellerCode,
+        savingsCode,
         dto.branchId,
         dto.performedBy,
+        dto.accountId,
         dto.description,
         em,
       );
@@ -233,11 +252,18 @@ export class TransactionService {
         destNewBalance,
         em,
       );
-      await this.accountingService.postInternalTransfer(
+      const srcSavingsCode =
+        dto.currency === 'FC'
+          ? COA_CODES.CUSTOMER_SAVINGS_FC
+          : COA_CODES.CUSTOMER_SAVINGS_USD;
+      await this.accountingService.postWithdrawal(
         dto.amount,
         dto.currency,
+        srcSavingsCode,
+        srcSavingsCode,
         dto.branchId,
         dto.performedBy,
+        dto.sourceAccountId,
         dto.description,
         em,
       );
@@ -318,15 +344,39 @@ export class TransactionService {
         balanceAfterFee,
         em,
       );
-      await this.accountingService.postExternalTransfer(
+      const extTellerCode =
+        dto.currency === 'FC' ? COA_CODES.TELLER1_FC : COA_CODES.TELLER1_USD;
+      const extSavingsCode =
+        dto.currency === 'FC'
+          ? COA_CODES.CUSTOMER_SAVINGS_FC
+          : COA_CODES.CUSTOMER_SAVINGS_USD;
+      await this.accountingService.postWithdrawal(
         dto.amount,
-        feeAmount,
         dto.currency,
+        extTellerCode,
+        extSavingsCode,
         dto.branchId,
         dto.performedBy,
+        dto.sourceAccountId,
         dto.description,
         em,
       );
+      if (feeAmount > 0) {
+        const feeCode =
+          dto.currency === 'FC'
+            ? COA_CODES.FEE_INCOME_FC
+            : COA_CODES.FEE_INCOME_USD;
+        await this.accountingService.postExpense(
+          feeAmount,
+          dto.currency,
+          feeCode,
+          extTellerCode,
+          dto.branchId,
+          dto.performedBy,
+          `Transfer fee for external transfer`,
+          em,
+        );
+      }
     });
 
     return { debit, fee, transfer };

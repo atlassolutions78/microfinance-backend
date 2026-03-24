@@ -7,7 +7,9 @@ export interface ClientModelProps {
   kycStatus: KycStatus;
   branchId: string;
   createdBy: string;
+  createdByName?: string;
   kycReviewedBy: string | null;
+  kycReviewedByName?: string | null;
   kycReviewedAt: Date | null;
   kycNotes: string | null;
   createdAt: Date;
@@ -32,6 +34,10 @@ export class ClientModel {
   kycNotes: string | null;
   updatedAt: Date;
 
+  /** Resolved display name — populated at read time, not persisted. */
+  createdByName?: string;
+  kycReviewedByName?: string | null;
+
   constructor(props: ClientModelProps) {
     this.id = props.id;
     this.clientNumber = props.clientNumber;
@@ -39,7 +45,9 @@ export class ClientModel {
     this.kycStatus = props.kycStatus;
     this.branchId = props.branchId;
     this.createdBy = props.createdBy;
+    this.createdByName = props.createdByName;
     this.kycReviewedBy = props.kycReviewedBy;
+    this.kycReviewedByName = props.kycReviewedByName;
     this.kycReviewedAt = props.kycReviewedAt;
     this.kycNotes = props.kycNotes;
     this.createdAt = props.createdAt;

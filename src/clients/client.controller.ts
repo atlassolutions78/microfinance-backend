@@ -10,7 +10,13 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+} from '@nestjs/swagger';
 import { ClientService } from './client.service';
 import {
   AttachIndividualDocumentsDto,
@@ -37,12 +43,42 @@ export class ClientController {
   // --- Onboarding ---
 
   @Post('individual')
+  @ApiOperation({ summary: 'Register a new individual client' })
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
     UserRole.BRANCH_MANAGER,
     UserRole.ADMIN,
   )
+  @ApiBody({
+    type: CreateIndividualClientDto,
+    examples: {
+      default: {
+        value: {
+          firstName: 'Marie',
+          middleName: 'Claire',
+          lastName: 'Kabongo',
+          gender: 'FEMALE',
+          nationality: 'Congolese',
+          dateOfBirth: '1990-06-15',
+          placeOfBirth: 'Lubumbashi',
+          maritalStatus: 'MARRIED',
+          profession: 'Nurse',
+          provinceOfOrigin: 'Katanga',
+          identificationType: 'NATIONAL_ID',
+          identificationNumber: '1-9012-34567890-12',
+          province: 'Kinshasa',
+          municipality: 'Gombe',
+          neighborhood: 'Lingwala',
+          street: 'Avenue des Aviateurs',
+          plotNumber: '42B',
+          phoneNumber: '+243812345678',
+          email: 'marie.kabongo@example.com',
+          addRepresentative: false,
+        },
+      },
+    },
+  })
   registerIndividual(
     @Body() dto: CreateIndividualClientDto,
     @CurrentUser() user: UserModel,
@@ -51,6 +87,7 @@ export class ClientController {
   }
 
   @Post('organization')
+  @ApiOperation({ summary: 'Register a new organization client' })
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
@@ -65,6 +102,10 @@ export class ClientController {
   }
 
   @Patch(':id/documents')
+  @ApiOperation({
+    summary: 'Attach identity documents to an individual client',
+  })
+  @ApiParam({ name: 'id', description: 'Client UUID' })
   @HttpCode(HttpStatus.OK)
   @Roles(
     UserRole.TELLER,
@@ -83,6 +124,8 @@ export class ClientController {
   // --- KYC lifecycle ---
 
   @Post(':id/kyc/submit')
+  @ApiOperation({ summary: 'Submit a client for KYC review' })
+  @ApiParam({ name: 'id', description: 'Client UUID' })
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
@@ -94,6 +137,8 @@ export class ClientController {
   }
 
   @Post(':id/kyc/approve')
+  @ApiOperation({ summary: 'Approve a client KYC review' })
+  @ApiParam({ name: 'id', description: 'Client UUID' })
   @Roles(
     UserRole.LOAN_OFFICER,
     UserRole.BRANCH_MANAGER,
@@ -108,12 +153,22 @@ export class ClientController {
   }
 
   @Post(':id/kyc/reject')
+  @ApiOperation({ summary: 'Reject a client KYC review' })
+  @ApiParam({ name: 'id', description: 'Client UUID' })
   @Roles(
     UserRole.LOAN_OFFICER,
     UserRole.BRANCH_MANAGER,
     UserRole.HQ_MANAGER,
     UserRole.ADMIN,
   )
+  @ApiBody({
+    type: RejectKycDto,
+    examples: {
+      default: {
+        value: { reason: 'Identity document is expired or unreadable' },
+      },
+    },
+  })
   rejectKyc(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RejectKycDto,
@@ -123,12 +178,27 @@ export class ClientController {
   }
 
   @Post(':id/kyc/request-update')
+  @ApiOperation({
+    summary: 'Request additional information from the client during KYC',
+  })
+  @ApiParam({ name: 'id', description: 'Client UUID' })
   @Roles(
     UserRole.LOAN_OFFICER,
     UserRole.BRANCH_MANAGER,
     UserRole.HQ_MANAGER,
     UserRole.ADMIN,
   )
+  @ApiBody({
+    type: RequestUpdateDto,
+    examples: {
+      default: {
+        value: {
+          message:
+            'Please provide a clearer copy of your national ID and proof of address.',
+        },
+      },
+    },
+  })
   requestUpdate(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RequestUpdateDto,
@@ -148,16 +218,14 @@ export class ClientController {
     UserRole.HQ_MANAGER,
     UserRole.ADMIN,
   )
-  update(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateClientDto,
-  ) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateClientDto) {
     return this.clientService.updateClient(id, dto);
   }
 
   // --- Queries ---
 
   @Get()
+  @ApiOperation({ summary: 'List all clients' })
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
@@ -170,6 +238,8 @@ export class ClientController {
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get a single client by ID' })
+  @ApiParam({ name: 'id', description: 'Client UUID' })
   @Roles(
     UserRole.TELLER,
     UserRole.LOAN_OFFICER,
