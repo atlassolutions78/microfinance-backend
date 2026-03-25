@@ -90,7 +90,7 @@ export class TransactionService {
       await this.repo.save(tx, em);
       await this.accountService.recordBalance(dto.accountId, newBalance, em);
       const tellerCode =
-        dto.currency === 'FC' ? COA_CODES.TELLER1_FC : COA_CODES.TELLER1_USD;
+        dto.currency === 'FC' ? COA_CODES.TELLER_FC : COA_CODES.TELLER_USD;
       const savingsCode =
         dto.currency === 'FC'
           ? COA_CODES.CUSTOMER_SAVINGS_FC
@@ -152,7 +152,7 @@ export class TransactionService {
       await this.repo.save(tx, em);
       await this.accountService.recordBalance(dto.accountId, newBalance, em);
       const tellerCode =
-        dto.currency === 'FC' ? COA_CODES.TELLER1_FC : COA_CODES.TELLER1_USD;
+        dto.currency === 'FC' ? COA_CODES.TELLER_FC : COA_CODES.TELLER_USD;
       const savingsCode =
         dto.currency === 'FC'
           ? COA_CODES.CUSTOMER_SAVINGS_FC
@@ -345,7 +345,7 @@ export class TransactionService {
         em,
       );
       const extTellerCode =
-        dto.currency === 'FC' ? COA_CODES.TELLER1_FC : COA_CODES.TELLER1_USD;
+        dto.currency === 'FC' ? COA_CODES.TELLER_FC : COA_CODES.TELLER_USD;
       const extSavingsCode =
         dto.currency === 'FC'
           ? COA_CODES.CUSTOMER_SAVINGS_FC

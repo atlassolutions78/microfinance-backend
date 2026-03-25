@@ -9,6 +9,7 @@ export interface ChartOfAccountsRecord {
   id: string;
   code: string;
   name: string;
+  nameEn: string | null;
   type: ChartAccountType;
   parentId: string | null;
   isActive: boolean;
@@ -123,6 +124,7 @@ export class AccountingMapper {
       id: entity.id,
       code: entity.code,
       name: entity.name,
+      nameEn: entity.name_en,
       type: entity.type,
       parentId: entity.parent_id,
       isActive: entity.is_active,
