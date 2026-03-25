@@ -23,18 +23,34 @@ import { AccountingModule } from './accounting/accounting.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get<string>('DATABASE_HOST', 'localhost'),
-        port: config.get<number>('DATABASE_PORT', 5432),
-        username: config.get<string>('DATABASE_USER', 'microfinance_user'),
-        password: config.get<string>('DATABASE_PASSWORD', 'microfinance_pass'),
-        database: config.get<string>('DATABASE_NAME', 'microfinance_db'),
-        autoLoadEntities: true, // Each module registers its entities via forFeature()
-        synchronize: false, // Never sync in production — use migrations
-        migrationsRun: false, // Run migrations manually via CLI
-        logging: config.get<string>('NODE_ENV') !== 'production',
-      }),
+      useFactory: (config: ConfigService) => {
+        const dbUrl = config.get<string>('DATABASE_URL');
+        return {
+          type: 'postgres' as const,
+          ...(dbUrl
+            ? { url: dbUrl, ssl: { rejectUnauthorized: false } }
+            : {
+                host: config.get<string>('DATABASE_HOST', 'localhost'),
+                port: config.get<number>('DATABASE_PORT', 5432),
+                username: config.get<string>(
+                  'DATABASE_USER',
+                  'microfinance_user',
+                ),
+                password: config.get<string>(
+                  'DATABASE_PASSWORD',
+                  'microfinance_pass',
+                ),
+                database: config.get<string>(
+                  'DATABASE_NAME',
+                  'microfinance_db',
+                ),
+              }),
+          autoLoadEntities: true, // Each module registers its entities via forFeature()
+          synchronize: false, // Never sync in production — use migrations
+          migrationsRun: false, // Run migrations manually via CLI
+          logging: config.get<string>('NODE_ENV') !== 'production',
+        };
+      },
     }),
 
     SettingsModule,

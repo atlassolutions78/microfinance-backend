@@ -74,13 +74,19 @@ import {
 
 // ---------------------------------------------------------------------------
 
+const seedDbUrl = process.env.DATABASE_URL;
+
 const ds = new DataSource({
   type: 'postgres',
-  host: process.env.DATABASE_HOST ?? 'localhost',
-  port: parseInt(process.env.DATABASE_PORT ?? '5432', 10),
-  username: process.env.DATABASE_USER ?? 'microfinance_user',
-  password: process.env.DATABASE_PASSWORD ?? 'microfinance_pass',
-  database: process.env.DATABASE_NAME ?? 'microfinance_db',
+  ...(seedDbUrl
+    ? { url: seedDbUrl, ssl: { rejectUnauthorized: false } }
+    : {
+        host: process.env.DATABASE_HOST ?? 'localhost',
+        port: parseInt(process.env.DATABASE_PORT ?? '5432', 10),
+        username: process.env.DATABASE_USER ?? 'microfinance_user',
+        password: process.env.DATABASE_PASSWORD ?? 'microfinance_pass',
+        database: process.env.DATABASE_NAME ?? 'microfinance_db',
+      }),
   entities: [
     UserEntity,
     ClientEntity,
@@ -733,267 +739,621 @@ async function seed() {
   type CoaRow = {
     code: string;
     name: string;
+    nameEn: string | null;
     type: ChartAccountType;
     parentCode: string | null;
   };
 
   const coaDefinition: CoaRow[] = [
-    // ── Level 1 — roots ──────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Level 1 — Report-level roots
+    // ═══════════════════════════════════════════════════════════════════════════
     {
-      code: '1000',
-      name: 'ASSETS',
+      code: 'ASSETS',
+      name: 'Actifs',
+      nameEn: 'Assets',
       type: ChartAccountType.ASSET,
       parentCode: null,
     },
     {
-      code: '2000',
-      name: 'LIABILITIES',
+      code: 'LIABILITIES',
+      name: 'Passifs',
+      nameEn: 'Liabilities',
       type: ChartAccountType.LIABILITY,
       parentCode: null,
     },
     {
-      code: '3000',
-      name: 'EQUITY',
+      code: 'EQUITY',
+      name: 'Capitaux propres',
+      nameEn: 'Equity',
       type: ChartAccountType.EQUITY,
       parentCode: null,
     },
     {
-      code: '4000',
-      name: 'INCOME',
+      code: 'INCOME',
+      name: 'Produits',
+      nameEn: 'Income',
       type: ChartAccountType.INCOME,
       parentCode: null,
     },
     {
-      code: '5000',
-      name: 'EXPENSES',
+      code: 'EXPENSES',
+      name: 'Charges',
+      nameEn: 'Expenses',
       type: ChartAccountType.EXPENSE,
       parentCode: null,
     },
 
-    // ── Level 2 — groups ─────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EQUITY (Classe 1)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // ── 10 — Capital ────────────────────────────────────────────────────────
     {
-      code: '1100',
-      name: 'Cash & Vault',
-      type: ChartAccountType.ASSET,
-      parentCode: '1000',
-    },
-    {
-      code: '1200',
-      name: 'Loans Receivable',
-      type: ChartAccountType.ASSET,
-      parentCode: '1000',
-    },
-    {
-      code: '2100',
-      name: 'Customer Savings',
-      type: ChartAccountType.LIABILITY,
-      parentCode: '2000',
-    },
-    {
-      code: '2200',
-      name: 'Customer Checking',
-      type: ChartAccountType.LIABILITY,
-      parentCode: '2000',
-    },
-    {
-      code: '2300',
-      name: 'Customer Business',
-      type: ChartAccountType.LIABILITY,
-      parentCode: '2000',
-    },
-    {
-      code: '3100',
-      name: 'Share Capital',
+      code: '10',
+      name: 'Capital',
+      nameEn: 'Capital',
       type: ChartAccountType.EQUITY,
-      parentCode: '3000',
+      parentCode: 'EQUITY',
     },
     {
-      code: '3200',
-      name: 'Retained Earnings',
+      code: '10000001',
+      name: 'Capital social appelé versé FC',
+      nameEn: 'Paid share capital FC',
       type: ChartAccountType.EQUITY,
-      parentCode: '3000',
+      parentCode: '10',
     },
     {
-      code: '4100',
-      name: 'Interest Income',
-      type: ChartAccountType.INCOME,
-      parentCode: '4000',
-    },
-    {
-      code: '4200',
-      name: 'Fee Income',
-      type: ChartAccountType.INCOME,
-      parentCode: '4000',
-    },
-    {
-      code: '4300',
-      name: 'Penalty Income',
-      type: ChartAccountType.INCOME,
-      parentCode: '4000',
-    },
-    {
-      code: '5100',
-      name: 'Salaries & Wages',
-      type: ChartAccountType.EXPENSE,
-      parentCode: '5000',
-    },
-    {
-      code: '5200',
-      name: 'Rent',
-      type: ChartAccountType.EXPENSE,
-      parentCode: '5000',
-    },
-    {
-      code: '5300',
-      name: 'Utilities',
-      type: ChartAccountType.EXPENSE,
-      parentCode: '5000',
+      code: '10000002',
+      name: 'Capital social appelé versé USD',
+      nameEn: 'Paid share capital USD',
+      type: ChartAccountType.EQUITY,
+      parentCode: '10',
     },
 
-    // ── Level 3 — leaf posting accounts ──────────────────────────────────────
+    // ── 12 — Report à nouveau ───────────────────────────────────────────────
     {
-      code: '1101',
-      name: 'Teller 1 - Cash USD',
-      type: ChartAccountType.ASSET,
-      parentCode: '1100',
+      code: '12',
+      name: 'Report à nouveau',
+      nameEn: 'Retained earnings',
+      type: ChartAccountType.EQUITY,
+      parentCode: 'EQUITY',
     },
     {
-      code: '1102',
-      name: 'Teller 1 - Cash FC',
-      type: ChartAccountType.ASSET,
-      parentCode: '1100',
+      code: '12000001',
+      name: 'Bénéfices non affectés FC',
+      nameEn: 'Retained earnings FC',
+      type: ChartAccountType.EQUITY,
+      parentCode: '12',
     },
     {
-      code: '1103',
-      name: 'Teller 2 - Cash USD',
-      type: ChartAccountType.ASSET,
-      parentCode: '1100',
+      code: '12000002',
+      name: 'Bénéfices non affectés USD',
+      nameEn: 'Retained earnings USD',
+      type: ChartAccountType.EQUITY,
+      parentCode: '12',
     },
     {
-      code: '1104',
-      name: 'Teller 2 - Cash FC',
-      type: ChartAccountType.ASSET,
-      parentCode: '1100',
+      code: '12100001',
+      name: 'Pertes non compensées FC',
+      nameEn: 'Accumulated losses FC',
+      type: ChartAccountType.EQUITY,
+      parentCode: '12',
     },
     {
-      code: '1105',
-      name: 'Vault - USD',
-      type: ChartAccountType.ASSET,
-      parentCode: '1100',
+      code: '12100002',
+      name: 'Pertes non compensées USD',
+      nameEn: 'Accumulated losses USD',
+      type: ChartAccountType.EQUITY,
+      parentCode: '12',
+    },
+
+    // ── 13 — Résultat net ───────────────────────────────────────────────────
+    {
+      code: '13',
+      name: 'Résultat net',
+      nameEn: 'Current year result',
+      type: ChartAccountType.EQUITY,
+      parentCode: 'EQUITY',
     },
     {
-      code: '1106',
-      name: 'Vault - FC',
-      type: ChartAccountType.ASSET,
-      parentCode: '1100',
+      code: '13000001',
+      name: 'Bénéfice net FC',
+      nameEn: 'Net profit FC',
+      type: ChartAccountType.EQUITY,
+      parentCode: '13',
     },
     {
-      code: '1201',
-      name: 'Standard Loans Receivable - USD',
-      type: ChartAccountType.ASSET,
-      parentCode: '1200',
+      code: '13000002',
+      name: 'Bénéfice net USD',
+      nameEn: 'Net profit USD',
+      type: ChartAccountType.EQUITY,
+      parentCode: '13',
     },
     {
-      code: '1202',
-      name: 'Standard Loans Receivable - FC',
-      type: ChartAccountType.ASSET,
-      parentCode: '1200',
+      code: '13100001',
+      name: 'Perte nette FC',
+      nameEn: 'Net loss FC',
+      type: ChartAccountType.EQUITY,
+      parentCode: '13',
     },
     {
-      code: '1203',
-      name: 'Salary Advance Receivable - USD',
+      code: '13100002',
+      name: 'Perte nette USD',
+      nameEn: 'Net loss USD',
+      type: ChartAccountType.EQUITY,
+      parentCode: '13',
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ASSETS — Loans (Classe 3, Credits)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // ── 32 — Crédits à court terme ──────────────────────────────────────────
+    {
+      code: '32',
+      name: 'Crédits à court terme',
+      nameEn: 'Short-term loans',
       type: ChartAccountType.ASSET,
-      parentCode: '1200',
+      parentCode: 'ASSETS',
+    },
+
+    {
+      code: '3251',
+      name: 'Prêt ordinaire',
+      nameEn: 'Ordinary loans',
+      type: ChartAccountType.ASSET,
+      parentCode: '32',
     },
     {
-      code: '1204',
-      name: 'Salary Advance Receivable - FC',
+      code: '32510001',
+      name: 'Prêt ordinaire FC',
+      nameEn: 'Ordinary loan FC',
       type: ChartAccountType.ASSET,
-      parentCode: '1200',
+      parentCode: '3251',
     },
     {
-      code: '1205',
-      name: 'Overdraft Receivable - USD',
+      code: '32510002',
+      name: 'Prêt ordinaire USD',
+      nameEn: 'Ordinary loan USD',
       type: ChartAccountType.ASSET,
-      parentCode: '1200',
+      parentCode: '3251',
+    },
+
+    {
+      code: '3252',
+      name: 'Découvert / facilité de caisse',
+      nameEn: 'Overdraft facility',
+      type: ChartAccountType.ASSET,
+      parentCode: '32',
     },
     {
-      code: '1206',
-      name: 'Overdraft Receivable - FC',
+      code: '32520001',
+      name: 'Découvert / facilité de caisse FC',
+      nameEn: 'Overdraft facility FC',
       type: ChartAccountType.ASSET,
-      parentCode: '1200',
+      parentCode: '3252',
     },
     {
-      code: '2101',
-      name: 'Customer Savings - USD',
+      code: '32520002',
+      name: 'Découvert / facilité de caisse USD',
+      nameEn: 'Overdraft facility USD',
+      type: ChartAccountType.ASSET,
+      parentCode: '3252',
+    },
+
+    {
+      code: '3253',
+      name: 'Avance sur salaire',
+      nameEn: 'Salary advance',
+      type: ChartAccountType.ASSET,
+      parentCode: '32',
+    },
+    {
+      code: '32530001',
+      name: 'Avance sur salaire FC',
+      nameEn: 'Salary advance FC',
+      type: ChartAccountType.ASSET,
+      parentCode: '3253',
+    },
+    {
+      code: '32530002',
+      name: 'Avance sur salaire USD',
+      nameEn: 'Salary advance USD',
+      type: ChartAccountType.ASSET,
+      parentCode: '3253',
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ASSETS — Cash / Treasury (Classe 5)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // ── 57 — Caisse ─────────────────────────────────────────────────────────
+    {
+      code: '57',
+      name: 'Caisse',
+      nameEn: 'Cash / Treasury',
+      type: ChartAccountType.ASSET,
+      parentCode: 'ASSETS',
+    },
+
+    {
+      code: '5701',
+      name: 'Coffre principal',
+      nameEn: 'Main vault',
+      type: ChartAccountType.ASSET,
+      parentCode: '57',
+    },
+    {
+      code: '57010001',
+      name: 'Coffre principal FC',
+      nameEn: 'Main vault FC',
+      type: ChartAccountType.ASSET,
+      parentCode: '5701',
+    },
+    {
+      code: '57010002',
+      name: 'Coffre principal USD',
+      nameEn: 'Main vault USD',
+      type: ChartAccountType.ASSET,
+      parentCode: '5701',
+    },
+
+    {
+      code: '5702',
+      name: 'Coffre agence',
+      nameEn: 'Branch safe',
+      type: ChartAccountType.ASSET,
+      parentCode: '57',
+    },
+    {
+      code: '57020001',
+      name: 'Coffre agence FC',
+      nameEn: 'Branch safe FC',
+      type: ChartAccountType.ASSET,
+      parentCode: '5702',
+    },
+    {
+      code: '57020002',
+      name: 'Coffre agence USD',
+      nameEn: 'Branch safe USD',
+      type: ChartAccountType.ASSET,
+      parentCode: '5702',
+    },
+
+    {
+      code: '5703',
+      name: 'Caisse guichet',
+      nameEn: 'Teller cash',
+      type: ChartAccountType.ASSET,
+      parentCode: '57',
+    },
+    {
+      code: '57030001',
+      name: 'Caisse guichet FC',
+      nameEn: 'Teller cash FC',
+      type: ChartAccountType.ASSET,
+      parentCode: '5703',
+    },
+    {
+      code: '57030002',
+      name: 'Caisse guichet USD',
+      nameEn: 'Teller cash USD',
+      type: ChartAccountType.ASSET,
+      parentCode: '5703',
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LIABILITIES — Customer Accounts (Classe 3, Deposits)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // ── 33 — Comptes de la clientèle ────────────────────────────────────────
+    {
+      code: '33',
+      name: 'Comptes de la clientèle',
+      nameEn: 'Customer accounts',
       type: ChartAccountType.LIABILITY,
-      parentCode: '2100',
+      parentCode: 'LIABILITIES',
     },
+
     {
-      code: '2102',
-      name: 'Customer Savings - FC',
+      code: '330',
+      name: 'Compte courant',
+      nameEn: 'Current accounts',
       type: ChartAccountType.LIABILITY,
-      parentCode: '2100',
+      parentCode: '33',
     },
     {
-      code: '2201',
-      name: 'Customer Checking - USD',
+      code: '33000000',
+      name: 'Compte courant FC',
+      nameEn: 'Current account FC',
       type: ChartAccountType.LIABILITY,
-      parentCode: '2200',
+      parentCode: '330',
     },
     {
-      code: '2202',
-      name: 'Customer Checking - FC',
+      code: '33010000',
+      name: 'Compte courant USD',
+      nameEn: 'Current account USD',
       type: ChartAccountType.LIABILITY,
-      parentCode: '2200',
+      parentCode: '330',
     },
+
     {
-      code: '2301',
-      name: 'Customer Business - USD',
+      code: '331',
+      name: 'Compte chèque',
+      nameEn: 'Checking accounts',
       type: ChartAccountType.LIABILITY,
-      parentCode: '2300',
+      parentCode: '33',
     },
     {
-      code: '2302',
-      name: 'Customer Business - FC',
+      code: '33100000',
+      name: 'Compte chèque FC',
+      nameEn: 'Checking account FC',
       type: ChartAccountType.LIABILITY,
-      parentCode: '2300',
+      parentCode: '331',
     },
     {
-      code: '4101',
-      name: 'Interest Income - USD',
-      type: ChartAccountType.INCOME,
-      parentCode: '4100',
+      code: '33110000',
+      name: 'Compte chèque USD',
+      nameEn: 'Checking account USD',
+      type: ChartAccountType.LIABILITY,
+      parentCode: '331',
+    },
+
+    {
+      code: '332',
+      name: 'Compte épargne',
+      nameEn: 'Savings accounts',
+      type: ChartAccountType.LIABILITY,
+      parentCode: '33',
     },
     {
-      code: '4102',
-      name: 'Interest Income - FC',
-      type: ChartAccountType.INCOME,
-      parentCode: '4100',
+      code: '33200000',
+      name: 'Compte épargne FC',
+      nameEn: 'Savings account FC',
+      type: ChartAccountType.LIABILITY,
+      parentCode: '332',
     },
     {
-      code: '4201',
-      name: 'Fee Income - USD',
+      code: '33201000',
+      name: 'Compte épargne USD',
+      nameEn: 'Savings account USD',
+      type: ChartAccountType.LIABILITY,
+      parentCode: '332',
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // INCOME (Classe 7)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // ── 71 — Intérêts ───────────────────────────────────────────────────────
+    {
+      code: '71',
+      name: 'Intérêts et produits assimilés',
+      nameEn: 'Interest income',
       type: ChartAccountType.INCOME,
-      parentCode: '4200',
+      parentCode: 'INCOME',
+    },
+
+    {
+      code: '71210',
+      name: 'Intérêts sur avance sur salaire',
+      nameEn: 'Interest on salary advance',
+      type: ChartAccountType.INCOME,
+      parentCode: '71',
     },
     {
-      code: '4202',
-      name: 'Fee Income - FC',
+      code: '71210001',
+      name: 'Intérêts sur prêts privés FC',
+      nameEn: 'Interest on salary advance FC',
       type: ChartAccountType.INCOME,
-      parentCode: '4200',
+      parentCode: '71210',
     },
     {
-      code: '4301',
-      name: 'Penalty Income - USD',
+      code: '71210002',
+      name: 'Intérêts sur prêts privés USD',
+      nameEn: 'Interest on salary advance USD',
       type: ChartAccountType.INCOME,
-      parentCode: '4300',
+      parentCode: '71210',
+    },
+
+    {
+      code: '71211',
+      name: 'Intérêts sur prêts ordinaires',
+      nameEn: 'Interest on ordinary loans',
+      type: ChartAccountType.INCOME,
+      parentCode: '71',
     },
     {
-      code: '4302',
-      name: 'Penalty Income - FC',
+      code: '71211001',
+      name: 'Intérêts sur prêts à la consommation FC',
+      nameEn: 'Interest on ordinary loans FC',
       type: ChartAccountType.INCOME,
-      parentCode: '4300',
+      parentCode: '71211',
+    },
+    {
+      code: '71211002',
+      name: 'Intérêts sur prêts à la consommation USD',
+      nameEn: 'Interest on ordinary loans USD',
+      type: ChartAccountType.INCOME,
+      parentCode: '71211',
+    },
+
+    {
+      code: '71212',
+      name: 'Intérêts sur découverts',
+      nameEn: 'Interest on overdraft',
+      type: ChartAccountType.INCOME,
+      parentCode: '71',
+    },
+    {
+      code: '71212001',
+      name: 'Intérêts sur découverts FC',
+      nameEn: 'Interest on overdraft FC',
+      type: ChartAccountType.INCOME,
+      parentCode: '71212',
+    },
+    {
+      code: '71212002',
+      name: 'Intérêts sur découverts USD',
+      nameEn: 'Interest on overdraft USD',
+      type: ChartAccountType.INCOME,
+      parentCode: '71212',
+    },
+
+    // ── 72 — Commissions ────────────────────────────────────────────────────
+    {
+      code: '72',
+      name: 'Commissions',
+      nameEn: 'Fees',
+      type: ChartAccountType.INCOME,
+      parentCode: 'INCOME',
+    },
+    {
+      code: '72000001',
+      name: 'Commissions et frais FC',
+      nameEn: 'Service fees FC',
+      type: ChartAccountType.INCOME,
+      parentCode: '72',
+    },
+    {
+      code: '72000002',
+      name: 'Commissions et frais USD',
+      nameEn: 'Service fees USD',
+      type: ChartAccountType.INCOME,
+      parentCode: '72',
+    },
+
+    // ── 73 — Pénalités ──────────────────────────────────────────────────────
+    {
+      code: '73',
+      name: 'Pénalités sur prêts',
+      nameEn: 'Loan penalties',
+      type: ChartAccountType.INCOME,
+      parentCode: 'INCOME',
+    },
+    {
+      code: '73130001',
+      name: 'Revenus des prêts impayés FC',
+      nameEn: 'Penalties on overdue loans FC',
+      type: ChartAccountType.INCOME,
+      parentCode: '73',
+    },
+    {
+      code: '73130002',
+      name: 'Revenus des prêts impayés USD',
+      nameEn: 'Penalties on overdue loans USD',
+      type: ChartAccountType.INCOME,
+      parentCode: '73',
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EXPENSES (Classe 6)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // ── 64 — Charges d'exploitation ─────────────────────────────────────────
+    {
+      code: '64',
+      name: "Charges d'exploitation",
+      nameEn: 'Operating expenses',
+      type: ChartAccountType.EXPENSE,
+      parentCode: 'EXPENSES',
+    },
+
+    {
+      code: '640',
+      name: 'Fournitures et services',
+      nameEn: 'Utilities & supplies',
+      type: ChartAccountType.EXPENSE,
+      parentCode: '64',
+    },
+    {
+      code: '64000000',
+      name: 'Eau',
+      nameEn: 'Water',
+      type: ChartAccountType.EXPENSE,
+      parentCode: '640',
+    },
+    {
+      code: '64001000',
+      name: 'Electricité',
+      nameEn: 'Electricity',
+      type: ChartAccountType.EXPENSE,
+      parentCode: '640',
+    },
+    {
+      code: '64003000',
+      name: 'Essence',
+      nameEn: 'Fuel',
+      type: ChartAccountType.EXPENSE,
+      parentCode: '640',
+    },
+    {
+      code: '64020000',
+      name: 'Fournitures de bureau',
+      nameEn: 'Office supplies',
+      type: ChartAccountType.EXPENSE,
+      parentCode: '640',
+    },
+
+    {
+      code: '641',
+      name: 'Transport',
+      nameEn: 'Transport',
+      type: ChartAccountType.EXPENSE,
+      parentCode: '64',
+    },
+    {
+      code: '64100000',
+      name: 'Déplacement et voyage',
+      nameEn: 'Travel expenses',
+      type: ChartAccountType.EXPENSE,
+      parentCode: '641',
+    },
+
+    {
+      code: '642',
+      name: 'Services extérieurs',
+      nameEn: 'External services',
+      type: ChartAccountType.EXPENSE,
+      parentCode: '64',
+    },
+    {
+      code: '64200000',
+      name: 'Télécommunication',
+      nameEn: 'Telecommunications',
+      type: ChartAccountType.EXPENSE,
+      parentCode: '642',
+    },
+    {
+      code: '64240000',
+      name: 'Frais de loyers',
+      nameEn: 'Rent',
+      type: ChartAccountType.EXPENSE,
+      parentCode: '642',
+    },
+    {
+      code: '64270000',
+      name: 'Frais informatiques',
+      nameEn: 'IT services',
+      type: ChartAccountType.EXPENSE,
+      parentCode: '642',
+    },
+
+    // ── 65 — Charges de personnel ───────────────────────────────────────────
+    {
+      code: '65',
+      name: 'Charges de personnel',
+      nameEn: 'Personnel expenses',
+      type: ChartAccountType.EXPENSE,
+      parentCode: 'EXPENSES',
+    },
+    {
+      code: '65010000',
+      name: 'Rémunérations des cadres',
+      nameEn: 'Salaries',
+      type: ChartAccountType.EXPENSE,
+      parentCode: '65',
     },
   ];
 
@@ -1014,6 +1374,7 @@ async function seed() {
       id: randomUUID(),
       code: row.code,
       name: row.name,
+      name_en: row.nameEn,
       type: row.type,
       parent_id: parentId,
       is_active: true,
@@ -1126,14 +1487,14 @@ async function seed() {
     'Opening balance — Vault USD',
     [
       {
-        code: '1105',
+        code: '57010002',
         debit: 10000,
         credit: 0,
         currency: 'USD',
         description: 'Vault USD opening',
       },
       {
-        code: '3200',
+        code: '12000002',
         debit: 0,
         credit: 10000,
         currency: 'USD',
@@ -1149,14 +1510,14 @@ async function seed() {
     'Opening balance — Vault FC',
     [
       {
-        code: '1106',
+        code: '57010001',
         debit: 5000000,
         credit: 0,
         currency: 'FC',
         description: 'Vault FC opening',
       },
       {
-        code: '3200',
+        code: '12000001',
         debit: 0,
         credit: 5000000,
         currency: 'FC',
@@ -1172,14 +1533,14 @@ async function seed() {
     'Daily float — Vault to Teller 1 USD',
     [
       {
-        code: '1101',
+        code: '57030002',
         debit: 2000,
         credit: 0,
         currency: 'USD',
         description: 'Teller 1 USD drawer',
       },
       {
-        code: '1105',
+        code: '57010002',
         debit: 0,
         credit: 2000,
         currency: 'USD',
@@ -1195,14 +1556,14 @@ async function seed() {
     'Daily float — Vault to Teller 1 FC',
     [
       {
-        code: '1102',
+        code: '57030001',
         debit: 1000000,
         credit: 0,
         currency: 'FC',
         description: 'Teller 1 FC drawer',
       },
       {
-        code: '1106',
+        code: '57010001',
         debit: 0,
         credit: 1000000,
         currency: 'FC',
@@ -1218,14 +1579,14 @@ async function seed() {
     'Daily float — Vault to Teller 2 USD',
     [
       {
-        code: '1103',
+        code: '57030002',
         debit: 2000,
         credit: 0,
         currency: 'USD',
         description: 'Teller 2 USD drawer',
       },
       {
-        code: '1105',
+        code: '57010002',
         debit: 0,
         credit: 2000,
         currency: 'USD',
@@ -1241,14 +1602,14 @@ async function seed() {
     'Daily float — Vault to Teller 2 FC',
     [
       {
-        code: '1104',
+        code: '57030001',
         debit: 1000000,
         credit: 0,
         currency: 'FC',
         description: 'Teller 2 FC drawer',
       },
       {
-        code: '1106',
+        code: '57010001',
         debit: 0,
         credit: 1000000,
         currency: 'FC',
@@ -1261,14 +1622,14 @@ async function seed() {
   // ── JE-2026-007 — Espérance deposits $500 USD ──────────────────────────────
   await postEntry('JE-2026-007', 'Deposit — Espérance Kahambu $500 USD', [
     {
-      code: '1101',
+      code: '57030002',
       debit: 500,
       credit: 0,
       currency: 'USD',
       description: 'Cash received at Teller 1',
     },
     {
-      code: '2101',
+      code: '33201000',
       debit: 0,
       credit: 500,
       currency: 'USD',
@@ -1280,14 +1641,14 @@ async function seed() {
   // ── JE-2026-008 — Gabriel deposits 200,000 FC ──────────────────────────────
   await postEntry('JE-2026-008', 'Deposit — Gabriel Mastaki 200,000 FC', [
     {
-      code: '1104',
+      code: '57030001',
       debit: 200000,
       credit: 0,
       currency: 'FC',
       description: 'Cash received at Teller 2',
     },
     {
-      code: '2102',
+      code: '33200000',
       debit: 0,
       credit: 200000,
       currency: 'FC',
@@ -1299,7 +1660,7 @@ async function seed() {
   // ── JE-2026-009 — Espérance withdraws $200 USD ─────────────────────────────
   await postEntry('JE-2026-009', 'Withdrawal — Espérance Kahambu $200 USD', [
     {
-      code: '2101',
+      code: '33201000',
       debit: 200,
       credit: 0,
       currency: 'USD',
@@ -1307,7 +1668,7 @@ async function seed() {
       clientAccountId: acc1Entity?.id,
     },
     {
-      code: '1101',
+      code: '57030002',
       debit: 0,
       credit: 200,
       currency: 'USD',
@@ -1321,14 +1682,14 @@ async function seed() {
     'Loan disbursement — Espérance Standard Loan $1,000 USD credited to savings',
     [
       {
-        code: '1201',
+        code: '32510002',
         debit: 1000,
         credit: 0,
         currency: 'USD',
         description: 'Loan receivable created',
       },
       {
-        code: '2101',
+        code: '33201000',
         debit: 0,
         credit: 1000,
         currency: 'USD',
@@ -1345,7 +1706,7 @@ async function seed() {
     'Loan withdrawal — Espérance takes $1,000 cash (Teller 1)',
     [
       {
-        code: '2101',
+        code: '33201000',
         debit: 1000,
         credit: 0,
         currency: 'USD',
@@ -1353,7 +1714,7 @@ async function seed() {
         clientAccountId: acc1Entity?.id,
       },
       {
-        code: '1101',
+        code: '57030002',
         debit: 0,
         credit: 1000,
         currency: 'USD',
@@ -1368,14 +1729,14 @@ async function seed() {
     'Loan disbursement — Coopérative Virunga Standard Loan $2,000 USD credited to business account',
     [
       {
-        code: '1201',
+        code: '32510002',
         debit: 2000,
         credit: 0,
         currency: 'USD',
         description: 'Loan receivable created',
       },
       {
-        code: '2301',
+        code: '33010000',
         debit: 0,
         credit: 2000,
         currency: 'USD',
@@ -1392,7 +1753,7 @@ async function seed() {
     'Loan withdrawal — Coopérative Virunga takes $2,000 cash (Teller 2)',
     [
       {
-        code: '2301',
+        code: '33010000',
         debit: 2000,
         credit: 0,
         currency: 'USD',
@@ -1400,7 +1761,7 @@ async function seed() {
         clientAccountId: acc4Entity?.id,
       },
       {
-        code: '1103',
+        code: '57030002',
         debit: 0,
         credit: 2000,
         currency: 'USD',
@@ -1415,14 +1776,14 @@ async function seed() {
     'Repayment deposit — Espérance $150 USD (Teller 1)',
     [
       {
-        code: '1101',
+        code: '57030002',
         debit: 150,
         credit: 0,
         currency: 'USD',
         description: 'Cash received at Teller 1',
       },
       {
-        code: '2101',
+        code: '33201000',
         debit: 0,
         credit: 150,
         currency: 'USD',
@@ -1438,7 +1799,7 @@ async function seed() {
     'Repayment — Espérance $120 principal + $30 interest',
     [
       {
-        code: '2101',
+        code: '33201000',
         debit: 150,
         credit: 0,
         currency: 'USD',
@@ -1446,14 +1807,14 @@ async function seed() {
         clientAccountId: acc1Entity?.id,
       },
       {
-        code: '1201',
+        code: '32510002',
         debit: 0,
         credit: 120,
         currency: 'USD',
         description: 'Reduce loan receivable (principal)',
       },
       {
-        code: '4101',
+        code: '71211002',
         debit: 0,
         credit: 30,
         currency: 'USD',
@@ -1468,14 +1829,14 @@ async function seed() {
     'Repayment deposit — Coopérative $300 USD (Teller 2)',
     [
       {
-        code: '1103',
+        code: '57030002',
         debit: 300,
         credit: 0,
         currency: 'USD',
         description: 'Cash received at Teller 2',
       },
       {
-        code: '2301',
+        code: '33010000',
         debit: 0,
         credit: 300,
         currency: 'USD',
@@ -1491,7 +1852,7 @@ async function seed() {
     'Repayment — Coopérative $250 principal + $50 interest',
     [
       {
-        code: '2301',
+        code: '33010000',
         debit: 300,
         credit: 0,
         currency: 'USD',
@@ -1499,14 +1860,14 @@ async function seed() {
         clientAccountId: acc4Entity?.id,
       },
       {
-        code: '1201',
+        code: '32510002',
         debit: 0,
         credit: 250,
         currency: 'USD',
         description: 'Reduce loan receivable (principal)',
       },
       {
-        code: '4101',
+        code: '71211002',
         debit: 0,
         credit: 50,
         currency: 'USD',
@@ -1521,14 +1882,14 @@ async function seed() {
     'Late repayment deposit — Espérance $100 USD (Teller 1)',
     [
       {
-        code: '1101',
+        code: '57030002',
         debit: 100,
         credit: 0,
         currency: 'USD',
         description: 'Cash received at Teller 1',
       },
       {
-        code: '2101',
+        code: '33201000',
         debit: 0,
         credit: 100,
         currency: 'USD',
@@ -1544,7 +1905,7 @@ async function seed() {
     'Late repayment — Espérance $75 principal + $5 interest + $20 penalty',
     [
       {
-        code: '2101',
+        code: '33201000',
         debit: 100,
         credit: 0,
         currency: 'USD',
@@ -1552,21 +1913,21 @@ async function seed() {
         clientAccountId: acc1Entity?.id,
       },
       {
-        code: '1201',
+        code: '32510002',
         debit: 0,
         credit: 75,
         currency: 'USD',
         description: 'Reduce loan receivable (principal)',
       },
       {
-        code: '4101',
+        code: '71211002',
         debit: 0,
         credit: 5,
         currency: 'USD',
         description: 'Interest income recognised',
       },
       {
-        code: '4301',
+        code: '73130002',
         debit: 0,
         credit: 20,
         currency: 'USD',
@@ -1581,14 +1942,14 @@ async function seed() {
     'Salary payment — March 2026 staff payroll $1,500 USD',
     [
       {
-        code: '5100',
+        code: '65010000',
         debit: 1500,
         credit: 0,
         currency: 'USD',
         description: 'Staff salaries March 2026',
       },
       {
-        code: '1105',
+        code: '57010002',
         debit: 0,
         credit: 1500,
         currency: 'USD',
@@ -1604,14 +1965,14 @@ async function seed() {
     'Rent payment — March 2026 branch premises $500 USD',
     [
       {
-        code: '5200',
+        code: '64240000',
         debit: 500,
         credit: 0,
         currency: 'USD',
         description: 'Branch rent March 2026',
       },
       {
-        code: '1105',
+        code: '57010002',
         debit: 0,
         credit: 500,
         currency: 'USD',
@@ -1629,14 +1990,14 @@ async function seed() {
     'INCORRECT deposit — Espérance $300 USD (entered in error)',
     [
       {
-        code: '1101',
+        code: '57030002',
         debit: 300,
         credit: 0,
         currency: 'USD',
         description: 'Cash received — data entry error',
       },
       {
-        code: '2101',
+        code: '33201000',
         debit: 0,
         credit: 300,
         currency: 'USD',
@@ -1656,7 +2017,7 @@ async function seed() {
       'REVERSAL of JE-2026-022 — incorrect deposit corrected',
       [
         {
-          code: '2101',
+          code: '33201000',
           debit: 300,
           credit: 0,
           currency: 'USD',
@@ -1664,7 +2025,7 @@ async function seed() {
           clientAccountId: acc1Entity?.id,
         },
         {
-          code: '1101',
+          code: '57030002',
           debit: 0,
           credit: 300,
           currency: 'USD',

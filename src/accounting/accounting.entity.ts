@@ -24,6 +24,9 @@ export class ChartOfAccountsEntity {
   @Column({ type: 'varchar' })
   name: string;
 
+  @Column({ type: 'varchar', name: 'name_en', nullable: true })
+  name_en: string | null;
+
   @Column({
     type: 'enum',
     enum: ChartAccountType,

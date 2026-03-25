@@ -4,30 +4,36 @@ export class SchemaUpdate1773827363231 implements MigrationInterface {
   name = 'SchemaUpdate1773827363231';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // If CreateAllTables already built the final schema, this migration is a no-op.
+    const hasIndividualProfiles = await queryRunner.query(
+      `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'individual_profiles'`,
+    );
+    if (hasIndividualProfiles.length > 0) return;
+
     await queryRunner.query(
-      `ALTER TABLE "clients" DROP CONSTRAINT "clients_kyc_verified_by_fkey"`,
+      `ALTER TABLE "clients" DROP CONSTRAINT IF EXISTS "clients_kyc_verified_by_fkey"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "clients" DROP CONSTRAINT "clients_individual_details_id_fkey"`,
+      `ALTER TABLE "clients" DROP CONSTRAINT IF EXISTS "clients_individual_details_id_fkey"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "clients" DROP CONSTRAINT "clients_business_details_id_fkey"`,
+      `ALTER TABLE "clients" DROP CONSTRAINT IF EXISTS "clients_business_details_id_fkey"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "clients" DROP CONSTRAINT "clients_guardian_id_fkey"`,
+      `ALTER TABLE "clients" DROP CONSTRAINT IF EXISTS "clients_guardian_id_fkey"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "clients" DROP CONSTRAINT "clients_created_by_fkey"`,
+      `ALTER TABLE "clients" DROP CONSTRAINT IF EXISTS "clients_created_by_fkey"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "representatives" DROP CONSTRAINT "representatives_client_id_fkey"`,
+      `ALTER TABLE "representatives" DROP CONSTRAINT IF EXISTS "representatives_client_id_fkey"`,
     );
     // Clear seed data — schema is incompatible with old rows; seed will be re-run after migration
     await queryRunner.query(`TRUNCATE TABLE "representatives"`);
     await queryRunner.query(`TRUNCATE TABLE "clients" CASCADE`);
     await queryRunner.query(`TRUNCATE TABLE "users" CASCADE`);
     await queryRunner.query(
-      `CREATE TABLE "branches" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "name" text NOT NULL, "address" text NOT NULL, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_7f37d3b42defea97f1df0d19535" PRIMARY KEY ("id"))`,
+      `CREATE TABLE IF NOT EXISTS "branches" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "name" text NOT NULL, "address" text NOT NULL, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_7f37d3b42defea97f1df0d19535" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE TYPE "public"."client_documents_document_type_enum" AS ENUM('PASSPORT_PHOTO', 'ID_DOCUMENT', 'REGISTRATION_DOC', 'OPENING_LETTER', 'BIOMETRIC')`,
@@ -75,7 +81,7 @@ export class SchemaUpdate1773827363231 implements MigrationInterface {
       `CREATE TABLE "business_profiles" ("client_id" uuid NOT NULL, "company_name" text NOT NULL, "mandatory_signatories" integer NOT NULL, "optional_signatories" integer NOT NULL, CONSTRAINT "PK_5f629e15d16b419e7d1b8774b45" PRIMARY KEY ("client_id"))`,
     );
     await queryRunner.query(
-      `ALTER TABLE "users" DROP CONSTRAINT "users_username_key"`,
+      `ALTER TABLE "users" DROP CONSTRAINT IF EXISTS "users_username_key"`,
     );
     await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "username"`);
     await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "full_name"`);
@@ -96,19 +102,19 @@ export class SchemaUpdate1773827363231 implements MigrationInterface {
       `ALTER TABLE "clients" DROP COLUMN "kyc_expiry_date"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "clients" DROP CONSTRAINT "clients_individual_details_id_key"`,
+      `ALTER TABLE "clients" DROP CONSTRAINT IF EXISTS "clients_individual_details_id_key"`,
     );
     await queryRunner.query(
       `ALTER TABLE "clients" DROP COLUMN "individual_details_id"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "clients" DROP CONSTRAINT "clients_business_details_id_key"`,
+      `ALTER TABLE "clients" DROP CONSTRAINT IF EXISTS "clients_business_details_id_key"`,
     );
     await queryRunner.query(
       `ALTER TABLE "clients" DROP COLUMN "business_details_id"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "clients" DROP CONSTRAINT "clients_guardian_id_key"`,
+      `ALTER TABLE "clients" DROP CONSTRAINT IF EXISTS "clients_guardian_id_key"`,
     );
     await queryRunner.query(`ALTER TABLE "clients" DROP COLUMN "guardian_id"`);
     await queryRunner.query(
@@ -209,7 +215,7 @@ export class SchemaUpdate1773827363231 implements MigrationInterface {
     );
     await queryRunner.query(`DROP TYPE "public"."user_role_enum_old"`);
     await queryRunner.query(
-      `ALTER TABLE "clients" DROP CONSTRAINT "clients_client_number_key"`,
+      `ALTER TABLE "clients" DROP CONSTRAINT IF EXISTS "clients_client_number_key"`,
     );
     await queryRunner.query(
       `ALTER TABLE "clients" DROP COLUMN "client_number"`,

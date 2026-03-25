@@ -320,29 +320,30 @@
 
 #### `chart_of_accounts`
 
-| Column     | Type                        | Notes                                          |
-| ---------- | --------------------------- | ---------------------------------------------- |
-| id         | uuid PK                     |                                                |
-| parent_id  | uuid FK → chart_of_accounts | nullable — null means root/top-level account   |
-| code       | text unique                 | e.g. `1001` — globally unique                  |
-| name       | text                        | e.g. `Cash - USD`                              |
-| type       | enum                        | `ASSET` `LIABILITY` `EQUITY` `INCOME` `EXPENSE`|
-| is_active  | boolean                     | default true                                   |
-| created_by | uuid FK → users             |                                                |
-| created_at | timestamp                   |                                                |
-| updated_at | timestamp                   |                                                |
+| Column     | Type                        | Notes                                           |
+| ---------- | --------------------------- | ----------------------------------------------- |
+| id         | uuid PK                     |                                                 |
+| parent_id  | uuid FK → chart_of_accounts | nullable — null means root/top-level account    |
+| code       | text unique                 | e.g. `57030002` — globally unique               |
+| name       | text                        | French name, e.g. `Caisse guichet USD`          |
+| name_en    | text                        | nullable — English name, e.g. `Teller cash USD` |
+| type       | enum                        | `ASSET` `LIABILITY` `EQUITY` `INCOME` `EXPENSE` |
+| is_active  | boolean                     | default true                                    |
+| created_by | uuid FK → users             |                                                 |
+| created_at | timestamp                   |                                                 |
+| updated_at | timestamp                   |                                                 |
 
 #### `journal_entries`
 
-| Column       | Type                      | Notes                               |
-| ------------ | ------------------------- | ----------------------------------- |
-| id           | uuid PK                   |                                     |
-| branch_id    | uuid FK → branches        | branch where the operation occurred |
-| reference    | text unique               |                                     |
-| description  | text                      |                                     |
-| status       | enum                      | `DRAFT` `POSTED` `REVERSED`         |
-| reversal_of  | uuid FK → journal_entries | nullable                            |
-| posted_at    | timestamp                 | nullable                            |
+| Column         | Type                      | Notes                               |
+| -------------- | ------------------------- | ----------------------------------- |
+| id             | uuid PK                   |                                     |
+| branch_id      | uuid FK → branches        | branch where the operation occurred |
+| reference      | text unique               |                                     |
+| description    | text                      |                                     |
+| status         | enum                      | `DRAFT` `POSTED` `REVERSED`         |
+| reversal_of    | uuid FK → journal_entries | nullable                            |
+| posted_at      | timestamp                 | nullable                            |
 | posted_by      | uuid FK → users           | nullable                            |
 | transaction_id | uuid FK → transactions    | nullable                            |
 | created_by     | uuid FK → users           |                                     |
@@ -350,16 +351,16 @@
 
 #### `journal_lines` — always balanced (Σ debit = Σ credit per entry)
 
-| Column           | Type                        | Notes            |
-| ---------------- | --------------------------- | ---------------- |
-| id               | uuid PK                     |                  |
-| journal_entry_id | uuid FK → journal_entries   |                  |
-| account_id       | uuid FK → chart_of_accounts |                  |
-| debit            | numeric(18,4)               | 0 if credit side |
-| credit           | numeric(18,4)               | 0 if debit side  |
-| client_account_id | uuid FK → accounts         | nullable — only filled when line affects a client account |
-| currency          | enum                        | `USD` `FC`       |
-| description       | text                        | nullable         |
+| Column            | Type                        | Notes                                                     |
+| ----------------- | --------------------------- | --------------------------------------------------------- |
+| id                | uuid PK                     |                                                           |
+| journal_entry_id  | uuid FK → journal_entries   |                                                           |
+| account_id        | uuid FK → chart_of_accounts |                                                           |
+| debit             | numeric(18,4)               | 0 if credit side                                          |
+| credit            | numeric(18,4)               | 0 if debit side                                           |
+| client_account_id | uuid FK → accounts          | nullable — only filled when line affects a client account |
+| currency          | enum                        | `USD` `FC`                                                |
+| description       | text                        | nullable                                                  |
 
 ---
 
