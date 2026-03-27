@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { TransactionEntity, TransferEntity } from './transaction.entity';
 import { TransactionMapper } from './transaction.mapper';
 import { TransactionModel } from './transaction.model';
@@ -15,12 +15,17 @@ export class TransactionRepository {
     private readonly transferRepo: Repository<TransferEntity>,
   ) {}
 
-  async save(tx: TransactionModel): Promise<void> {
-    await this.repo.save(TransactionMapper.toRecord(tx));
+  async save(tx: TransactionModel, em?: EntityManager): Promise<void> {
+    const repo = em ? em.getRepository(TransactionEntity) : this.repo;
+    await repo.save(TransactionMapper.toRecord(tx));
   }
 
-  async saveTransfer(transfer: TransferModel): Promise<void> {
-    await this.transferRepo.save(TransactionMapper.transferToRecord(transfer));
+  async saveTransfer(
+    transfer: TransferModel,
+    em?: EntityManager,
+  ): Promise<void> {
+    const repo = em ? em.getRepository(TransferEntity) : this.transferRepo;
+    await repo.save(TransactionMapper.transferToRecord(transfer));
   }
 
   // Balance is encoded in balance_after on the latest transaction row.
@@ -49,7 +54,9 @@ export class TransactionRepository {
     return entities.map(TransactionMapper.toDomain);
   }
 
-  async findTransferByDebitId(debitTxId: string): Promise<TransferModel | null> {
+  async findTransferByDebitId(
+    debitTxId: string,
+  ): Promise<TransferModel | null> {
     const entity = await this.transferRepo.findOne({
       where: { debit_transaction_id: debitTxId },
     });

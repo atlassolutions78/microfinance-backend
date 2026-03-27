@@ -4,9 +4,10 @@ import { BranchEntity } from './branch.entity';
 import { BranchRepository } from './branch.repository';
 import { SettingsService } from './settings.service';
 import { SettingsController } from './settings.controller';
+import { UserEntity } from '../users/user.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([BranchEntity])],
+  imports: [TypeOrmModule.forFeature([BranchEntity, UserEntity])],
   controllers: [SettingsController],
   providers: [SettingsService, BranchRepository],
   exports: [SettingsService],

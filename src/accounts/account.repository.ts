@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { AccountEntity, AccountSequenceEntity } from './account.entity';
 import { AccountModel } from './account.model';
 import { AccountMapper } from './account.mapper';
-import { AccountCurrency, AccountType } from './account.enums';
+import { AccountCurrency, AccountStatus, AccountType } from './account.enums';
+import { UserEntity } from '../users/user.entity';
 
 @Injectable()
 export class AccountRepository {
@@ -13,6 +14,8 @@ export class AccountRepository {
     private readonly repo: Repository<AccountEntity>,
     @InjectRepository(AccountSequenceEntity)
     private readonly sequenceRepo: Repository<AccountSequenceEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepo: Repository<UserEntity>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -22,7 +25,11 @@ export class AccountRepository {
 
   async findById(id: string): Promise<AccountModel | null> {
     const entity = await this.repo.findOne({ where: { id } });
-    return entity ? AccountMapper.toDomain(entity) : null;
+    if (!entity) return null;
+    const model = AccountMapper.toDomain(entity);
+    const nameMap = await this.resolveUserNames([entity.opened_by]);
+    model.openedByName = nameMap.get(entity.opened_by);
+    return model;
   }
 
   async findByClientId(clientId: string): Promise<AccountModel[]> {
@@ -30,12 +37,51 @@ export class AccountRepository {
       where: { client_id: clientId },
       order: { created_at: 'DESC' },
     });
-    return entities.map(AccountMapper.toDomain);
+    const userIds = new Set(entities.map((e) => e.opened_by));
+    const nameMap = await this.resolveUserNames([...userIds]);
+    return entities.map((e) => {
+      const model = AccountMapper.toDomain(e);
+      model.openedByName = nameMap.get(e.opened_by);
+      return model;
+    });
   }
 
   async findAll(): Promise<AccountModel[]> {
     const entities = await this.repo.find({ order: { created_at: 'DESC' } });
-    return entities.map(AccountMapper.toDomain);
+    const userIds = new Set(entities.map((e) => e.opened_by));
+    const nameMap = await this.resolveUserNames([...userIds]);
+    return entities.map((e) => {
+      const model = AccountMapper.toDomain(e);
+      model.openedByName = nameMap.get(e.opened_by);
+      return model;
+    });
+  }
+
+  async findByAccountNumber(
+    accountNumber: string,
+  ): Promise<AccountModel | null> {
+    const entity = await this.repo.findOne({
+      where: { account_number: accountNumber },
+    });
+    return entity ? AccountMapper.toDomain(entity) : null;
+  }
+
+  async updateBalance(
+    id: string,
+    newBalance: number,
+    em?: EntityManager,
+  ): Promise<void> {
+    const repo = em ? em.getRepository(AccountEntity) : this.repo;
+    await repo.update(id, { balance: newBalance.toString() });
+  }
+
+  async updateStatus(
+    id: string,
+    status: AccountStatus,
+    em?: EntityManager,
+  ): Promise<void> {
+    const repo = em ? em.getRepository(AccountEntity) : this.repo;
+    await repo.update(id, { status });
   }
 
   /**
@@ -108,11 +154,12 @@ export class AccountRepository {
     return `${base} ${series}/${currencySymbol}`;
   }
 
-  /** Atomically add `amount` to the account's balance. */
-  async credit(id: string, amount: number): Promise<void> {
-    await this.dataSource.query(
-      `UPDATE accounts SET balance = balance + $1, updated_at = NOW() WHERE id = $2`,
-      [amount, id],
-    );
+  private async resolveUserNames(ids: string[]): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const users = await this.userRepo.find({
+      where: { id: In(ids) },
+      select: { id: true, first_name: true, last_name: true },
+    });
+    return new Map(users.map((u) => [u.id, `${u.first_name} ${u.last_name}`]));
   }
 }

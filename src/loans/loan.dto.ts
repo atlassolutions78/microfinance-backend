@@ -13,6 +13,7 @@
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { LoanCurrency, LoanDocumentType, LoanStatus, LoanType } from './loan.enums';
+import { ApiProperty } from '@nestjs/swagger';
 
 // ---------------------------------------------------------------------------
 // Loan application
@@ -37,6 +38,11 @@ export class ApplyLoanDto {
   @IsUUID()
   accountId: string;
 
+  @ApiProperty({
+    enum: LoanType,
+    description: 'Type of loan',
+    example: LoanType.PERSONAL_LOAN,
+  })
   @IsEnum(LoanType)
   type: LoanType;
 
@@ -73,6 +79,10 @@ export class ApplyLoanDto {
 // ---------------------------------------------------------------------------
 
 export class RejectLoanDto {
+  @ApiProperty({
+    description: 'Reason for rejection (minimum 5 characters)',
+    example: 'Insufficient collateral provided by the applicant',
+  })
   @IsString()
   @MinLength(5)
   reason: string;

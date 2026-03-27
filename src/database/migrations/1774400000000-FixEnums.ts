@@ -42,4 +42,3 @@ export class FixEnums1774400000000 implements MigrationInterface {
     );
   }
 }
-
