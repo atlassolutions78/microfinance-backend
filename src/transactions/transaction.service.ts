@@ -1,5 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { randomBytes, randomUUID } from 'crypto';
+import { DataSource } from 'typeorm';
 import {
   DepositDto,
   ExternalTransferDto,
@@ -11,6 +16,10 @@ import { TransferModel } from './transfer.model';
 import { TransactionRepository } from './transaction.repository';
 import { TransactionPolicy } from './transaction.policy';
 import { TransactionType } from './transaction.enums';
+import { AccountService } from '../accounts/account.service';
+import { AccountStatus } from '../accounts/account.enums';
+import { AccountingService } from '../accounting/accounting.service';
+import { COA_CODES } from '../accounting/accounting.enums';
 
 export interface TransferResult {
   debit: TransactionModel;
@@ -26,7 +35,12 @@ export interface ExternalTransferResult {
 
 @Injectable()
 export class TransactionService {
-  constructor(private readonly repo: TransactionRepository) {}
+  constructor(
+    private readonly repo: TransactionRepository,
+    private readonly accountService: AccountService,
+    private readonly accountingService: AccountingService,
+    private readonly dataSource: DataSource,
+  ) {}
 
   private generateReference(): string {
     const date = new Date();
@@ -37,14 +51,22 @@ export class TransactionService {
 
   private async findOrFail(id: string): Promise<TransactionModel> {
     const tx = await this.repo.findById(id);
-    if (!tx) {
-      throw new NotFoundException(`Transaction ${id} not found`);
-    }
+    if (!tx) throw new NotFoundException(`Transaction ${id} not found`);
     return tx;
   }
 
   async deposit(dto: DepositDto): Promise<TransactionModel> {
-    TransactionPolicy.assertAccountActive(dto.accountId);
+    // ── Pre-flight (outside DB transaction — read-only) ───────────────────────
+    const account = await this.accountService.findById(dto.accountId);
+    if (
+      account.status === AccountStatus.SUSPENDED ||
+      account.status === AccountStatus.CLOSED ||
+      account.status === AccountStatus.DORMANT
+    ) {
+      throw new BadRequestException(
+        `Account is ${account.status.toLowerCase()} and cannot accept deposits.`,
+      );
+    }
 
     const balance = await this.repo.getBalance(dto.accountId);
     const newBalance = balance + dto.amount;
@@ -63,21 +85,51 @@ export class TransactionService {
       createdAt: new Date(),
     });
 
-    await this.repo.save(tx);
-    await this.repo.setBalance(dto.accountId, newBalance);
+    // ── Atomic persistence ────────────────────────────────────────────────────
+    await this.dataSource.transaction(async (em) => {
+      await this.repo.save(tx, em);
+      await this.accountService.recordBalance(dto.accountId, newBalance, em);
+      const tellerCode =
+        dto.currency === 'FC' ? COA_CODES.TELLER_FC : COA_CODES.TELLER_USD;
+      const savingsCode =
+        dto.currency === 'FC'
+          ? COA_CODES.CUSTOMER_SAVINGS_FC
+          : COA_CODES.CUSTOMER_SAVINGS_USD;
+      await this.accountingService.postDeposit(
+        dto.amount,
+        dto.currency,
+        tellerCode,
+        savingsCode,
+        dto.branchId,
+        dto.performedBy,
+        dto.accountId,
+        dto.description,
+        em,
+      );
+    });
 
     return tx;
   }
 
   async withdraw(dto: WithdrawalDto): Promise<TransactionModel> {
-    TransactionPolicy.assertAccountActive(dto.accountId);
+    // ── Pre-flight ────────────────────────────────────────────────────────────
+    const account = await this.accountService.findById(dto.accountId);
+    if (account.status !== AccountStatus.ACTIVE) {
+      throw new BadRequestException(
+        `Account is ${account.status.toLowerCase()} and cannot process withdrawals.`,
+      );
+    }
 
     if (dto.accountType === 'BUSINESS') {
       TransactionPolicy.assertSignaturePolicy(dto.accountType, dto.accountId);
     }
 
     const balance = await this.repo.getBalance(dto.accountId);
-    TransactionPolicy.assertSufficientBalance(balance, dto.amount, dto.accountId);
+    TransactionPolicy.assertSufficientBalance(
+      balance,
+      dto.amount,
+      dto.accountId,
+    );
 
     const newBalance = balance - dto.amount;
 
@@ -95,18 +147,53 @@ export class TransactionService {
       createdAt: new Date(),
     });
 
-    await this.repo.save(tx);
-    await this.repo.setBalance(dto.accountId, newBalance);
+    // ── Atomic persistence ────────────────────────────────────────────────────
+    await this.dataSource.transaction(async (em) => {
+      await this.repo.save(tx, em);
+      await this.accountService.recordBalance(dto.accountId, newBalance, em);
+      const tellerCode =
+        dto.currency === 'FC' ? COA_CODES.TELLER_FC : COA_CODES.TELLER_USD;
+      const savingsCode =
+        dto.currency === 'FC'
+          ? COA_CODES.CUSTOMER_SAVINGS_FC
+          : COA_CODES.CUSTOMER_SAVINGS_USD;
+      await this.accountingService.postWithdrawal(
+        dto.amount,
+        dto.currency,
+        tellerCode,
+        savingsCode,
+        dto.branchId,
+        dto.performedBy,
+        dto.accountId,
+        dto.description,
+        em,
+      );
+    });
 
     return tx;
   }
 
   async internalTransfer(dto: InternalTransferDto): Promise<TransferResult> {
-    TransactionPolicy.assertAccountActive(dto.sourceAccountId);
-    TransactionPolicy.assertAccountActive(dto.destinationAccountId);
+    // ── Pre-flight ────────────────────────────────────────────────────────────
+    const source = await this.accountService.findById(dto.sourceAccountId);
+    if (source.status !== AccountStatus.ACTIVE) {
+      throw new BadRequestException(
+        `Source account is ${source.status.toLowerCase()} and cannot process transfers.`,
+      );
+    }
+    const dest = await this.accountService.findById(dto.destinationAccountId);
+    if (dest.status !== AccountStatus.ACTIVE) {
+      throw new BadRequestException(
+        `Destination account is ${dest.status.toLowerCase()} and cannot receive transfers.`,
+      );
+    }
 
     const sourceBalance = await this.repo.getBalance(dto.sourceAccountId);
-    TransactionPolicy.assertSufficientBalance(sourceBalance, dto.amount, dto.sourceAccountId);
+    TransactionPolicy.assertSufficientBalance(
+      sourceBalance,
+      dto.amount,
+      dto.sourceAccountId,
+    );
 
     const destBalance = await this.repo.getBalance(dto.destinationAccountId);
     const sourceNewBalance = sourceBalance - dto.amount;
@@ -150,24 +237,61 @@ export class TransactionService {
       claimReference: undefined,
     });
 
-    // TODO: wrap the three saves in a DB transaction when TypeORM is wired.
-    await this.repo.save(debit);
-    await this.repo.setBalance(dto.sourceAccountId, sourceNewBalance);
-    await this.repo.save(credit);
-    await this.repo.setBalance(dto.destinationAccountId, destNewBalance);
-    await this.repo.saveTransfer(transfer);
+    // ── Atomic persistence ────────────────────────────────────────────────────
+    await this.dataSource.transaction(async (em) => {
+      await this.repo.save(debit, em);
+      await this.repo.save(credit, em);
+      await this.repo.saveTransfer(transfer, em);
+      await this.accountService.recordBalance(
+        dto.sourceAccountId,
+        sourceNewBalance,
+        em,
+      );
+      await this.accountService.recordBalance(
+        dto.destinationAccountId,
+        destNewBalance,
+        em,
+      );
+      const srcSavingsCode =
+        dto.currency === 'FC'
+          ? COA_CODES.CUSTOMER_SAVINGS_FC
+          : COA_CODES.CUSTOMER_SAVINGS_USD;
+      await this.accountingService.postWithdrawal(
+        dto.amount,
+        dto.currency,
+        srcSavingsCode,
+        srcSavingsCode,
+        dto.branchId,
+        dto.performedBy,
+        dto.sourceAccountId,
+        dto.description,
+        em,
+      );
+    });
 
     return { debit, credit, transfer };
   }
 
-  async externalTransfer(dto: ExternalTransferDto): Promise<ExternalTransferResult> {
-    TransactionPolicy.assertAccountActive(dto.sourceAccountId);
+  async externalTransfer(
+    dto: ExternalTransferDto,
+  ): Promise<ExternalTransferResult> {
+    // ── Pre-flight ────────────────────────────────────────────────────────────
+    const account = await this.accountService.findById(dto.sourceAccountId);
+    if (account.status !== AccountStatus.ACTIVE) {
+      throw new BadRequestException(
+        `Account is ${account.status.toLowerCase()} and cannot process transfers.`,
+      );
+    }
 
     const balance = await this.repo.getBalance(dto.sourceAccountId);
     const feeAmount = Math.round(dto.amount * 0.01 * 10000) / 10000;
     const totalDebit = dto.amount + feeAmount;
 
-    TransactionPolicy.assertSufficientBalance(balance, totalDebit, dto.sourceAccountId);
+    TransactionPolicy.assertSufficientBalance(
+      balance,
+      totalDebit,
+      dto.sourceAccountId,
+    );
 
     const balanceAfterPrincipal = balance - dto.amount;
     const balanceAfterFee = balanceAfterPrincipal - feeAmount;
@@ -210,11 +334,50 @@ export class TransactionService {
       claimReference: dto.claimReference,
     });
 
-    // TODO: wrap the three saves in a DB transaction when TypeORM is wired.
-    await this.repo.save(debit);
-    await this.repo.save(fee);
-    await this.repo.setBalance(dto.sourceAccountId, balanceAfterFee);
-    await this.repo.saveTransfer(transfer);
+    // ── Atomic persistence ────────────────────────────────────────────────────
+    await this.dataSource.transaction(async (em) => {
+      await this.repo.save(debit, em);
+      await this.repo.save(fee, em);
+      await this.repo.saveTransfer(transfer, em);
+      await this.accountService.recordBalance(
+        dto.sourceAccountId,
+        balanceAfterFee,
+        em,
+      );
+      const extTellerCode =
+        dto.currency === 'FC' ? COA_CODES.TELLER_FC : COA_CODES.TELLER_USD;
+      const extSavingsCode =
+        dto.currency === 'FC'
+          ? COA_CODES.CUSTOMER_SAVINGS_FC
+          : COA_CODES.CUSTOMER_SAVINGS_USD;
+      await this.accountingService.postWithdrawal(
+        dto.amount,
+        dto.currency,
+        extTellerCode,
+        extSavingsCode,
+        dto.branchId,
+        dto.performedBy,
+        dto.sourceAccountId,
+        dto.description,
+        em,
+      );
+      if (feeAmount > 0) {
+        const feeCode =
+          dto.currency === 'FC'
+            ? COA_CODES.FEE_INCOME_FC
+            : COA_CODES.FEE_INCOME_USD;
+        await this.accountingService.postExpense(
+          feeAmount,
+          dto.currency,
+          feeCode,
+          extTellerCode,
+          dto.branchId,
+          dto.performedBy,
+          `Transfer fee for external transfer`,
+          em,
+        );
+      }
+    });
 
     return { debit, fee, transfer };
   }

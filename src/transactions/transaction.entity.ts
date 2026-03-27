@@ -17,13 +17,21 @@ export class TransactionEntity {
   @Column({ name: 'branch_id', type: 'uuid' })
   branch_id: string;
 
-  @Column({ type: 'enum', enum: TransactionType, enumName: 'transactions_type_enum' })
+  @Column({
+    type: 'enum',
+    enum: TransactionType,
+    enumName: 'transactions_type_enum',
+  })
   type: TransactionType;
 
   @Column({ type: 'numeric', precision: 18, scale: 4 })
   amount: number;
 
-  @Column({ type: 'enum', enum: Currency, enumName: 'transactions_currency_enum' })
+  @Column({
+    type: 'enum',
+    enum: Currency,
+    enumName: 'transactions_currency_enum',
+  })
   currency: Currency;
 
   @Column({ name: 'balance_after', type: 'numeric', precision: 18, scale: 4 })

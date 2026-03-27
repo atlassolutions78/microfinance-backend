@@ -9,6 +9,7 @@ import {
   RepresentativeEntity,
   OrganizationRepresentativeEntity,
 } from './client.entity';
+import { UserEntity } from '../users/user.entity';
 import { ClientRepository } from './client.repository';
 import { ClientService } from './client.service';
 import { ClientController } from './client.controller';
@@ -23,6 +24,7 @@ import { ClientController } from './client.controller';
       MinorGuardianEntity,
       RepresentativeEntity,
       OrganizationRepresentativeEntity,
+      UserEntity,
     ]),
   ],
   controllers: [ClientController],

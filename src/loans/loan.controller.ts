@@ -8,7 +8,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UserModel } from '../users/user.model';
@@ -42,6 +42,8 @@ export class LoanController {
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get a single loan by ID' })
+  @ApiParam({ name: 'id', description: 'Loan UUID' })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.loanService.findById(id);
   }

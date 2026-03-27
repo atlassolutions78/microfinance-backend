@@ -11,52 +11,61 @@
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { LoanStatus, LoanType } from './loan.enums';
 import { Type } from 'class-transformer';
-import { LoanCurrency, LoanDocumentType, LoanStatus, LoanType } from './loan.enums';
 
-// ---------------------------------------------------------------------------
-// Loan application
-// ---------------------------------------------------------------------------
-
-export class LoanDocumentInputDto {
-  @IsEnum(LoanDocumentType)
-  documentType: LoanDocumentType;
-
-  @IsString()
-  fileName: string;
-
-  @IsString()
-  fileUrl: string;
-}
-
-export class ApplyLoanDto {
+export class CreateLoanDto {
+  @ApiProperty({
+    description: 'UUID of the member applying for the loan',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+  })
   @IsUUID()
   clientId: string;
 
-  /** Account to receive the disbursement. Must belong to the client. */
-  @IsUUID()
-  accountId: string;
+  @ApiProperty({
+    description: 'Loan principal amount (minimum 10,000)',
+    minimum: 10000,
+    example: 500000,
+  })
+  @IsNumber()
+  @Min(10_000)
+  amount: number;
 
+  @ApiProperty({
+    description: 'Annual interest rate as a decimal, e.g. 0.15 for 15%',
+    minimum: 0.01,
+    maximum: 1,
+    example: 0.15,
+  })
+  @IsNumber()
+  @Min(0.01)
+  @Max(1)
+  interestRate: number;
+
+  @ApiProperty({
+    description: 'Loan term in months (1–60)',
+    minimum: 1,
+    maximum: 60,
+    example: 12,
+  })
+  @IsNumber()
+  @Min(1)
+  @Max(60)
+  termMonths: number;
+
+  @ApiProperty({
+    enum: LoanType,
+    description: 'Type of loan',
+    example: LoanType.SALARY_ADVANCE,
+  })
   @IsEnum(LoanType)
   type: LoanType;
 
-  @IsEnum(LoanCurrency)
-  currency: LoanCurrency;
-
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0.01)
-  principalAmount: number;
-
-  /**
-   * Required for PERSONAL_LOAN (10 or 12 months).
-   * Ignored for SALARY_ADVANCE (fixed 1 month) and OVERDRAFT (fixed 3 months).
-   */
-  @IsInt()
-  @Min(1)
-  @Max(60)
-  @IsOptional()
-  termMonths?: number;
-
+  @ApiProperty({
+    description: 'Purpose of the loan (minimum 10 characters)',
+    example: 'Purchase of agricultural equipment for farming season',
+  })
   @IsString()
   @IsOptional()
   purpose?: string;
@@ -68,11 +77,36 @@ export class ApplyLoanDto {
   documents: LoanDocumentInputDto[];
 }
 
-// ---------------------------------------------------------------------------
-// Review actions
-// ---------------------------------------------------------------------------
+export class ApproveLoanDto {
+  @ApiProperty({
+    description: 'UUID of the staff member approving the loan',
+    example: 'd1b2c3d4-e5f6-7890-abcd-ef1234567890',
+  })
+  @IsUUID()
+  approverId: string;
+}
+
+export class LoanDocumentInputDto {
+  @ApiProperty({
+    description: 'Document type (MOU, Commitment Letter, Request Letter, etc.)',
+    example: 'MOU',
+  })
+  @IsString()
+  type: string;
+
+  @ApiProperty({
+    description: 'Base64-encoded document content or file URL',
+    example: 'data:application/pdf;base64,...',
+  })
+  @IsString()
+  content: string;
+}
 
 export class RejectLoanDto {
+  @ApiProperty({
+    description: 'Reason for rejection (minimum 5 characters)',
+    example: 'Insufficient collateral provided by the applicant',
+  })
   @IsString()
   @MinLength(5)
   reason: string;
