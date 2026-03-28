@@ -3,11 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { UserRepository } from './user.repository';
 import { UserModel } from './user.model';
-import { CreateUserDto, ChangeRoleDto } from './user.dto';
+import { ChangeRoleDto, CreateUserDto, UpdateUserDto, UserFilterDto } from './user.dto';
 
 @Injectable()
 export class UserService {
@@ -29,6 +29,7 @@ export class UserService {
       passwordHash,
       role: dto.role,
       isActive: true,
+      mustChangePassword: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -64,6 +65,27 @@ export class UserService {
     user.activate();
     await this.userRepository.save(user);
     return user;
+  }
+
+  async findAllFiltered(filters: UserFilterDto): Promise<UserModel[]> {
+    return this.userRepository.findAllFiltered(filters);
+  }
+
+  async updateUser(id: string, dto: UpdateUserDto): Promise<UserModel> {
+    const user = await this.findOrFail(id);
+    if (dto.role !== undefined) user.changeRole(dto.role);
+    if (dto.branchId !== undefined) user.reassignBranch(dto.branchId ?? null);
+    await this.userRepository.save(user);
+    return user;
+  }
+
+  async resetPassword(id: string): Promise<{ tempPassword: string }> {
+    const user = await this.findOrFail(id);
+    const tempPassword = randomBytes(6).toString('hex');
+    const hash = await bcrypt.hash(tempPassword, 12);
+    user.resetPassword(hash);
+    await this.userRepository.save(user);
+    return { tempPassword };
   }
 
   private async findOrFail(id: string): Promise<UserModel> {

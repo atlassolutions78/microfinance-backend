@@ -40,6 +40,9 @@ export class UserEntity {
   @Column({ name: 'is_active', default: true })
   is_active: boolean;
 
+  @Column({ name: 'must_change_password', default: false })
+  must_change_password: boolean;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   created_at: Date;
 

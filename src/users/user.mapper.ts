@@ -17,6 +17,7 @@ export class UserMapper {
       passwordHash: entity.password_hash,
       role: entity.role,
       isActive: entity.is_active,
+      mustChangePassword: entity.must_change_password,
       createdAt: entity.created_at,
       updatedAt: entity.updated_at,
     });
@@ -33,6 +34,7 @@ export class UserMapper {
     entity.password_hash = model.passwordHash;
     entity.role = model.role;
     entity.is_active = model.isActive;
+    entity.must_change_password = model.mustChangePassword;
     return entity;
   }
 }
