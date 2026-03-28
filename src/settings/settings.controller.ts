@@ -5,6 +5,7 @@ import {
   Patch,
   Param,
   Body,
+  Query,
   ParseUUIDPipe,
   UseGuards,
 } from '@nestjs/common';
@@ -17,6 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { SettingsService } from './settings.service';
 import { CreateBranchDto, UpdateBranchDto } from './settings.dto';
+import { CreateUserDto, UpdateUserDto, UserFilterDto } from '../users/user.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -30,6 +32,8 @@ import { UserRole } from '../users/user.enums';
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
+
+  // ─── Branch Endpoints ─────────────────────────────────────────────────────────
 
   @Post('branches')
   @ApiOperation({ summary: 'Create a new branch (Admin only)' })
@@ -100,5 +104,65 @@ export class SettingsController {
     @CurrentUser() user: UserModel,
   ) {
     return this.settingsService.deactivateBranch(id, user.id);
+  }
+
+  @Patch('branches/:id/activate')
+  @Roles(UserRole.ADMIN)
+  activateBranch(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.settingsService.activateBranch(id, user.id);
+  }
+
+  // ─── User Management Endpoints ────────────────────────────────────────────────
+
+  @Post('users')
+  @Roles(UserRole.ADMIN, UserRole.BRANCH_MANAGER)
+  createUser(@Body() dto: CreateUserDto, @CurrentUser() actor: UserModel) {
+    return this.settingsService.createSettingsUser(dto, actor);
+  }
+
+  @Get('users')
+  @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER, UserRole.BRANCH_MANAGER)
+  listUsers(@Query() filters: UserFilterDto) {
+    return this.settingsService.listUsers(filters);
+  }
+
+  @Get('users/:id')
+  @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER, UserRole.BRANCH_MANAGER)
+  getUser(@Param('id', ParseUUIDPipe) id: string) {
+    return this.settingsService.getSettingsUser(id);
+  }
+
+  @Patch('users/:id')
+  @Roles(UserRole.ADMIN, UserRole.BRANCH_MANAGER)
+  updateUser(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUserDto,
+    @CurrentUser() actor: UserModel,
+  ) {
+    return this.settingsService.updateSettingsUser(id, dto, actor);
+  }
+
+  @Patch('users/:id/activate')
+  @Roles(UserRole.ADMIN)
+  activateUser(@Param('id', ParseUUIDPipe) id: string) {
+    return this.settingsService.activateSettingsUser(id);
+  }
+
+  @Patch('users/:id/deactivate')
+  @Roles(UserRole.ADMIN)
+  deactivateUser(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() actor: UserModel,
+  ) {
+    return this.settingsService.deactivateSettingsUser(id, actor);
+  }
+
+  @Post('users/:id/reset-password')
+  @Roles(UserRole.ADMIN)
+  resetPassword(@Param('id', ParseUUIDPipe) id: string) {
+    return this.settingsService.resetUserPassword(id);
   }
 }

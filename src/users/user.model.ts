@@ -10,6 +10,7 @@ export interface UserModelProps {
   passwordHash: string;
   role: UserRole;
   isActive: boolean;
+  mustChangePassword: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -20,16 +21,17 @@ export interface UserModelProps {
  */
 export class UserModel {
   readonly id: string;
-  readonly branchId: string | null;
   readonly firstName: string;
   readonly middleName: string | null;
   readonly lastName: string;
   readonly email: string;
-  readonly passwordHash: string;
   readonly createdAt: Date;
 
+  branchId: string | null;
+  passwordHash: string;
   role: UserRole;
   isActive: boolean;
+  mustChangePassword: boolean;
   updatedAt: Date;
 
   constructor(props: UserModelProps) {
@@ -42,6 +44,7 @@ export class UserModel {
     this.passwordHash = props.passwordHash;
     this.role = props.role;
     this.isActive = props.isActive;
+    this.mustChangePassword = props.mustChangePassword;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
   }
@@ -60,6 +63,17 @@ export class UserModel {
 
   changeRole(newRole: UserRole): void {
     this.role = newRole;
+    this.updatedAt = new Date();
+  }
+
+  resetPassword(newPasswordHash: string): void {
+    this.passwordHash = newPasswordHash;
+    this.mustChangePassword = true;
+    this.updatedAt = new Date();
+  }
+
+  reassignBranch(branchId: string | null): void {
+    this.branchId = branchId;
     this.updatedAt = new Date();
   }
 }
