@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddBranchTypeAndRoles1742300000000 implements MigrationInterface {
-  name = 'AddBranchTypeAndRoles1742300000000';
+export class AddBranchTypeAndRoles1773800000000 implements MigrationInterface {
+  name = 'AddBranchTypeAndRoles1773800000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // --- branches: add type, code, phone, is_active ---
@@ -17,9 +17,7 @@ export class AddBranchTypeAndRoles1742300000000 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "branches" ADD COLUMN "type" "public"."branches_type_enum" NOT NULL DEFAULT 'NORMAL'`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "branches" ADD COLUMN "phone" text`,
-    );
+    await queryRunner.query(`ALTER TABLE "branches" ADD COLUMN "phone" text`);
     await queryRunner.query(
       `ALTER TABLE "branches" ADD COLUMN "is_active" boolean NOT NULL DEFAULT true`,
     );
@@ -44,33 +42,17 @@ export class AddBranchTypeAndRoles1742300000000 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // --- branches: remove added columns ---
-    await queryRunner.query(
-      `ALTER TABLE "branches" DROP COLUMN "updated_by"`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "branches" DROP COLUMN "created_by"`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "branches" DROP COLUMN "updated_at"`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "branches" DROP COLUMN "is_active"`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "branches" DROP COLUMN "phone"`,
-    );
+    await queryRunner.query(`ALTER TABLE "branches" DROP COLUMN "updated_by"`);
+    await queryRunner.query(`ALTER TABLE "branches" DROP COLUMN "created_by"`);
+    await queryRunner.query(`ALTER TABLE "branches" DROP COLUMN "updated_at"`);
+    await queryRunner.query(`ALTER TABLE "branches" DROP COLUMN "is_active"`);
+    await queryRunner.query(`ALTER TABLE "branches" DROP COLUMN "phone"`);
     await queryRunner.query(
       `ALTER TABLE "branches" DROP CONSTRAINT "UQ_branches_code"`,
     );
-    await queryRunner.query(
-      `ALTER TABLE "branches" DROP COLUMN "code"`,
-    );
-    await queryRunner.query(
-      `ALTER TABLE "branches" DROP COLUMN "type"`,
-    );
-    await queryRunner.query(
-      `DROP TYPE "public"."branches_type_enum"`,
-    );
+    await queryRunner.query(`ALTER TABLE "branches" DROP COLUMN "code"`);
+    await queryRunner.query(`ALTER TABLE "branches" DROP COLUMN "type"`);
+    await queryRunner.query(`DROP TYPE "public"."branches_type_enum"`);
 
     // --- users: rename BRANCH_MANAGER back to MANAGER ---
     // Note: HQ_MANAGER cannot be removed from a PostgreSQL enum without

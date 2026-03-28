@@ -30,7 +30,7 @@ export class AuthService {
 
     const payload = { sub: user.id, role: user.role };
     const accessToken = this.jwtService.sign(payload);
-    const decoded = this.jwtService.decode(accessToken) as { exp: number };
+    const decoded = this.jwtService.decode(accessToken);
     const expiresAt = new Date(decoded.exp * 1000).toISOString();
 
     const branch = user.branchId

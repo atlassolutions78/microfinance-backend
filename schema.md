@@ -320,39 +320,47 @@
 
 #### `chart_of_accounts`
 
-| Column    | Type               | Notes                                         |
-| --------- | ------------------ | --------------------------------------------- |
-| id        | uuid PK            |                                               |
-| branch_id | uuid FK → branches |                                               |
-| code      | text               | e.g. `1001` — unique per branch, not globally |
-| name      | text               | e.g. `Cash - USD`                             |
-| type      | enum               | `ASSET` `LIABILITY` `INCOME` `EXPENSE`        |
-| currency  | text               | `USD` or `FC`                                 |
-| balance   | numeric(18,4)      | running balance                               |
-
-Unique constraint: `(code, branch_id)`
+| Column     | Type                        | Notes                                           |
+| ---------- | --------------------------- | ----------------------------------------------- |
+| id         | uuid PK                     |                                                 |
+| parent_id  | uuid FK → chart_of_accounts | nullable — null means root/top-level account    |
+| code       | text unique                 | e.g. `57030002` — globally unique               |
+| name       | text                        | French name, e.g. `Caisse guichet USD`          |
+| name_en    | text                        | nullable — English name, e.g. `Teller cash USD` |
+| type       | enum                        | `ASSET` `LIABILITY` `EQUITY` `INCOME` `EXPENSE` |
+| is_active  | boolean                     | default true                                    |
+| created_by | uuid FK → users             |                                                 |
+| created_at | timestamp                   |                                                 |
+| updated_at | timestamp                   |                                                 |
 
 #### `journal_entries`
 
-| Column         | Type               | Notes                                                                                |
-| -------------- | ------------------ | ------------------------------------------------------------------------------------ |
-| id             | uuid PK            |                                                                                      |
-| branch_id      | uuid FK → branches | branch where the operation occurred                                                  |
-| reference      | text unique        |                                                                                      |
-| description    | text               |                                                                                      |
-| operation_type | enum               | `DEPOSIT` `WITHDRAWAL` `LOAN_DISBURSEMENT` `LOAN_REPAYMENT` `FEE_PENALTY` `TRANSFER` |
-| created_by     | uuid FK → users    |                                                                                      |
-| created_at     | timestamp          |                                                                                      |
+| Column         | Type                      | Notes                               |
+| -------------- | ------------------------- | ----------------------------------- |
+| id             | uuid PK                   |                                     |
+| branch_id      | uuid FK → branches        | branch where the operation occurred |
+| reference      | text unique               |                                     |
+| description    | text                      |                                     |
+| status         | enum                      | `DRAFT` `POSTED` `REVERSED`         |
+| reversal_of    | uuid FK → journal_entries | nullable                            |
+| posted_at      | timestamp                 | nullable                            |
+| posted_by      | uuid FK → users           | nullable                            |
+| transaction_id | uuid FK → transactions    | nullable                            |
+| created_by     | uuid FK → users           |                                     |
+| created_at     | timestamp                 |                                     |
 
 #### `journal_lines` — always balanced (Σ debit = Σ credit per entry)
 
-| Column           | Type                        | Notes            |
-| ---------------- | --------------------------- | ---------------- |
-| id               | uuid PK                     |                  |
-| journal_entry_id | uuid FK → journal_entries   |                  |
-| account_id       | uuid FK → chart_of_accounts |                  |
-| debit            | numeric(18,4)               | 0 if credit side |
-| credit           | numeric(18,4)               | 0 if debit side  |
+| Column            | Type                        | Notes                                                     |
+| ----------------- | --------------------------- | --------------------------------------------------------- |
+| id                | uuid PK                     |                                                           |
+| journal_entry_id  | uuid FK → journal_entries   |                                                           |
+| account_id        | uuid FK → chart_of_accounts |                                                           |
+| debit             | numeric(18,4)               | 0 if credit side                                          |
+| credit            | numeric(18,4)               | 0 if debit side                                           |
+| client_account_id | uuid FK → accounts          | nullable — only filled when line affects a client account |
+| currency          | enum                        | `USD` `FC`                                                |
+| description       | text                        | nullable                                                  |
 
 ---
 
@@ -365,7 +373,7 @@ branches ──────────────< accounts
 branches ──────────────< transactions
 branches ──────────────< loans
 branches ──────────────< repayments
-branches ──────────────< chart_of_accounts
+chart_of_accounts ────── chart_of_accounts (parent_id, self-reference)
 branches ──────────────< journal_entries
 
 users ──────────────────< clients (created_by)
@@ -377,6 +385,7 @@ users ──────────────────< repayments (receiv
 users ──────────────────< transactions (performed_by)
 users ──────────────────< client_documents (reviewed_by)
 users ──────────────────< journal_entries (created_by)
+users ──────────────────< chart_of_accounts (created_by)
 
 clients ─────────────── individual_profiles  (1:1)
 clients ─────────────── organization_profiles (1:1)
@@ -394,7 +403,10 @@ loans ────────────────< repayment_schedules
 loans ────────────────< repayments
 
 journal_entries ──────< journal_lines
+journal_entries ──────── journal_entries (reversal_of, self-reference)
+transactions ──────────< journal_entries (transaction_id)
 chart_of_accounts ────< journal_lines
+accounts ─────────────< journal_lines (client_account_id)
 ```
 
 ---

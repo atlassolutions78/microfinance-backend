@@ -1,0 +1,15 @@
+export enum TransactionType {
+  DEPOSIT = 'DEPOSIT',
+  WITHDRAWAL = 'WITHDRAWAL',
+  TRANSFER_IN = 'TRANSFER_IN',
+  TRANSFER_OUT = 'TRANSFER_OUT',
+  LOAN_DISBURSEMENT = 'LOAN_DISBURSEMENT',
+  LOAN_REPAYMENT = 'LOAN_REPAYMENT',
+  FEE = 'FEE',
+  PENALTY = 'PENALTY',
+}
+
+export enum Currency {
+  USD = 'USD',
+  FC = 'FC',
+}
