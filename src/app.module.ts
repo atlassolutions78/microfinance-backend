@@ -13,6 +13,7 @@ import { SettingsModule } from './settings/settings.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { AccountingModule } from './accounting/accounting.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { AccountingModule } from './accounting/accounting.module';
     UploadsModule,
     AccountsModule,
     AccountingModule,
+    NotificationsModule,
     LoansModule,
     TransactionsModule,
     UsersModule,

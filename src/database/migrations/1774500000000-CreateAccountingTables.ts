@@ -4,6 +4,14 @@ export class CreateAccountingTables1774500000000 implements MigrationInterface {
   name = 'CreateAccountingTables1774500000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Ensure the currency enum exists regardless of whether the transactions
+    // migration already created it (guards against out-of-order execution).
+    await queryRunner.query(`
+      DO $$ BEGIN
+        CREATE TYPE "public"."transactions_currency_enum" AS ENUM('USD', 'FC');
+      EXCEPTION WHEN duplicate_object THEN null; END $$
+    `);
+
     // ── Chart of accounts ──────────────────────────────────────────────────────
     await queryRunner.query(
       `CREATE TYPE "public"."accounting_account_type_enum" AS ENUM('ASSET', 'LIABILITY', 'EQUITY', 'INCOME', 'EXPENSE')`,

@@ -15,5 +15,6 @@ import { AccountingModule } from '../accounting/accounting.module';
   ],
   controllers: [TransactionController],
   providers: [TransactionService, TransactionRepository],
+  exports: [TransactionService],
 })
 export class TransactionsModule {}
