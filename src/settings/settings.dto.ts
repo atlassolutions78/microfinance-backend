@@ -1,6 +1,18 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsEmail,
+  IsUUID,
+  MinLength,
+  MaxLength,
+  IsBoolean,
+} from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BranchType } from './branch.enums';
+import { UserRole } from '../users/user.enums';
 
 export class CreateBranchDto {
   @ApiProperty({
@@ -70,4 +82,76 @@ export class UpdateBranchDto {
   @IsString()
   @IsOptional()
   phone?: string;
+}
+
+// ─── User DTOs ────────────────────────────────────────────────────────────────
+
+export class CreateSettingsUserDto {
+  @ApiPropertyOptional({ description: 'Branch UUID', example: 'uuid' })
+  @IsUUID()
+  @IsOptional()
+  branchId?: string | null;
+
+  @ApiProperty({ example: 'Jean' })
+  @IsString()
+  @MinLength(2)
+  @MaxLength(100)
+  firstName: string;
+
+  @ApiPropertyOptional({ example: 'Pierre' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  middleName?: string | null;
+
+  @ApiProperty({ example: 'Mutombo' })
+  @IsString()
+  @MinLength(2)
+  @MaxLength(100)
+  lastName: string;
+
+  @ApiProperty({ example: 'jean@microfinance.cd' })
+  @IsEmail()
+  email: string;
+
+  @ApiProperty({ description: 'Temporary password, min 8 chars' })
+  @IsString()
+  @MinLength(8)
+  password: string;
+
+  @ApiProperty({ enum: UserRole })
+  @IsEnum(UserRole)
+  role: UserRole;
+}
+
+export class UpdateSettingsUserDto {
+  @ApiPropertyOptional({ enum: UserRole })
+  @IsEnum(UserRole)
+  @IsOptional()
+  role?: UserRole;
+
+  @ApiPropertyOptional({ description: 'Branch UUID or null to unassign' })
+  @IsUUID()
+  @IsOptional()
+  branchId?: string | null;
+}
+
+export class UserFiltersQuery {
+  @ApiPropertyOptional()
+  @IsUUID()
+  @IsOptional()
+  branchId?: string;
+
+  @ApiPropertyOptional({ enum: UserRole })
+  @IsEnum(UserRole)
+  @IsOptional()
+  role?: UserRole;
+
+  @ApiPropertyOptional({ description: 'true or false' })
+  @Transform(({ value }) =>
+    value === 'true' ? true : value === 'false' ? false : undefined,
+  )
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }
