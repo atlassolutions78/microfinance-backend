@@ -201,6 +201,28 @@ export class AccountingService {
   }
 
   /**
+   * Penalty assessment entry (accrual basis):
+   *   DR Loan Receivable  (asset increases — client owes more)
+   *   CR Penalty Income   (income recognized at assessment)
+   */
+  async postPenaltyAssessment(
+    amount: number,
+    currency: string,
+    loanReceivableCode: string,
+    penaltyIncomeCode: string,
+    branchId: string,
+    createdBy: string,
+    description?: string,
+    em?: EntityManager,
+  ): Promise<string> {
+    const draft = new JournalEntryDraft(branchId, createdBy, description, [
+      { accountCode: loanReceivableCode, debit: amount, credit: 0, currency },
+      { accountCode: penaltyIncomeCode, debit: 0, credit: amount, currency },
+    ]);
+    return this.post(draft, em);
+  }
+
+  /**
    * Posts a reversal of an existing entry.
    * The reversal flips every debit/credit on the original lines.
    * The original entry is NOT automatically marked as REVERSED here —

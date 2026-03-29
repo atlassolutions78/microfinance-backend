@@ -3,6 +3,8 @@
   LoanDocumentType,
   LoanStatus,
   LoanType,
+  ReminderChannel,
+  ReminderStatus,
   RepaymentStatus,
 } from './loan.enums';
 import {
@@ -11,6 +13,7 @@ import {
   LoanModelProps,
   LoanPayment,
   LoanPenalty,
+  LoanReminder,
   RepaymentScheduleItem,
 } from './loan.model';
 import {
@@ -18,6 +21,7 @@ import {
   LoanEntity,
   LoanPaymentEntity,
   LoanPenaltyEntity,
+  LoanReminderEntity,
   RepaymentScheduleEntity,
 } from './loan.entity';
 
@@ -43,7 +47,6 @@ export class LoanMapper {
       outstandingBalance: Number(e.outstanding_balance),
       interestRate: Number(e.interest_rate),
       termMonths: e.term_months,
-      formFee: Number(e.form_fee),
       purpose: e.purpose ?? undefined,
       status: e.status as LoanStatus,
       rejectionReason: e.rejection_reason ?? undefined,
@@ -72,7 +75,6 @@ export class LoanMapper {
     e.outstanding_balance = String(m.outstandingBalance);
     e.interest_rate = String(m.interestRate);
     e.term_months = m.termMonths;
-    e.form_fee = String(m.formFee);
     e.purpose = m.purpose ?? null;
     e.status = m.status;
     e.rejection_reason = m.rejectionReason ?? null;
@@ -101,6 +103,7 @@ export class LoanMapper {
     item.paidAmount = Number(e.paid_amount);
     item.status = e.status as RepaymentStatus;
     item.paidAt = e.paid_at ?? undefined;
+    item.reminderSentAt = e.reminder_sent_at ?? undefined;
     return item;
   }
 
@@ -116,6 +119,7 @@ export class LoanMapper {
     e.paid_amount = String(item.paidAmount);
     e.status = item.status;
     e.paid_at = item.paidAt ?? null;
+    e.reminder_sent_at = item.reminderSentAt ?? null;
     return e;
   }
 
@@ -126,6 +130,7 @@ export class LoanMapper {
     p.id = e.id;
     p.loanId = e.loan_id;
     p.scheduleId = e.schedule_id;
+    p.transactionId = e.transaction_id;
     p.amount = Number(e.amount);
     p.currency = e.currency as LoanCurrency;
     p.paymentDate = e.payment_date;
@@ -140,6 +145,7 @@ export class LoanMapper {
     e.id = p.id;
     e.loan_id = p.loanId;
     e.schedule_id = p.scheduleId ?? null;
+    e.transaction_id = p.transactionId ?? null;
     e.amount = String(p.amount);
     e.currency = p.currency;
     e.payment_date = p.paymentDate;
@@ -198,6 +204,32 @@ export class LoanMapper {
     e.file_url = d.fileUrl;
     e.uploaded_by = d.uploadedBy;
     e.uploaded_at = d.uploadedAt;
+    return e;
+  }
+
+  // --- LoanReminder ---
+
+  static reminderToDomain(e: LoanReminderEntity): LoanReminder {
+    const r = new LoanReminder();
+    r.id = e.id;
+    r.loanId = e.loan_id;
+    r.scheduleId = e.schedule_id;
+    r.channel = e.channel as ReminderChannel;
+    r.status = e.status as ReminderStatus;
+    r.errorMessage = e.error_message;
+    r.sentAt = e.sent_at;
+    return r;
+  }
+
+  static reminderToEntity(r: LoanReminder): LoanReminderEntity {
+    const e = new LoanReminderEntity();
+    e.id = r.id;
+    e.loan_id = r.loanId;
+    e.schedule_id = r.scheduleId;
+    e.channel = r.channel;
+    e.status = r.status;
+    e.error_message = r.errorMessage;
+    e.sent_at = r.sentAt;
     return e;
   }
 }

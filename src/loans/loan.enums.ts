@@ -30,3 +30,13 @@ export enum LoanDocumentType {
   COMMITMENT_LETTER = 'COMMITMENT_LETTER', // Letter of Commitment
   REQUEST_LETTER    = 'REQUEST_LETTER',    // Request Letter
 }
+
+export enum ReminderChannel {
+  EMAIL = 'EMAIL',
+  SMS   = 'SMS',
+}
+
+export enum ReminderStatus {
+  SENT   = 'SENT',
+  FAILED = 'FAILED',
+}

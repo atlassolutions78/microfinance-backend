@@ -164,11 +164,6 @@ export class AccountService {
     return account;
   }
 
-  /** Credit (add) an amount to an account's balance — used for loan disbursements. */
-  async credit(id: string, amount: number): Promise<void> {
-    await this.accountRepository.credit(id, amount);
-  }
-
   private async findOrFail(id: string): Promise<AccountModel> {
     const account = await this.accountRepository.findById(id);
     if (!account) throw new NotFoundException(`Account ${id} not found.`);

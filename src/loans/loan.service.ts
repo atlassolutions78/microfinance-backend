@@ -1,6 +1,7 @@
 ﻿import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
@@ -8,6 +9,11 @@ import { AccountService } from '../accounts/account.service';
 import { ClientService } from '../clients/client.service';
 import { KycStatus } from '../clients/client.enums';
 import { UserModel } from '../users/user.model';
+import { TransactionService } from '../transactions/transaction.service';
+import { Currency } from '../transactions/transaction.enums';
+import { AccountingService } from '../accounting/accounting.service';
+import { COA_CODES } from '../accounting/accounting.enums';
+import { NotificationsService } from '../notifications/notifications.service';
 import { LoanRepository } from './loan.repository';
 import { LoanPolicy, LOAN_PRODUCTS } from './loan.policy';
 import {
@@ -15,11 +21,13 @@ import {
   LoanModel,
   LoanPayment,
   LoanPenalty,
+  LoanReminder,
   RepaymentScheduleItem,
 } from './loan.model';
-import { LoanCurrency, LoanStatus, RepaymentStatus } from './loan.enums';
+import { LoanCurrency, LoanStatus, LoanType, ReminderChannel, ReminderStatus, RepaymentStatus } from './loan.enums';
 import {
   ApplyLoanDto,
+  DisburseDto,
   QueryLoansDto,
   RecordPaymentDto,
   RejectLoanDto,
@@ -27,10 +35,15 @@ import {
 
 @Injectable()
 export class LoanService {
+  private readonly logger = new Logger(LoanService.name);
+
   constructor(
     private readonly loanRepository: LoanRepository,
     private readonly accountService: AccountService,
     private readonly clientService: ClientService,
+    private readonly transactionService: TransactionService,
+    private readonly accountingService: AccountingService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -62,7 +75,6 @@ export class LoanService {
     LoanPolicy.assertAmountRange(dto.principalAmount);
     const termMonths = LoanPolicy.deriveTermMonths(dto.type, dto.termMonths);
     const product = LOAN_PRODUCTS[dto.type];
-    const formFee = LoanPolicy.deriveFormFee(dto.type, dto.currency);
 
     // 5. Generate loan number
     const loanNumber = await this.loanRepository.nextLoanNumber();
@@ -80,7 +92,6 @@ export class LoanService {
       outstandingBalance: 0,
       interestRate: product.monthlyRate,
       termMonths,
-      formFee,
       purpose: dto.purpose,
       status: LoanStatus.PENDING,
       appliedBy: user.id,
@@ -136,8 +147,20 @@ export class LoanService {
   // Disbursement
   // ---------------------------------------------------------------------------
 
-  async disburse(id: string, user: UserModel): Promise<LoanModel> {
+  async disburse(id: string, dto: DisburseDto, user: UserModel): Promise<LoanModel> {
     const loan = await this.findOrFail(id);
+
+    // If the officer chose a different disbursement account, validate and apply it now.
+    if (dto.accountId && dto.accountId !== loan.accountId) {
+      const clientAccounts = await this.accountService.findByClientId(loan.clientId);
+      const account = clientAccounts.find((a) => a.id === dto.accountId);
+      if (!account) {
+        throw new NotFoundException('Account not found or does not belong to this client.');
+      }
+      LoanPolicy.assertAccountEligible(account);
+      loan.accountId = dto.accountId;
+    }
+
     try {
       loan.disburse(user.id);
     } catch (e) {
@@ -148,9 +171,18 @@ export class LoanService {
     const schedule = loan.computeSchedule(loan.disbursedAt!);
     await this.loanRepository.saveSchedule(schedule);
 
-    // Credit the disbursement amount to the client's account
-    // TODO: also create a LOAN_DISBURSEMENT transaction record in the ledger
-    await this.accountService.credit(loan.accountId, loan.principalAmount);
+    // Credit the disbursement amount to the client's account (atomic: tx + balance + journal)
+    const { loanReceivableCode, savingsCode } = this.getCoaCodes(loan.type, loan.currency);
+    await this.transactionService.loanDisbursement({
+      accountId: loan.accountId,
+      branchId: loan.branchId,
+      amount: loan.principalAmount,
+      currency: loan.currency as unknown as Currency,
+      performedBy: user.id,
+      loanReceivableCode,
+      savingsCode,
+      description: `Loan disbursement — ${loan.loanNumber}`,
+    });
 
     await this.loanRepository.save(loan);
     return loan;
@@ -192,10 +224,44 @@ export class LoanService {
       }
     }
 
+    // Fetch assessed penalties for this installment
+    const penalties = await this.loanRepository.findPenaltiesForScheduleItem(target.id);
+    const totalPenalty = penalties.reduce((sum, p) => sum + p.penaltyAmount, 0);
+
+    // Repayment split:
+    //   loanReceivableCredit = principal + assessed penalty (clears the receivable)
+    //   interestCredit       = interest (goes to Interest Income)
+    // Penalty income was already recognised at assessment time — not credited again here.
+    const loanReceivableCredit = target.principalAmount + totalPenalty;
+    const interestCredit = target.interestAmount;
+
+    const { loanReceivableCode, interestIncomeCode, savingsCode } =
+      this.getCoaCodes(loan.type, loan.currency);
+
+    const penaltyIncomeCode =
+      loan.currency === LoanCurrency.FC
+        ? COA_CODES.PENALTY_INCOME_FC
+        : COA_CODES.PENALTY_INCOME_USD;
+
+    // Atomic: debit account + create LOAN_REPAYMENT transaction + post journal
+    const tx = await this.transactionService.loanRepayment({
+      accountId: loan.accountId,
+      branchId: loan.branchId,
+      loanReceivableCredit,
+      interestCredit,
+      currency: loan.currency as unknown as Currency,
+      performedBy: user.id,
+      loanReceivableCode,
+      interestIncomeCode,
+      savingsCode,
+      penaltyIncomeCode,
+      description: `Loan repayment — ${loan.loanNumber} installment #${target.installmentNumber}`,
+    });
+
+    // Update domain objects
     target.markPaid();
     loan.applyPayment(target.principalAmount);
 
-    // Save the updated schedule item and loan
     await this.loanRepository.saveScheduleItem(target);
     await this.loanRepository.save(loan);
 
@@ -204,15 +270,14 @@ export class LoanService {
     payment.id = randomUUID();
     payment.loanId = id;
     payment.scheduleId = target.id;
-    payment.amount = dto.amount;
+    payment.transactionId = tx.id;
+    payment.amount = loanReceivableCredit + interestCredit;
     payment.currency = loan.currency as unknown as LoanCurrency;
     payment.paymentDate = new Date();
     payment.recordedBy = user.id;
     payment.notes = dto.notes ?? null;
     payment.createdAt = new Date();
     await this.loanRepository.savePayment(payment);
-
-    // TODO: create LOAN_REPAYMENT transaction record in the ledger
 
     return loan;
   }
@@ -227,38 +292,189 @@ export class LoanService {
    * Items 1â€“29 days overdue are marked LATE with no penalty.
    * Call this on a scheduler (e.g. daily cron) or trigger manually via the admin endpoint.
    */
-  async processLatePenalties(): Promise<{ processed: number }> {
+  async processLatePenalties(): Promise<{ processed: number; reminders: number }> {
     const overdueItems = await this.loanRepository.findOverdueScheduleItems();
     let processed = 0;
+    let reminders = 0;
 
     for (const item of overdueItems) {
-      if (item.daysOverdue() >= 30) {
-        // Penalty applied only once
-        const alreadyPenalised = await this.loanRepository.existsPenaltyForScheduleItem(item.id);
-        if (!alreadyPenalised) {
-          const overdueAmount = item.totalAmount - item.paidAmount;
-          const penaltyAmount = LoanPolicy.computePenalty(overdueAmount);
+      const loan = await this.loanRepository.findById(item.loanId);
+      if (!loan) continue;
 
-          const penalty = new LoanPenalty();
-          penalty.id = randomUUID();
-          penalty.loanId = item.loanId;
-          penalty.scheduleId = item.id;
-          penalty.penaltyRate = 0.11;
-          penalty.penaltyAmount = penaltyAmount;
-          penalty.appliedAt = new Date();
-          penalty.createdAt = new Date();
+      if (!item.reminderSentAt) {
+        // First overdue detection: send reminder and start penalty clock
+        const contact = await this.clientService.getContactInfo(loan.clientId).catch(() => ({
+          name: null,
+          phone: null,
+          email: null,
+        }));
 
-          await this.loanRepository.savePenalty(penalty);
-          processed++;
+        const results = await this.notificationsService.sendLoanReminder({
+          loanNumber: loan.loanNumber,
+          installmentNumber: item.installmentNumber,
+          dueDate: item.dueDate,
+          amount: item.totalAmount,
+          currency: loan.currency,
+          clientName: contact.name ?? undefined,
+          clientPhone: contact.phone ?? undefined,
+          clientEmail: contact.email ?? undefined,
+        });
+
+        const now = new Date();
+        for (const result of results) {
+          const reminder = new LoanReminder();
+          reminder.id = randomUUID();
+          reminder.loanId = loan.id;
+          reminder.scheduleId = item.id;
+          reminder.channel = result.channel as unknown as ReminderChannel;
+          reminder.status = result.status as unknown as ReminderStatus;
+          reminder.errorMessage = result.errorMessage;
+          reminder.sentAt = now;
+          await this.loanRepository.saveReminder(reminder);
         }
-        item.markOverdue();
-      } else {
+
+        // Start the penalty clock regardless of delivery outcome
+        item.reminderSentAt = now;
+        reminders++;
         item.markLate();
+      } else {
+        const daysSinceReminder = Math.floor(
+          (Date.now() - item.reminderSentAt.getTime()) / 86_400_000,
+        );
+
+        if (daysSinceReminder >= 30) {
+          // Penalty threshold reached: apply once
+          const alreadyPenalised = await this.loanRepository.existsPenaltyForScheduleItem(item.id);
+          if (!alreadyPenalised) {
+            const overdueAmount = item.totalAmount - item.paidAmount;
+            const penaltyAmount = LoanPolicy.computePenalty(overdueAmount);
+
+            const penalty = new LoanPenalty();
+            penalty.id = randomUUID();
+            penalty.loanId = loan.id;
+            penalty.scheduleId = item.id;
+            penalty.penaltyRate = 0.11;
+            penalty.penaltyAmount = penaltyAmount;
+            penalty.appliedAt = new Date();
+            penalty.createdAt = new Date();
+            await this.loanRepository.savePenalty(penalty);
+
+            // Post accounting entry at assessment time (accrual basis)
+            const { loanReceivableCode } = this.getCoaCodes(loan.type, loan.currency);
+            const penaltyIncomeCode =
+              loan.currency === LoanCurrency.FC
+                ? COA_CODES.PENALTY_INCOME_FC
+                : COA_CODES.PENALTY_INCOME_USD;
+            try {
+              await this.accountingService.postPenaltyAssessment(
+                penaltyAmount,
+                loan.currency,
+                loanReceivableCode,
+                penaltyIncomeCode,
+                loan.branchId,
+                loan.appliedBy,
+                `Penalty on loan ${loan.loanNumber} installment #${item.installmentNumber}`,
+              );
+            } catch (err) {
+              this.logger.error(
+                `Penalty accounting failed for loan ${loan.loanNumber} installment #${item.installmentNumber}: ${(err as Error).message}`,
+              );
+            }
+
+            processed++;
+          }
+          item.markOverdue();
+        } else {
+          item.markLate();
+        }
       }
+
       await this.loanRepository.saveScheduleItem(item);
     }
 
-    return { processed };
+    return { processed, reminders };
+  }
+
+  /**
+   * Scans all schedule items due today or earlier (status PENDING or LATE) and
+   * automatically debits the client's account for each, provided the balance is sufficient.
+   * Items with insufficient balance are skipped and remain in their current status.
+   * Call this on a daily scheduler or trigger manually via the admin endpoint.
+   */
+  async processScheduledRepayments(): Promise<{ processed: number; skipped: number }> {
+    const dueItems = await this.loanRepository.findDueScheduleItems();
+    let processed = 0;
+    let skipped = 0;
+
+    for (const item of dueItems) {
+      const loan = await this.loanRepository.findById(item.loanId);
+      if (!loan) continue;
+
+      // Compute total due for this installment (principal + interest + any assessed penalties)
+      const penalties = await this.loanRepository.findPenaltiesForScheduleItem(item.id);
+      const totalPenalty = penalties.reduce((sum, p) => sum + p.penaltyAmount, 0);
+      const totalDue = item.principalAmount + item.interestAmount + totalPenalty;
+
+      // Check balance — skip the installment if funds are insufficient
+      const clientAccounts = await this.accountService.findByClientId(loan.clientId);
+      const account = clientAccounts.find((a) => a.id === loan.accountId);
+      if (!account || account.balance < totalDue) {
+        skipped++;
+        continue;
+      }
+
+      const { loanReceivableCode, interestIncomeCode, savingsCode } = this.getCoaCodes(
+        loan.type,
+        loan.currency,
+      );
+      const penaltyIncomeCode =
+        loan.currency === LoanCurrency.FC
+          ? COA_CODES.PENALTY_INCOME_FC
+          : COA_CODES.PENALTY_INCOME_USD;
+
+      try {
+        const tx = await this.transactionService.loanRepayment({
+          accountId: loan.accountId,
+          branchId: loan.branchId,
+          loanReceivableCredit: item.principalAmount + totalPenalty,
+          interestCredit: item.interestAmount,
+          currency: loan.currency as unknown as Currency,
+          performedBy: 'system',
+          loanReceivableCode,
+          interestIncomeCode,
+          savingsCode,
+          penaltyIncomeCode,
+          description: `Auto-repayment — ${loan.loanNumber} installment #${item.installmentNumber}`,
+        });
+
+        item.markPaid();
+        loan.applyPayment(item.principalAmount);
+        await this.loanRepository.saveScheduleItem(item);
+        await this.loanRepository.save(loan);
+
+        const payment = new LoanPayment();
+        payment.id = randomUUID();
+        payment.loanId = loan.id;
+        payment.scheduleId = item.id;
+        payment.transactionId = tx.id;
+        payment.amount = totalDue;
+        payment.currency = loan.currency as unknown as LoanCurrency;
+        payment.paymentDate = new Date();
+        payment.recordedBy = 'system';
+        payment.notes = 'Auto-repayment';
+        payment.createdAt = new Date();
+        await this.loanRepository.savePayment(payment);
+
+        processed++;
+      } catch (err) {
+        this.logger.error(
+          `Auto-repayment failed for loan ${loan.loanNumber} installment #${item.installmentNumber}: ${(err as Error).message}`,
+        );
+        skipped++;
+      }
+    }
+
+    return { processed, skipped };
   }
 
   // ---------------------------------------------------------------------------
@@ -268,6 +484,7 @@ export class LoanService {
   async findAll(query: QueryLoansDto): Promise<LoanModel[]> {
     return this.loanRepository.findAll({
       status: query.status,
+      type: query.type,
       clientId: query.clientId,
     });
   }
@@ -304,5 +521,27 @@ export class LoanService {
     const loan = await this.loanRepository.findById(id);
     if (!loan) throw new NotFoundException(`Loan ${id} not found.`);
     return loan;
+  }
+
+  private getCoaCodes(type: LoanType, currency: LoanCurrency) {
+    const isFc = currency === LoanCurrency.FC;
+    const loanReceivableCode = {
+      [LoanType.SALARY_ADVANCE]: isFc ? COA_CODES.LOANS_SALARY_FC : COA_CODES.LOANS_SALARY_USD,
+      [LoanType.PERSONAL_LOAN]: isFc ? COA_CODES.LOANS_ORDINARY_FC : COA_CODES.LOANS_ORDINARY_USD,
+      [LoanType.OVERDRAFT]: isFc ? COA_CODES.LOANS_OVERDRAFT_FC : COA_CODES.LOANS_OVERDRAFT_USD,
+    }[type];
+    const interestIncomeCode = {
+      [LoanType.SALARY_ADVANCE]: isFc
+        ? COA_CODES.INTEREST_SALARY_ADVANCE_FC
+        : COA_CODES.INTEREST_SALARY_ADVANCE_USD,
+      [LoanType.PERSONAL_LOAN]: isFc
+        ? COA_CODES.INTEREST_ORDINARY_LOAN_FC
+        : COA_CODES.INTEREST_ORDINARY_LOAN_USD,
+      [LoanType.OVERDRAFT]: isFc
+        ? COA_CODES.INTEREST_OVERDRAFT_FC
+        : COA_CODES.INTEREST_OVERDRAFT_USD,
+    }[type];
+    const savingsCode = isFc ? COA_CODES.CUSTOMER_SAVINGS_FC : COA_CODES.CUSTOMER_SAVINGS_USD;
+    return { loanReceivableCode, interestIncomeCode, savingsCode };
   }
 }

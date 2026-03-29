@@ -78,6 +78,13 @@ export class ApplyLoanDto {
 // Review actions
 // ---------------------------------------------------------------------------
 
+export class DisburseDto {
+  /** Override the disbursement account. Must belong to the same client. Optional — defaults to the account set at application. */
+  @IsUUID()
+  @IsOptional()
+  accountId?: string;
+}
+
 export class RejectLoanDto {
   @ApiProperty({
     description: 'Reason for rejection (minimum 5 characters)',

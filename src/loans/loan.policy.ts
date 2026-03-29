@@ -1,7 +1,7 @@
 ﻿import { BadRequestException } from '@nestjs/common';
 import { AccountModel } from '../accounts/account.model';
 import { AccountStatus } from '../accounts/account.enums';
-import { LoanCurrency, LoanType } from './loan.enums';
+import { LoanType } from './loan.enums';
 
 // ---------------------------------------------------------------------------
 // Loan product catalogue
@@ -12,8 +12,6 @@ export interface LoanProduct {
   monthlyRate: number;
   /** Allowed term(s) in months. Fixed products have a single value. */
   allowedTerms: number[];
-  /** Form fee in USD. Only applied to USD loans; FC loans carry no form fee. */
-  formFeeUsd: number;
   /** Human-readable label shown in the UI. */
   label: string;
   /** Interest label shown in the UI (e.g. "2.5% per month"). */
@@ -103,12 +101,6 @@ export class LoanPolicy {
       );
     }
     return requested;
-  }
-
-  /** Derive the form fee in the loan's currency. */
-  static deriveFormFee(type: LoanType, currency: LoanCurrency): number {
-    if (currency === LoanCurrency.FC) return 0;
-    return LOAN_PRODUCTS[type].formFeeUsd;
   }
 
   /** Amount must be positive. */

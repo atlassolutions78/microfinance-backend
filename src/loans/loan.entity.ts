@@ -11,6 +11,8 @@ import {
   LoanDocumentType,
   LoanStatus,
   LoanType,
+  ReminderChannel,
+  ReminderStatus,
   RepaymentStatus,
 } from './loan.enums';
 
@@ -55,10 +57,6 @@ export class LoanEntity {
 
   @Column({ name: 'term_months', type: 'integer' })
   term_months: number;
-
-  /** One-off form / processing fee charged at application time */
-  @Column({ name: 'form_fee', type: 'numeric', precision: 18, scale: 2, default: 0 })
-  form_fee: string;
 
   @Column({ name: 'purpose', type: 'text', nullable: true })
   purpose: string | null;
@@ -144,6 +142,9 @@ export class RepaymentScheduleEntity {
 
   @Column({ name: 'paid_at', type: 'timestamptz', nullable: true })
   paid_at: Date | null;
+
+  @Column({ name: 'reminder_sent_at', type: 'timestamptz', nullable: true })
+  reminder_sent_at: Date | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +161,9 @@ export class LoanPaymentEntity {
 
   @Column({ name: 'schedule_id', type: 'uuid', nullable: true })
   schedule_id: string | null;
+
+  @Column({ name: 'transaction_id', type: 'uuid', nullable: true })
+  transaction_id: string | null;
 
   @Column({ name: 'amount', type: 'numeric', precision: 18, scale: 2 })
   amount: string;
@@ -206,6 +210,34 @@ export class LoanPenaltyEntity {
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   created_at: Date;
+}
+
+// ---------------------------------------------------------------------------
+// Loan reminder (audit trail of overdue notifications)
+// ---------------------------------------------------------------------------
+
+@Entity('loan_reminders')
+export class LoanReminderEntity {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ name: 'loan_id', type: 'uuid' })
+  loan_id: string;
+
+  @Column({ name: 'schedule_id', type: 'uuid' })
+  schedule_id: string;
+
+  @Column({ name: 'channel', type: 'enum', enum: ReminderChannel })
+  channel: ReminderChannel;
+
+  @Column({ name: 'status', type: 'enum', enum: ReminderStatus })
+  status: ReminderStatus;
+
+  @Column({ name: 'error_message', type: 'text', nullable: true })
+  error_message: string | null;
+
+  @CreateDateColumn({ name: 'sent_at', type: 'timestamptz' })
+  sent_at: Date;
 }
 
 // ---------------------------------------------------------------------------
