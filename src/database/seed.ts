@@ -2043,6 +2043,517 @@ async function seed() {
   }
 
   // -------------------------------------------------------------------------
+  // Loan-eligible clients & accounts (ACTIVE, opened > 6 months ago)
+  // -------------------------------------------------------------------------
+  console.log(
+    '\n── Loan-eligible clients ───────────────────────────────────────────────────',
+  );
+
+  // Backdate any already-existing loan-eligible clients/accounts that landed as today
+  await ds.query(`
+    UPDATE clients SET created_at = '2025-01-15' WHERE client_number = 'CL-000005' AND created_at::date = CURRENT_DATE;
+    UPDATE clients SET created_at = '2025-02-10' WHERE client_number = 'CL-000006' AND created_at::date = CURRENT_DATE;
+    UPDATE clients SET created_at = '2025-03-05' WHERE client_number = 'CL-000007' AND created_at::date = CURRENT_DATE;
+    UPDATE accounts SET created_at = '2025-01-15' WHERE account_number = '50 003\\2 serie 433' AND created_at::date = CURRENT_DATE;
+    UPDATE accounts SET created_at = '2025-02-10' WHERE account_number = '50 004\\2 serie 433' AND created_at::date = CURRENT_DATE;
+    UPDATE accounts SET created_at = '2025-03-05' WHERE account_number = '50 005\\2 serie 433' AND created_at::date = CURRENT_DATE;
+  `);
+  console.log('  backdated CL-000005/006/007 clients and accounts (if they were created today)');
+
+  // CL-000005 — Marie-Claire Bahati Ndagano
+  if (!(await clientExists('CL-000005'))) {
+    const c5Id = randomUUID();
+    await clientRepo.save(
+      clientRepo.create({
+        id: c5Id,
+        client_number: 'CL-000005',
+        type: ClientType.INDIVIDUAL,
+        kyc_status: KycStatus.APPROVED,
+        kyc_reviewed_by: officerId,
+        kyc_reviewed_at: new Date('2025-01-10'),
+        kyc_notes: null,
+        branch_id: gomaBranchId,
+        created_by: adminId,
+      }),
+    );
+    await profileRepo.save(
+      profileRepo.create({
+        client_id: c5Id,
+        first_name: 'Marie-Claire',
+        middle_name: 'Bahati',
+        last_name: 'Ndagano',
+        date_of_birth: new Date('1990-03-14'),
+        place_of_birth: 'Goma',
+        province_of_origin: 'Nord-Kivu',
+        gender: Gender.FEMALE,
+        nationality: 'Congolaise',
+        marital_status: MaritalStatus.MARRIED,
+        profession: 'Infirmière',
+        province: 'Nord-Kivu',
+        municipality: 'Goma',
+        neighborhood: 'Himbi',
+        street: 'Avenue des Brasseurs',
+        plot_number: '8',
+        phone: '+243850000005',
+        email: null,
+        id_type: IdType.NATIONAL_ID,
+        id_number: 'NK-NID-010001',
+        matriculation_number: null,
+        is_minor: false,
+      }),
+    );
+    await clientDocRepo.save(
+      clientDocRepo.create({
+        id: randomUUID(),
+        client_id: c5Id,
+        document_type: ClientDocumentType.ID_DOCUMENT,
+        file_name: 'marie-claire-id.jpg',
+        file_url: 'uploads/clients/CL-000005/marie-claire-id.jpg',
+        status: DocumentStatus.ACCEPTED,
+        rejection_reason: null,
+        uploaded_by: adminId,
+        reviewed_by: officerId,
+        reviewed_at: new Date('2025-01-10'),
+      }),
+    );
+    const acc5Number = AccountRepository.formatSavingsNumber(3);
+    if (!(await accountExists(acc5Number))) {
+      const acc5 = accountRepo.create({
+        id: randomUUID(),
+        account_number: acc5Number,
+        client_id: c5Id,
+        branch_id: gomaBranchId,
+        account_type: AccountType.SAVINGS,
+        currency: AccountCurrency.USD,
+        status: AccountStatus.ACTIVE,
+        balance: '250',
+        opened_by: adminId,
+      });
+      await accountRepo.save(acc5);
+      await ds.query(
+        `UPDATE accounts SET created_at = $1 WHERE account_number = $2`,
+        [new Date('2025-01-15'), acc5Number],
+      );
+      console.log(
+        `  created account: ${acc5Number} (CL-000005 SAVINGS USD, opened 2025-01-15)`,
+      );
+    }
+    console.log('  created client: CL-000005 Marie-Claire Bahati Ndagano (INDIVIDUAL, APPROVED)');
+  } else {
+    console.log('  skip client: CL-000005 (already exists)');
+  }
+
+  // CL-000006 — Théodore Muhigwa Kamosi
+  if (!(await clientExists('CL-000006'))) {
+    const c6Id = randomUUID();
+    await clientRepo.save(
+      clientRepo.create({
+        id: c6Id,
+        client_number: 'CL-000006',
+        type: ClientType.INDIVIDUAL,
+        kyc_status: KycStatus.APPROVED,
+        kyc_reviewed_by: officerId,
+        kyc_reviewed_at: new Date('2025-02-05'),
+        kyc_notes: null,
+        branch_id: gomaBranchId,
+        created_by: adminId,
+      }),
+    );
+    await profileRepo.save(
+      profileRepo.create({
+        client_id: c6Id,
+        first_name: 'Théodore',
+        middle_name: 'Muhigwa',
+        last_name: 'Kamosi',
+        date_of_birth: new Date('1985-07-22'),
+        place_of_birth: 'Butembo',
+        province_of_origin: 'Nord-Kivu',
+        gender: Gender.MALE,
+        nationality: 'Congolais',
+        marital_status: MaritalStatus.SINGLE,
+        profession: 'Mécanicien',
+        province: 'Nord-Kivu',
+        municipality: 'Goma',
+        neighborhood: 'Karisimbi',
+        street: 'Avenue du Marché',
+        plot_number: '33',
+        phone: '+243860000006',
+        email: null,
+        id_type: IdType.NATIONAL_ID,
+        id_number: 'NK-NID-010002',
+        matriculation_number: null,
+        is_minor: false,
+      }),
+    );
+    await clientDocRepo.save(
+      clientDocRepo.create({
+        id: randomUUID(),
+        client_id: c6Id,
+        document_type: ClientDocumentType.ID_DOCUMENT,
+        file_name: 'theodore-id.jpg',
+        file_url: 'uploads/clients/CL-000006/theodore-id.jpg',
+        status: DocumentStatus.ACCEPTED,
+        rejection_reason: null,
+        uploaded_by: adminId,
+        reviewed_by: officerId,
+        reviewed_at: new Date('2025-02-05'),
+      }),
+    );
+    const acc6Number = AccountRepository.formatSavingsNumber(4);
+    if (!(await accountExists(acc6Number))) {
+      const acc6 = accountRepo.create({
+        id: randomUUID(),
+        account_number: acc6Number,
+        client_id: c6Id,
+        branch_id: gomaBranchId,
+        account_type: AccountType.SAVINGS,
+        currency: AccountCurrency.USD,
+        status: AccountStatus.ACTIVE,
+        balance: '500',
+        opened_by: adminId,
+      });
+      await accountRepo.save(acc6);
+      await ds.query(
+        `UPDATE accounts SET created_at = $1 WHERE account_number = $2`,
+        [new Date('2025-02-10'), acc6Number],
+      );
+      console.log(
+        `  created account: ${acc6Number} (CL-000006 SAVINGS USD, opened 2025-02-10)`,
+      );
+    }
+    console.log('  created client: CL-000006 Théodore Muhigwa Kamosi (INDIVIDUAL, APPROVED)');
+  } else {
+    console.log('  skip client: CL-000006 (already exists)');
+  }
+
+  // CL-000007 — Grâce Kiyana Mulonda
+  if (!(await clientExists('CL-000007'))) {
+    const c7Id = randomUUID();
+    await clientRepo.save(
+      clientRepo.create({
+        id: c7Id,
+        client_number: 'CL-000007',
+        type: ClientType.INDIVIDUAL,
+        kyc_status: KycStatus.APPROVED,
+        kyc_reviewed_by: officerId,
+        kyc_reviewed_at: new Date('2025-03-01'),
+        kyc_notes: null,
+        branch_id: gomaBranchId,
+        created_by: adminId,
+      }),
+    );
+    await profileRepo.save(
+      profileRepo.create({
+        client_id: c7Id,
+        first_name: 'Grâce',
+        middle_name: 'Kiyana',
+        last_name: 'Mulonda',
+        date_of_birth: new Date('1994-11-08'),
+        place_of_birth: 'Goma',
+        province_of_origin: 'Nord-Kivu',
+        gender: Gender.FEMALE,
+        nationality: 'Congolaise',
+        marital_status: MaritalStatus.SINGLE,
+        profession: 'Commerçante',
+        province: 'Nord-Kivu',
+        municipality: 'Goma',
+        neighborhood: 'Ndosho',
+        street: 'Avenue Kiwanja',
+        plot_number: '19',
+        phone: '+243870000007',
+        email: null,
+        id_type: IdType.NATIONAL_ID,
+        id_number: 'NK-NID-010003',
+        matriculation_number: null,
+        is_minor: false,
+      }),
+    );
+    await clientDocRepo.save(
+      clientDocRepo.create({
+        id: randomUUID(),
+        client_id: c7Id,
+        document_type: ClientDocumentType.ID_DOCUMENT,
+        file_name: 'grace-id.jpg',
+        file_url: 'uploads/clients/CL-000007/grace-id.jpg',
+        status: DocumentStatus.ACCEPTED,
+        rejection_reason: null,
+        uploaded_by: adminId,
+        reviewed_by: officerId,
+        reviewed_at: new Date('2025-03-01'),
+      }),
+    );
+    const acc7Number = AccountRepository.formatSavingsNumber(5);
+    if (!(await accountExists(acc7Number))) {
+      const acc7 = accountRepo.create({
+        id: randomUUID(),
+        account_number: acc7Number,
+        client_id: c7Id,
+        branch_id: gomaBranchId,
+        account_type: AccountType.SAVINGS,
+        currency: AccountCurrency.USD,
+        status: AccountStatus.ACTIVE,
+        balance: '750',
+        opened_by: adminId,
+      });
+      await accountRepo.save(acc7);
+      await ds.query(
+        `UPDATE accounts SET created_at = $1 WHERE account_number = $2`,
+        [new Date('2025-03-05'), acc7Number],
+      );
+      console.log(
+        `  created account: ${acc7Number} (CL-000007 SAVINGS USD, opened 2025-03-05)`,
+      );
+    }
+    console.log('  created client: CL-000007 Grâce Kiyana Mulonda (INDIVIDUAL, APPROVED)');
+  } else {
+    console.log('  skip client: CL-000007 (already exists)');
+  }
+
+  // CL-000008 — Joséphine Zawadi Katembo
+  if (!(await clientExists('CL-000008'))) {
+    const c8Id = randomUUID();
+    await clientRepo.save(
+      clientRepo.create({
+        id: c8Id,
+        client_number: 'CL-000008',
+        type: ClientType.INDIVIDUAL,
+        kyc_status: KycStatus.APPROVED,
+        kyc_reviewed_by: officerId,
+        kyc_reviewed_at: new Date('2025-04-10'),
+        kyc_notes: null,
+        branch_id: gomaBranchId,
+        created_by: adminId,
+      }),
+    );
+    await ds.query(`UPDATE clients SET created_at = '2025-04-10' WHERE client_number = 'CL-000008'`);
+    await profileRepo.save(
+      profileRepo.create({
+        client_id: c8Id,
+        first_name: 'Joséphine',
+        middle_name: 'Zawadi',
+        last_name: 'Katembo',
+        date_of_birth: new Date('1987-05-30'),
+        place_of_birth: 'Goma',
+        province_of_origin: 'Nord-Kivu',
+        gender: Gender.FEMALE,
+        nationality: 'Congolaise',
+        marital_status: MaritalStatus.MARRIED,
+        profession: 'Couturière',
+        province: 'Nord-Kivu',
+        municipality: 'Goma',
+        neighborhood: 'Birere',
+        street: 'Avenue Nyiragongo',
+        plot_number: '42',
+        phone: '+243880000008',
+        email: null,
+        id_type: IdType.NATIONAL_ID,
+        id_number: 'NK-NID-010004',
+        matriculation_number: null,
+        is_minor: false,
+      }),
+    );
+    await clientDocRepo.save(
+      clientDocRepo.create({
+        id: randomUUID(),
+        client_id: c8Id,
+        document_type: ClientDocumentType.ID_DOCUMENT,
+        file_name: 'josephine-id.jpg',
+        file_url: 'uploads/clients/CL-000008/josephine-id.jpg',
+        status: DocumentStatus.ACCEPTED,
+        rejection_reason: null,
+        uploaded_by: adminId,
+        reviewed_by: officerId,
+        reviewed_at: new Date('2025-04-10'),
+      }),
+    );
+    const acc8Number = AccountRepository.formatSavingsNumber(6);
+    if (!(await accountExists(acc8Number))) {
+      await accountRepo.save(
+        accountRepo.create({
+          id: randomUUID(),
+          account_number: acc8Number,
+          client_id: c8Id,
+          branch_id: gomaBranchId,
+          account_type: AccountType.SAVINGS,
+          currency: AccountCurrency.USD,
+          status: AccountStatus.ACTIVE,
+          balance: '180',
+          opened_by: adminId,
+        }),
+      );
+      await ds.query(`UPDATE accounts SET created_at = '2025-04-12' WHERE account_number = $1`, [acc8Number]);
+      console.log(`  created account: ${acc8Number} (CL-000008 SAVINGS USD, opened 2025-04-12)`);
+    }
+    console.log('  created client: CL-000008 Joséphine Zawadi Katembo (INDIVIDUAL, APPROVED)');
+  } else {
+    console.log('  skip client: CL-000008 (already exists)');
+  }
+
+  // CL-000009 — Honoré Bisimwa Luanda
+  if (!(await clientExists('CL-000009'))) {
+    const c9Id = randomUUID();
+    await clientRepo.save(
+      clientRepo.create({
+        id: c9Id,
+        client_number: 'CL-000009',
+        type: ClientType.INDIVIDUAL,
+        kyc_status: KycStatus.APPROVED,
+        kyc_reviewed_by: officerId,
+        kyc_reviewed_at: new Date('2025-05-20'),
+        kyc_notes: null,
+        branch_id: gomaBranchId,
+        created_by: adminId,
+      }),
+    );
+    await ds.query(`UPDATE clients SET created_at = '2025-05-20' WHERE client_number = 'CL-000009'`);
+    await profileRepo.save(
+      profileRepo.create({
+        client_id: c9Id,
+        first_name: 'Honoré',
+        middle_name: 'Bisimwa',
+        last_name: 'Luanda',
+        date_of_birth: new Date('1980-09-15'),
+        place_of_birth: 'Masisi',
+        province_of_origin: 'Nord-Kivu',
+        gender: Gender.MALE,
+        nationality: 'Congolais',
+        marital_status: MaritalStatus.MARRIED,
+        profession: 'Agriculteur',
+        province: 'Nord-Kivu',
+        municipality: 'Goma',
+        neighborhood: 'Katindo',
+        street: 'Avenue des Volcans',
+        plot_number: '7',
+        phone: '+243890000009',
+        email: null,
+        id_type: IdType.NATIONAL_ID,
+        id_number: 'NK-NID-010005',
+        matriculation_number: null,
+        is_minor: false,
+      }),
+    );
+    await clientDocRepo.save(
+      clientDocRepo.create({
+        id: randomUUID(),
+        client_id: c9Id,
+        document_type: ClientDocumentType.ID_DOCUMENT,
+        file_name: 'honore-id.jpg',
+        file_url: 'uploads/clients/CL-000009/honore-id.jpg',
+        status: DocumentStatus.ACCEPTED,
+        rejection_reason: null,
+        uploaded_by: adminId,
+        reviewed_by: officerId,
+        reviewed_at: new Date('2025-05-20'),
+      }),
+    );
+    const acc9Number = AccountRepository.formatSavingsNumber(7);
+    if (!(await accountExists(acc9Number))) {
+      await accountRepo.save(
+        accountRepo.create({
+          id: randomUUID(),
+          account_number: acc9Number,
+          client_id: c9Id,
+          branch_id: gomaBranchId,
+          account_type: AccountType.SAVINGS,
+          currency: AccountCurrency.USD,
+          status: AccountStatus.ACTIVE,
+          balance: '420',
+          opened_by: adminId,
+        }),
+      );
+      await ds.query(`UPDATE accounts SET created_at = '2025-05-22' WHERE account_number = $1`, [acc9Number]);
+      console.log(`  created account: ${acc9Number} (CL-000009 SAVINGS USD, opened 2025-05-22)`);
+    }
+    console.log('  created client: CL-000009 Honoré Bisimwa Luanda (INDIVIDUAL, APPROVED)');
+  } else {
+    console.log('  skip client: CL-000009 (already exists)');
+  }
+
+  // CL-000010 — Sylvie Mapendo Kasindi
+  if (!(await clientExists('CL-000010'))) {
+    const c10Id = randomUUID();
+    await clientRepo.save(
+      clientRepo.create({
+        id: c10Id,
+        client_number: 'CL-000010',
+        type: ClientType.INDIVIDUAL,
+        kyc_status: KycStatus.APPROVED,
+        kyc_reviewed_by: officerId,
+        kyc_reviewed_at: new Date('2025-06-15'),
+        kyc_notes: null,
+        branch_id: gomaBranchId,
+        created_by: adminId,
+      }),
+    );
+    await ds.query(`UPDATE clients SET created_at = '2025-06-15' WHERE client_number = 'CL-000010'`);
+    await profileRepo.save(
+      profileRepo.create({
+        client_id: c10Id,
+        first_name: 'Sylvie',
+        middle_name: 'Mapendo',
+        last_name: 'Kasindi',
+        date_of_birth: new Date('1995-02-18'),
+        place_of_birth: 'Goma',
+        province_of_origin: 'Nord-Kivu',
+        gender: Gender.FEMALE,
+        nationality: 'Congolaise',
+        marital_status: MaritalStatus.SINGLE,
+        profession: 'Enseignante',
+        province: 'Nord-Kivu',
+        municipality: 'Goma',
+        neighborhood: 'Himbi',
+        street: 'Avenue du Lac',
+        plot_number: '23',
+        phone: '+243900000010',
+        email: null,
+        id_type: IdType.NATIONAL_ID,
+        id_number: 'NK-NID-010006',
+        matriculation_number: null,
+        is_minor: false,
+      }),
+    );
+    await clientDocRepo.save(
+      clientDocRepo.create({
+        id: randomUUID(),
+        client_id: c10Id,
+        document_type: ClientDocumentType.ID_DOCUMENT,
+        file_name: 'sylvie-id.jpg',
+        file_url: 'uploads/clients/CL-000010/sylvie-id.jpg',
+        status: DocumentStatus.ACCEPTED,
+        rejection_reason: null,
+        uploaded_by: adminId,
+        reviewed_by: officerId,
+        reviewed_at: new Date('2025-06-15'),
+      }),
+    );
+    const acc10Number = AccountRepository.formatSavingsNumber(8);
+    if (!(await accountExists(acc10Number))) {
+      await accountRepo.save(
+        accountRepo.create({
+          id: randomUUID(),
+          account_number: acc10Number,
+          client_id: c10Id,
+          branch_id: gomaBranchId,
+          account_type: AccountType.SAVINGS,
+          currency: AccountCurrency.USD,
+          status: AccountStatus.ACTIVE,
+          balance: '620',
+          opened_by: adminId,
+        }),
+      );
+      await ds.query(`UPDATE accounts SET created_at = '2025-06-18' WHERE account_number = $1`, [acc10Number]);
+      console.log(`  created account: ${acc10Number} (CL-000010 SAVINGS USD, opened 2025-06-18)`);
+    }
+    console.log('  created client: CL-000010 Sylvie Mapendo Kasindi (INDIVIDUAL, APPROVED)');
+  } else {
+    console.log('  skip client: CL-000010 (already exists)');
+  }
+
+  // Update SAVINGS sequence to account for new entries
+  await seqRepo.update({ type: AccountType.SAVINGS }, { last_seq: 8 });
+  console.log('  updated SAVINGS sequence: last_seq=8');
+
+  // -------------------------------------------------------------------------
 
   await ds.destroy();
   console.log('\nSeed complete.');

@@ -15,7 +15,7 @@ import { TransactionModel } from './transaction.model';
 import { TransferModel } from './transfer.model';
 import { TransactionRepository } from './transaction.repository';
 import { TransactionPolicy } from './transaction.policy';
-import { TransactionType } from './transaction.enums';
+import { Currency, TransactionType } from './transaction.enums';
 import { AccountService } from '../accounts/account.service';
 import { AccountStatus } from '../accounts/account.enums';
 import { AccountingService } from '../accounting/accounting.service';
@@ -396,5 +396,137 @@ export class TransactionService {
 
   async findAll(): Promise<TransactionModel[]> {
     return this.repo.findAll();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Loan operations
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Credits the loan principal into the client's account and writes the
+   * corresponding journal entry atomically.
+   * DR Loan Receivable / CR Customer Savings
+   */
+  async loanDisbursement(params: {
+    accountId: string;
+    branchId: string;
+    amount: number;
+    currency: Currency;
+    performedBy: string;
+    loanReceivableCode: string;
+    savingsCode: string;
+    description?: string;
+  }): Promise<TransactionModel> {
+    const balance = await this.repo.getBalance(params.accountId);
+    const newBalance = balance + params.amount;
+
+    const tx = TransactionModel.create({
+      id: randomUUID(),
+      accountId: params.accountId,
+      branchId: params.branchId,
+      type: TransactionType.LOAN_DISBURSEMENT,
+      amount: params.amount,
+      currency: params.currency,
+      balanceAfter: newBalance,
+      reference: this.generateReference(),
+      description: params.description ?? 'Loan disbursement',
+      performedBy: params.performedBy,
+      createdAt: new Date(),
+    });
+
+    await this.dataSource.transaction(async (em) => {
+      await this.repo.save(tx, em);
+      await this.accountService.recordBalance(params.accountId, newBalance, em);
+      await this.accountingService.postLoanDisbursementToSavings(
+        params.amount,
+        params.currency,
+        params.loanReceivableCode,
+        params.savingsCode,
+        params.branchId,
+        params.performedBy,
+        params.accountId,
+        params.description,
+        em,
+      );
+    });
+
+    return tx;
+  }
+
+  /**
+   * Debits the repayment amount from the client's account and posts the
+   * corresponding journal entry atomically.
+   *
+   * Repayment priority (already computed by the caller):
+   *   loanReceivableCredit = principal + any assessed penalty (clears the receivable)
+   *   interestCredit       = interest portion (goes to Interest Income)
+   *
+   * Journal: DR Customer Savings (total) / CR Loan Receivable / CR Interest Income
+   *
+   * Note: penalty income was recognised at assessment time
+   * (postPenaltyAssessment) so it is NOT credited again here.
+   */
+  async loanRepayment(params: {
+    accountId: string;
+    branchId: string;
+    loanReceivableCredit: number;
+    interestCredit: number;
+    currency: Currency;
+    performedBy: string;
+    loanReceivableCode: string;
+    interestIncomeCode: string;
+    savingsCode: string;
+    penaltyIncomeCode: string;   // required by postLoanRepaymentFromSavings
+    description?: string;
+  } & { currency: Currency }): Promise<TransactionModel> {
+    const totalDebit = params.loanReceivableCredit + params.interestCredit;
+
+    const balance = await this.repo.getBalance(params.accountId);
+    if (balance < totalDebit) {
+      throw new BadRequestException(
+        `Insufficient account balance for repayment. Required: ${totalDebit}, available: ${balance}.`,
+      );
+    }
+
+    const newBalance = balance - totalDebit;
+
+    const tx = TransactionModel.create({
+      id: randomUUID(),
+      accountId: params.accountId,
+      branchId: params.branchId,
+      type: TransactionType.LOAN_REPAYMENT,
+      amount: totalDebit,
+      currency: params.currency,
+      balanceAfter: newBalance,
+      reference: this.generateReference(),
+      description: params.description ?? 'Loan repayment',
+      performedBy: params.performedBy,
+      createdAt: new Date(),
+    });
+
+    await this.dataSource.transaction(async (em) => {
+      await this.repo.save(tx, em);
+      await this.accountService.recordBalance(params.accountId, newBalance, em);
+      // Pass loanReceivableCredit as "principal" — this clears the principal
+      // + any assessed penalty from Loan Receivable.
+      // penaltyAmount is 0 because penalty income was already recognised at assessment.
+      await this.accountingService.postLoanRepaymentFromSavings(
+        params.loanReceivableCredit,
+        params.interestCredit,
+        0,
+        params.currency,
+        params.savingsCode,
+        params.loanReceivableCode,
+        params.interestIncomeCode,
+        params.penaltyIncomeCode,
+        params.branchId,
+        params.performedBy,
+        params.accountId,
+        params.description,
+        em,
+      );
+    });
+
+    return tx;
   }
 }

@@ -7,11 +7,13 @@ import dataSource from '../../typeorm.config';
 
 const ALREADY_APPLIED = [
   { timestamp: 1773771287585, name: 'CreateAllTables1773771287585' },
+  { timestamp: 1773800000000, name: 'AddBranchTypeAndRoles1773800000000' },
   { timestamp: 1773925430605, name: 'UpdateSchema1773925430605' },
   { timestamp: 1773996940885, name: 'Migration1773996940885' },
   { timestamp: 1774100000000, name: 'UpdateMinorGuardians1774100000000' },
   { timestamp: 1774200000000, name: 'AddSignatureDocumentType1774200000000' },
   { timestamp: 1774300000000, name: 'CreateAccountsTables1774300000000' },
+  { timestamp: 1774300000001, name: 'CreateTransactionsTables1774300000000' },
 ];
 
 async function main() {
