@@ -12,6 +12,7 @@ import {
   CreateIndividualClientDto,
   CreateOrganizationClientDto,
   AttachIndividualDocumentsDto,
+  GetClientsQueryDto,
   RejectKycDto,
   RequestUpdateDto,
   UpdateClientDto,
@@ -308,7 +309,14 @@ export class ClientService {
   async findById(clientId: string): Promise<ClientApiResponse> {
     const data = await this.clientRepository.findByIdFull(clientId);
     if (!data) throw new NotFoundException(`Client ${clientId} not found.`);
-    return ClientMapper.toApiResponse(data.client, data.individualProfile, data.orgProfile);
+    return ClientMapper.toApiResponse(
+      data.client,
+      data.individualProfile,
+      data.orgProfile,
+      data.representative,
+      data.guardian,
+      data.orgRepresentatives,
+    );
   }
 
   /**
@@ -343,9 +351,12 @@ export class ClientService {
     return { name: null, phone: null, email: null };
   }
 
-  async findAll(): Promise<ClientApiResponse[]> {
-    const rows = await this.clientRepository.findAllFull();
-    return rows.map((r) => ClientMapper.toApiResponse(r.client, r.individualProfile, r.orgProfile));
+  async findAll(query?: GetClientsQueryDto): Promise<{ data: ClientApiResponse[]; total: number }> {
+    const { rows, total } = await this.clientRepository.findAllFull(query);
+    return {
+      data: rows.map((r) => ClientMapper.toApiResponse(r.client, r.individualProfile, r.orgProfile)),
+      total,
+    };
   }
 
   // ---------------------------------------------------------------------------
