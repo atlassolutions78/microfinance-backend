@@ -4,7 +4,6 @@ import { AccountsModule } from '../accounts/accounts.module';
 import { AccountingModule } from '../accounting/accounting.module';
 import { ClientsModule } from '../clients/clients.module';
 import { NotificationsModule } from '../notifications/notifications.module';
-import { TransactionsModule } from '../transactions/transactions.module';
 import {
   LoanDocumentEntity,
   LoanEntity,
@@ -24,7 +23,6 @@ import { LoanRepository } from './loan.repository';
     AccountingModule,
     ClientsModule,
     NotificationsModule,
-    TransactionsModule,
     TypeOrmModule.forFeature([
       LoanEntity,
       LoanSequenceEntity,

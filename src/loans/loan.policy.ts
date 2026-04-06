@@ -12,6 +12,8 @@ export interface LoanProduct {
   monthlyRate: number;
   /** Allowed term(s) in months. Fixed products have a single value. */
   allowedTerms: number[];
+  /** One-time fee charged at application in USD. */
+  formFeeUsd: number;
   /** Human-readable label shown in the UI. */
   label: string;
   /** Interest label shown in the UI (e.g. "2.5% per month"). */
@@ -20,21 +22,21 @@ export interface LoanProduct {
 
 export const LOAN_PRODUCTS: Record<LoanType, LoanProduct> = {
   [LoanType.SALARY_ADVANCE]: {
-    monthlyRate: 0.025,      // 2.5 % per month (flat single payment)
+    monthlyRate: 0.025, // 2.5 % per month (flat single payment)
     allowedTerms: [1],
     formFeeUsd: 12,
     label: 'Salary Advance',
     rateLabel: '2.5% per month',
   },
   [LoanType.PERSONAL_LOAN]: {
-    monthlyRate: 0.05 / 12,  // 5 % annual â†’ ~0.4167 % per month
+    monthlyRate: 0.05 / 12, // 5 % annual â†’ ~0.4167 % per month
     allowedTerms: [10, 12],
     formFeeUsd: 0,
     label: 'Personal Loan',
     rateLabel: '5% annual',
   },
   [LoanType.OVERDRAFT]: {
-    monthlyRate: 0.025,      // 2.5 % per month
+    monthlyRate: 0.025, // 2.5 % per month
     allowedTerms: [3],
     formFeeUsd: 0,
     label: 'Overdraft',
@@ -48,7 +50,7 @@ export const LOAN_PRODUCTS: Record<LoanType, LoanProduct> = {
 
 const MAX_ACTIVE_LOANS = 1;
 const MIN_ACCOUNT_AGE_MONTHS = 6;
-export const PENALTY_RATE = 0.11;  // 11 % applied to overdue installment amount
+export const PENALTY_RATE = 0.11; // 11 % applied to overdue installment amount
 
 // ---------------------------------------------------------------------------
 // Policy
@@ -81,7 +83,7 @@ export class LoanPolicy {
     if (account.createdAt > minOpenDate) {
       throw new BadRequestException(
         `Loan eligibility requires an account that is at least ${MIN_ACCOUNT_AGE_MONTHS} months old. ` +
-        `This account was opened on ${account.createdAt.toDateString()}.`,
+          `This account was opened on ${account.createdAt.toDateString()}.`,
       );
     }
   }
@@ -106,7 +108,9 @@ export class LoanPolicy {
   /** Amount must be positive. */
   static assertAmountRange(amount: number): void {
     if (amount <= 0) {
-      throw new BadRequestException('Principal amount must be greater than zero.');
+      throw new BadRequestException(
+        'Principal amount must be greater than zero.',
+      );
     }
   }
 
