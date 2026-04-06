@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, ILike, In, Repository } from 'typeorm';
 import { AccountEntity, AccountSequenceEntity } from './account.entity';
 import { AccountModel } from './account.model';
 import { AccountMapper } from './account.mapper';
@@ -64,6 +64,28 @@ export class AccountRepository {
       where: { account_number: accountNumber },
     });
     return entity ? AccountMapper.toDomain(entity) : null;
+  }
+
+  async searchByAccountNumber(
+    query: string,
+    limit = 20,
+  ): Promise<AccountModel[]> {
+    const escaped = query
+      .replace(/\\/g, '\\\\')
+      .replace(/%/g, '\\%')
+      .replace(/_/g, '\\_');
+    const entities = await this.repo.find({
+      where: { account_number: ILike(`%${escaped}%`) },
+      order: { account_number: 'ASC' },
+      take: limit,
+    });
+    const userIds = new Set(entities.map((e) => e.opened_by));
+    const nameMap = await this.resolveUserNames([...userIds]);
+    return entities.map((e) => {
+      const model = AccountMapper.toDomain(e);
+      model.openedByName = nameMap.get(e.opened_by);
+      return model;
+    });
   }
 
   async updateBalance(

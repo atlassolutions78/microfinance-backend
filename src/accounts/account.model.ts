@@ -11,6 +11,8 @@ export interface AccountModelProps {
   balance: number;
   openedBy: string;
   openedByName?: string;
+  clientName?: string;
+  clientNumber?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,6 +39,10 @@ export class AccountModel {
 
   /** Resolved display name — populated at read time, not persisted. */
   openedByName?: string;
+  /** Client's display name — populated at read time, not persisted. */
+  clientName?: string;
+  /** Client's number (e.g. CL-000001) — populated at read time, not persisted. */
+  clientNumber?: string;
 
   constructor(props: AccountModelProps) {
     this.id = props.id;
@@ -49,6 +55,8 @@ export class AccountModel {
     this.balance = props.balance;
     this.openedBy = props.openedBy;
     this.openedByName = props.openedByName;
+    this.clientName = props.clientName;
+    this.clientNumber = props.clientNumber;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
   }

@@ -116,9 +116,6 @@ export class JournalLineEntity {
   @Column({ type: 'uuid', name: 'account_id' })
   account_id: string;
 
-  @Column({ type: 'uuid', name: 'client_account_id', nullable: true })
-  client_account_id: string | null;
-
   @Column({ type: 'numeric', precision: 18, scale: 4, default: 0 })
   debit: string;
 

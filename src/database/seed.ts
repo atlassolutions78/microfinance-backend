@@ -71,6 +71,19 @@ import {
   ChartAccountType,
   JournalEntryStatus,
 } from 'src/accounting/accounting.enums';
+import {
+  BranchCoaAccountEntity,
+  TellerCoaAccountEntity,
+  TellerSessionEntity,
+  TellerTransactionEntity,
+  ClientTransactionEntity,
+} from 'src/teller/teller.entity';
+import {
+  TellerSessionStatus,
+  TellerTxType,
+  AccountTxType,
+  Currency,
+} from 'src/teller/teller.enums';
 
 // ---------------------------------------------------------------------------
 
@@ -102,6 +115,11 @@ const ds = new DataSource({
     ChartOfAccountsEntity,
     JournalEntryEntity,
     JournalLineEntity,
+    BranchCoaAccountEntity,
+    TellerCoaAccountEntity,
+    TellerSessionEntity,
+    TellerTransactionEntity,
+    ClientTransactionEntity,
   ],
   synchronize: false,
 });
@@ -136,6 +154,28 @@ async function seed() {
   }
 
   const gomaBranchId = gomaBranch.id;
+
+  let bukavuBranch = await branchRepo.findOne({
+    where: { name: 'Agence de Bukavu' },
+  });
+  if (!bukavuBranch) {
+    bukavuBranch = branchRepo.create({
+      id: randomUUID(),
+      name: 'Agence de Bukavu',
+      code: 'BUK01',
+      type: BranchType.NORMAL,
+      address: 'Avenue Patrice Lumumba, Centre-Ville, Bukavu, Sud-Kivu',
+      phone: null,
+      is_active: true,
+      created_by: '00000000-0000-0000-0000-000000000000',
+    });
+    await branchRepo.save(bukavuBranch);
+    console.log('  created branch: Agence de Bukavu');
+  } else {
+    console.log('  skip branch: Agence de Bukavu (already exists)');
+  }
+
+  const bukavuBranchId = bukavuBranch.id;
 
   // -------------------------------------------------------------------------
   // Users
@@ -217,6 +257,70 @@ async function seed() {
   const officerId = createdUsers[UserRole.LOAN_OFFICER].id;
   const tellerId = createdUsers[UserRole.TELLER].id;
   const managerId = createdUsers[UserRole.BRANCH_MANAGER].id;
+
+  // -------------------------------------------------------------------------
+  // Bukavu Users
+  // -------------------------------------------------------------------------
+  const bukavuUsers: Array<{
+    firstName: string;
+    middleName: string | null;
+    lastName: string;
+    email: string;
+    role: UserRole;
+  }> = [
+    {
+      firstName: 'Olivier',
+      middleName: 'Bisimwa',
+      lastName: 'Murhula',
+      email: 'olivier.murhula@microfinance.cd',
+      role: UserRole.BRANCH_MANAGER,
+    },
+    {
+      firstName: 'Solange',
+      middleName: 'Nabintu',
+      lastName: 'Chibalonza',
+      email: 'solange.chibalonza@microfinance.cd',
+      role: UserRole.LOAN_OFFICER,
+    },
+    {
+      firstName: 'Dieudonné',
+      middleName: null,
+      lastName: 'Balezi',
+      email: 'dieudonne.balezi@microfinance.cd',
+      role: UserRole.TELLER,
+    },
+  ];
+
+  const bukavuCreatedUsers: Record<string, UserEntity> = {};
+
+  for (const u of bukavuUsers) {
+    const existing = await userRepo.findOne({ where: { email: u.email } });
+    if (existing) {
+      console.log(`  skip user: ${u.email} (already exists)`);
+      bukavuCreatedUsers[u.role] = existing;
+      continue;
+    }
+    const entity = userRepo.create({
+      id: randomUUID(),
+      branch_id: bukavuBranchId,
+      first_name: u.firstName,
+      middle_name: u.middleName,
+      last_name: u.lastName,
+      email: u.email,
+      password_hash: await bcrypt.hash('Password123!', 12),
+      role: u.role,
+      is_active: true,
+    });
+    await userRepo.save(entity);
+    bukavuCreatedUsers[u.role] = entity;
+    console.log(
+      `  created user: ${u.firstName} ${u.lastName} [${u.role}]  password: Password123!`,
+    );
+  }
+
+  const bukavuManagerId = bukavuCreatedUsers[UserRole.BRANCH_MANAGER].id;
+  const bukavuOfficerId = bukavuCreatedUsers[UserRole.LOAN_OFFICER].id;
+  const bukavuTellerId = bukavuCreatedUsers[UserRole.TELLER].id;
 
   // -------------------------------------------------------------------------
   // Clients
@@ -1007,16 +1111,30 @@ async function seed() {
       parentCode: '57',
     },
     {
-      code: '57020001',
-      name: 'Coffre agence FC',
-      nameEn: 'Branch safe FC',
+      code: '57020101',
+      name: 'Coffre – Agence de Goma (FC)',
+      nameEn: 'Branch safe – Goma (FC)',
       type: ChartAccountType.ASSET,
       parentCode: '5702',
     },
     {
-      code: '57020002',
-      name: 'Coffre agence USD',
-      nameEn: 'Branch safe USD',
+      code: '57020102',
+      name: 'Coffre – Agence de Goma (USD)',
+      nameEn: 'Branch safe – Goma (USD)',
+      type: ChartAccountType.ASSET,
+      parentCode: '5702',
+    },
+    {
+      code: '57020201',
+      name: 'Coffre – Agence de Bukavu (FC)',
+      nameEn: 'Branch safe – Bukavu (FC)',
+      type: ChartAccountType.ASSET,
+      parentCode: '5702',
+    },
+    {
+      code: '57020202',
+      name: 'Coffre – Agence de Bukavu (USD)',
+      nameEn: 'Branch safe – Bukavu (USD)',
       type: ChartAccountType.ASSET,
       parentCode: '5702',
     },
@@ -1029,18 +1147,47 @@ async function seed() {
       parentCode: '57',
     },
     {
-      code: '57030001',
-      name: 'Caisse guichet FC',
-      nameEn: 'Teller cash FC',
+      code: '57030100',
+      name: 'Caisse guichet – Agence de Goma (FC)',
+      nameEn: 'Teller cash aggregate – Goma (FC)',
       type: ChartAccountType.ASSET,
       parentCode: '5703',
     },
     {
-      code: '57030002',
-      name: 'Caisse guichet USD',
-      nameEn: 'Teller cash USD',
+      code: '57030150',
+      name: 'Caisse guichet – Agence de Goma (USD)',
+      nameEn: 'Teller cash aggregate – Goma (USD)',
       type: ChartAccountType.ASSET,
       parentCode: '5703',
+    },
+    {
+      code: '57030200',
+      name: 'Caisse guichet – Agence de Bukavu (FC)',
+      nameEn: 'Teller cash aggregate – Bukavu (FC)',
+      type: ChartAccountType.ASSET,
+      parentCode: '5703',
+    },
+    {
+      code: '57030250',
+      name: 'Caisse guichet – Agence de Bukavu (USD)',
+      nameEn: 'Teller cash aggregate – Bukavu (USD)',
+      type: ChartAccountType.ASSET,
+      parentCode: '5703',
+    },
+    // Per-teller leaf accounts — Aimée Masika (teller_seq=1 within Goma)
+    {
+      code: '57030101',
+      name: 'Caisse Teller – Aimée Masika (FC)',
+      nameEn: 'Teller cash – Aimée Masika (FC)',
+      type: ChartAccountType.ASSET,
+      parentCode: '57030100',
+    },
+    {
+      code: '57030151',
+      name: 'Caisse Teller – Aimée Masika (USD)',
+      nameEn: 'Teller cash – Aimée Masika (USD)',
+      type: ChartAccountType.ASSET,
+      parentCode: '57030150',
     },
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1120,6 +1267,36 @@ async function seed() {
       nameEn: 'Savings account USD',
       type: ChartAccountType.LIABILITY,
       parentCode: '332',
+    },
+
+    // ── 45 — Comptes de liaison inter-agences ────────────────────────────────
+    {
+      code: '45',
+      name: 'Comptes de liaison inter-agences',
+      nameEn: 'Inter-branch accounts',
+      type: ChartAccountType.LIABILITY,
+      parentCode: 'LIABILITIES',
+    },
+    {
+      code: '4519',
+      name: 'Transit virements inter-agences',
+      nameEn: 'Inter-branch remittance transit',
+      type: ChartAccountType.LIABILITY,
+      parentCode: '45',
+    },
+    {
+      code: '45191001',
+      name: 'Transit virements inter-agences FC',
+      nameEn: 'Inter-branch remittance transit FC',
+      type: ChartAccountType.LIABILITY,
+      parentCode: '4519',
+    },
+    {
+      code: '45191002',
+      name: 'Transit virements inter-agences USD',
+      nameEn: 'Inter-branch remittance transit USD',
+      type: ChartAccountType.LIABILITY,
+      parentCode: '4519',
     },
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1468,7 +1645,6 @@ async function seed() {
           id: randomUUID(),
           journal_entry_id: savedEntry.id,
           account_id: accountId,
-          client_account_id: line.clientAccountId ?? null,
           debit: String(line.debit),
           credit: String(line.credit),
           currency: line.currency,
@@ -1533,7 +1709,7 @@ async function seed() {
     'Daily float — Vault to Teller 1 USD',
     [
       {
-        code: '57030002',
+        code: '57030151',
         debit: 2000,
         credit: 0,
         currency: 'USD',
@@ -1556,7 +1732,7 @@ async function seed() {
     'Daily float — Vault to Teller 1 FC',
     [
       {
-        code: '57030001',
+        code: '57030101',
         debit: 1000000,
         credit: 0,
         currency: 'FC',
@@ -1579,7 +1755,7 @@ async function seed() {
     'Daily float — Vault to Teller 2 USD',
     [
       {
-        code: '57030002',
+        code: '57030151',
         debit: 2000,
         credit: 0,
         currency: 'USD',
@@ -1602,7 +1778,7 @@ async function seed() {
     'Daily float — Vault to Teller 2 FC',
     [
       {
-        code: '57030001',
+        code: '57030101',
         debit: 1000000,
         credit: 0,
         currency: 'FC',
@@ -1622,7 +1798,7 @@ async function seed() {
   // ── JE-2026-007 — Espérance deposits $500 USD ──────────────────────────────
   await postEntry('JE-2026-007', 'Deposit — Espérance Kahambu $500 USD', [
     {
-      code: '57030002',
+      code: '57030151',
       debit: 500,
       credit: 0,
       currency: 'USD',
@@ -1641,7 +1817,7 @@ async function seed() {
   // ── JE-2026-008 — Gabriel deposits 200,000 FC ──────────────────────────────
   await postEntry('JE-2026-008', 'Deposit — Gabriel Mastaki 200,000 FC', [
     {
-      code: '57030001',
+      code: '57030101',
       debit: 200000,
       credit: 0,
       currency: 'FC',
@@ -1668,7 +1844,7 @@ async function seed() {
       clientAccountId: acc1Entity?.id,
     },
     {
-      code: '57030002',
+      code: '57030151',
       debit: 0,
       credit: 200,
       currency: 'USD',
@@ -1714,7 +1890,7 @@ async function seed() {
         clientAccountId: acc1Entity?.id,
       },
       {
-        code: '57030002',
+        code: '57030151',
         debit: 0,
         credit: 1000,
         currency: 'USD',
@@ -1761,7 +1937,7 @@ async function seed() {
         clientAccountId: acc4Entity?.id,
       },
       {
-        code: '57030002',
+        code: '57030151',
         debit: 0,
         credit: 2000,
         currency: 'USD',
@@ -1776,7 +1952,7 @@ async function seed() {
     'Repayment deposit — Espérance $150 USD (Teller 1)',
     [
       {
-        code: '57030002',
+        code: '57030151',
         debit: 150,
         credit: 0,
         currency: 'USD',
@@ -1829,7 +2005,7 @@ async function seed() {
     'Repayment deposit — Coopérative $300 USD (Teller 2)',
     [
       {
-        code: '57030002',
+        code: '57030151',
         debit: 300,
         credit: 0,
         currency: 'USD',
@@ -1882,7 +2058,7 @@ async function seed() {
     'Late repayment deposit — Espérance $100 USD (Teller 1)',
     [
       {
-        code: '57030002',
+        code: '57030151',
         debit: 100,
         credit: 0,
         currency: 'USD',
@@ -1990,7 +2166,7 @@ async function seed() {
     'INCORRECT deposit — Espérance $300 USD (entered in error)',
     [
       {
-        code: '57030002',
+        code: '57030151',
         debit: 300,
         credit: 0,
         currency: 'USD',
@@ -2025,7 +2201,7 @@ async function seed() {
           clientAccountId: acc1Entity?.id,
         },
         {
-          code: '57030002',
+          code: '57030151',
           debit: 0,
           credit: 300,
           currency: 'USD',
@@ -2040,6 +2216,423 @@ async function seed() {
     console.log(`  marked JE-2026-022 as REVERSED`);
   } else {
     console.log(`  skip JE: JE-2026-023 (already exists)`);
+  }
+
+  // -------------------------------------------------------------------------
+  // Teller Module — COA accounts, sessions, and transactions
+  // -------------------------------------------------------------------------
+  console.log(
+    '\n── Teller module ──────────────────────────────────────────────────────────',
+  );
+
+  const tellerSessionRepo = ds.getRepository(TellerSessionEntity);
+  const tellerTxRepo = ds.getRepository(TellerTransactionEntity);
+  const tellerCoaRepo = ds.getRepository(TellerCoaAccountEntity);
+  const clientTxRepo = ds.getRepository(ClientTransactionEntity);
+
+  // ── Branch COA account mapping for Agence de Goma (branch_seq = 1) ──────────
+
+  const branchCoaRepo = ds.getRepository(BranchCoaAccountEntity);
+  const existingBranchCoa = await branchCoaRepo.findOne({
+    where: { branch_id: gomaBranchId },
+  });
+  if (!existingBranchCoa) {
+    await branchCoaRepo.save(
+      branchCoaRepo.create({
+        id: randomUUID(),
+        branch_id: gomaBranchId,
+        branch_seq: 1,
+        vault_fc_code: '57020101',
+        vault_usd_code: '57020102',
+        teller_fc_code: '57030100',
+        teller_usd_code: '57030150',
+        vault_fc_coa_id: coaIds.get('57020101')!,
+        vault_usd_coa_id: coaIds.get('57020102')!,
+        teller_fc_coa_id: coaIds.get('57030100')!,
+        teller_usd_coa_id: coaIds.get('57030150')!,
+      }),
+    );
+    console.log('  created branch COA mapping for Agence de Goma (seq=1)');
+  } else {
+    console.log('  skip branch COA mapping (already exists)');
+  }
+
+  // ── Branch COA account mapping for Agence de Bukavu (branch_seq = 2) ─────────
+
+  const existingBukavuBranchCoa = await branchCoaRepo.findOne({
+    where: { branch_id: bukavuBranchId },
+  });
+  if (!existingBukavuBranchCoa) {
+    await branchCoaRepo.save(
+      branchCoaRepo.create({
+        id: randomUUID(),
+        branch_id: bukavuBranchId,
+        branch_seq: 2,
+        vault_fc_code: '57020201',
+        vault_usd_code: '57020202',
+        teller_fc_code: '57030200',
+        teller_usd_code: '57030250',
+        vault_fc_coa_id: coaIds.get('57020201')!,
+        vault_usd_coa_id: coaIds.get('57020202')!,
+        teller_fc_coa_id: coaIds.get('57030200')!,
+        teller_usd_coa_id: coaIds.get('57030250')!,
+      }),
+    );
+    console.log('  created branch COA mapping for Agence de Bukavu (seq=2)');
+  } else {
+    console.log('  skip branch COA mapping (Agence de Bukavu already exists)');
+  }
+
+  // ── Variance COA accounts (needed for EOD reconciliation) ───────────────────
+
+  const varianceParentCode = '5704';
+  if (!coaIds.has(varianceParentCode)) {
+    const cashParentId = coaIds.get('57') ?? null;
+    const existingVarParent = await coaRepo.findOne({
+      where: { code: varianceParentCode },
+    });
+    if (existingVarParent) {
+      coaIds.set(varianceParentCode, existingVarParent.id);
+      console.log(`  skip COA: ${varianceParentCode} (already exists)`);
+    } else {
+      const varParent = coaRepo.create({
+        id: randomUUID(),
+        code: varianceParentCode,
+        name: 'Écarts de caisse',
+        name_en: 'Teller variance / suspense',
+        type: ChartAccountType.ASSET,
+        parent_id: cashParentId,
+        is_active: true,
+        created_by: adminId,
+      });
+      await coaRepo.save(varParent);
+      coaIds.set(varianceParentCode, varParent.id);
+      console.log(`  created COA: ${varianceParentCode}  Écarts de caisse`);
+    }
+  }
+
+  const varianceLeafCodes: Array<{
+    code: string;
+    name: string;
+    nameEn: string;
+  }> = [
+    {
+      code: '57040001',
+      name: 'Écarts de caisse FC',
+      nameEn: 'Teller variance FC',
+    },
+    {
+      code: '57040002',
+      name: 'Écarts de caisse USD',
+      nameEn: 'Teller variance USD',
+    },
+  ];
+
+  for (const { code, name, nameEn } of varianceLeafCodes) {
+    if (coaIds.has(code)) continue;
+    const existing = await coaRepo.findOne({ where: { code } });
+    if (existing) {
+      coaIds.set(code, existing.id);
+      console.log(`  skip COA: ${code} ${name}`);
+      continue;
+    }
+    const entity = coaRepo.create({
+      id: randomUUID(),
+      code,
+      name,
+      name_en: nameEn,
+      type: ChartAccountType.ASSET,
+      parent_id: coaIds.get(varianceParentCode) ?? null,
+      is_active: true,
+      created_by: adminId,
+    });
+    await coaRepo.save(entity);
+    coaIds.set(code, entity.id);
+    console.log(`  created COA: ${code}  ${name}`);
+  }
+
+  // ── Per-teller COA entries for Aimée Masika ─────────────────────────────────
+  // Seeded in the main COA loop above. This block ensures coaIds stays
+  // populated on re-runs where entries already exist.
+
+  const perTellerCoaCodes: Array<{
+    code: string;
+    name: string;
+    parentCode: string;
+  }> = [
+    {
+      code: '57030101',
+      name: 'Caisse Teller – Aimée Masika (FC)',
+      parentCode: '57030100',
+    },
+    {
+      code: '57030151',
+      name: 'Caisse Teller – Aimée Masika (USD)',
+      parentCode: '57030150',
+    },
+  ];
+
+  for (const { code, name, parentCode } of perTellerCoaCodes) {
+    const existing = await coaRepo.findOne({ where: { code } });
+    if (existing) {
+      coaIds.set(code, existing.id);
+      console.log(`  skip per-teller COA: ${code} ${name}`);
+      continue;
+    }
+    const parentId = coaIds.get(parentCode) ?? null;
+    const entity = coaRepo.create({
+      id: randomUUID(),
+      code,
+      name,
+      name_en: null,
+      type: ChartAccountType.ASSET,
+      parent_id: parentId,
+      is_active: true,
+      created_by: adminId,
+    });
+    await coaRepo.save(entity);
+    coaIds.set(code, entity.id);
+    console.log(`  created per-teller COA: ${code}  ${name}`);
+  }
+
+  // ── Teller COA account mapping ──────────────────────────────────────────────
+
+  const existingTellerMapping = await tellerCoaRepo.findOne({
+    where: { teller_id: tellerId },
+  });
+  if (!existingTellerMapping) {
+    await tellerCoaRepo.save(
+      tellerCoaRepo.create({
+        id: randomUUID(),
+        teller_id: tellerId,
+        branch_id: gomaBranchId,
+        fc_account_code: '57030101',
+        usd_account_code: '57030151',
+        fc_coa_id: coaIds.get('57030101')!,
+        usd_coa_id: coaIds.get('57030151')!,
+      }),
+    );
+    console.log('  created teller COA mapping for Aimée Masika');
+  } else {
+    console.log('  skip teller COA mapping (already exists)');
+  }
+
+  // ── Session 1: CLOSED — 2026-03-25 (full day lifecycle) ─────────────────────
+  //
+  // Aimée requests float → manager approves → opens → processes 3 txns
+  // (2 deposits, 1 withdrawal) → submits EOD → manager reconciles & closes.
+  //
+  //   Deposit:    Espérance $200 USD    (acc1, balance: 0 → 200)
+  //   Deposit:    Gabriel 100,000 FC   (acc3, balance: 0 → 100,000)
+  //   Withdrawal: Espérance $50 USD    (acc1, balance: 200 → 150)
+
+  const s1Date = '2026-03-25';
+  const existingS1 = await tellerSessionRepo.findOne({
+    where: { teller_id: tellerId, date: s1Date },
+  });
+
+  if (!existingS1 && acc1Entity && acc3Entity) {
+    const s1Id = randomUUID();
+
+    await tellerSessionRepo.save(
+      tellerSessionRepo.create({
+        id: s1Id,
+        teller_id: tellerId,
+        branch_id: gomaBranchId,
+        date: s1Date,
+        status: TellerSessionStatus.CLOSED,
+        requested_amount_fc: 500000,
+        requested_amount_usd: 500,
+        approved_amount_fc: 500000,
+        approved_amount_usd: 500,
+        approved_by: managerId,
+        approved_at: new Date('2026-03-25T08:15:00Z'),
+        opening_cash_fc: 500000,
+        opening_cash_usd: 500,
+        cash_in_fc: 100000,
+        cash_in_usd: 200,
+        cash_out_fc: 0,
+        cash_out_usd: 50,
+        declared_closing_cash_fc: 600000,
+        declared_closing_cash_usd: 650,
+        submitted_at: new Date('2026-03-25T16:30:00Z'),
+        reconciled_by: managerId,
+        reconciled_at: new Date('2026-03-25T17:00:00Z'),
+      }),
+    );
+    console.log('  created teller session: 2026-03-25 (CLOSED)');
+
+    await tellerTxRepo.save(
+      tellerTxRepo.create({
+        id: randomUUID(),
+        session_id: s1Id,
+        type: TellerTxType.DEPOSIT,
+        amount: 200,
+        currency: 'USD',
+        account_id: acc1Entity.id,
+        reference: 'TLR-20260325-A1B2C3',
+        description: 'Deposit from Espérance Kahambu',
+      }),
+    );
+    await tellerTxRepo.save(
+      tellerTxRepo.create({
+        id: randomUUID(),
+        session_id: s1Id,
+        type: TellerTxType.DEPOSIT,
+        amount: 100000,
+        currency: 'FC',
+        account_id: acc3Entity.id,
+        reference: 'TLR-20260325-D4E5F6',
+        description: 'Deposit from Gabriel Mastaki',
+      }),
+    );
+    await tellerTxRepo.save(
+      tellerTxRepo.create({
+        id: randomUUID(),
+        session_id: s1Id,
+        type: TellerTxType.WITHDRAWAL,
+        amount: 50,
+        currency: 'USD',
+        account_id: acc1Entity.id,
+        reference: 'TLR-20260325-G7H8I9',
+        description: 'Withdrawal for Espérance Kahambu',
+      }),
+    );
+    console.log('  created 3 teller transactions (session 2026-03-25)');
+
+    await clientTxRepo.save(
+      clientTxRepo.create({
+        id: randomUUID(),
+        account_id: acc1Entity.id,
+        branch_id: gomaBranchId,
+        type: AccountTxType.DEPOSIT,
+        amount: 200,
+        currency: Currency.USD,
+        balance_after: 200,
+        reference: 'TLR-20260325-A1B2C3',
+        description: 'Deposit from Espérance Kahambu',
+        performed_by: tellerId,
+      }),
+    );
+    await clientTxRepo.save(
+      clientTxRepo.create({
+        id: randomUUID(),
+        account_id: acc3Entity.id,
+        branch_id: gomaBranchId,
+        type: AccountTxType.DEPOSIT,
+        amount: 100000,
+        currency: Currency.FC,
+        balance_after: 100000,
+        reference: 'TLR-20260325-D4E5F6',
+        description: 'Deposit from Gabriel Mastaki',
+        performed_by: tellerId,
+      }),
+    );
+    await clientTxRepo.save(
+      clientTxRepo.create({
+        id: randomUUID(),
+        account_id: acc1Entity.id,
+        branch_id: gomaBranchId,
+        type: AccountTxType.WITHDRAWAL,
+        amount: 50,
+        currency: Currency.USD,
+        balance_after: 150,
+        reference: 'TLR-20260325-G7H8I9',
+        description: 'Withdrawal for Espérance Kahambu',
+        performed_by: tellerId,
+      }),
+    );
+    console.log('  created 3 client transactions (session 2026-03-25)');
+  } else if (existingS1) {
+    console.log('  skip teller session: 2026-03-25 (already exists)');
+  }
+
+  // ── Session 2: OPEN — 2026-03-29 (today, in progress) ──────────────────────
+  //
+  // Aimée has received float and processed one deposit.
+  //
+  //   Deposit: Gabriel 50,000 FC   (acc3, balance: 100,000 → 150,000)
+
+  const s2Date = '2026-03-29';
+  const existingS2 = await tellerSessionRepo.findOne({
+    where: { teller_id: tellerId, date: s2Date },
+  });
+
+  if (!existingS2 && acc3Entity) {
+    const s2Id = randomUUID();
+
+    await tellerSessionRepo.save(
+      tellerSessionRepo.create({
+        id: s2Id,
+        teller_id: tellerId,
+        branch_id: gomaBranchId,
+        date: s2Date,
+        status: TellerSessionStatus.OPEN,
+        requested_amount_fc: 500000,
+        requested_amount_usd: 0,
+        approved_amount_fc: 500000,
+        approved_amount_usd: 0,
+        approved_by: managerId,
+        approved_at: new Date('2026-03-29T08:10:00Z'),
+        opening_cash_fc: 500000,
+        opening_cash_usd: 0,
+        cash_in_fc: 50000,
+        cash_in_usd: 0,
+        cash_out_fc: 0,
+        cash_out_usd: 0,
+        declared_closing_cash_fc: null,
+        declared_closing_cash_usd: null,
+        submitted_at: null,
+        reconciled_by: null,
+        reconciled_at: null,
+      }),
+    );
+    console.log('  created teller session: 2026-03-29 (OPEN)');
+
+    await tellerTxRepo.save(
+      tellerTxRepo.create({
+        id: randomUUID(),
+        session_id: s2Id,
+        type: TellerTxType.DEPOSIT,
+        amount: 50000,
+        currency: 'FC',
+        account_id: acc3Entity.id,
+        reference: 'TLR-20260329-J1K2L3',
+        description: 'Deposit from Gabriel Mastaki',
+      }),
+    );
+    await clientTxRepo.save(
+      clientTxRepo.create({
+        id: randomUUID(),
+        account_id: acc3Entity.id,
+        branch_id: gomaBranchId,
+        type: AccountTxType.DEPOSIT,
+        amount: 50000,
+        currency: Currency.FC,
+        balance_after: 150000,
+        reference: 'TLR-20260329-J1K2L3',
+        description: 'Deposit from Gabriel Mastaki',
+        performed_by: tellerId,
+      }),
+    );
+    console.log(
+      '  created 1 teller transaction + 1 client transaction (session 2026-03-29)',
+    );
+  } else if (existingS2) {
+    console.log('  skip teller session: 2026-03-29 (already exists)');
+  }
+
+  // ── Update account balances to match final seeded state ──────────────────────
+  // acc1 (Espérance USD SAVINGS): +200 -50        = 150 USD
+  // acc3 (Gabriel FC SAVINGS):    +100,000 +50,000 = 150,000 FC
+
+  if (acc1Entity) {
+    await accountRepo.update(acc1Entity.id, { balance: '150' });
+    console.log('  updated acc1 (Espérance USD) balance → 150 USD');
+  }
+  if (acc3Entity) {
+    await accountRepo.update(acc3Entity.id, { balance: '150000' });
+    console.log('  updated acc3 (Gabriel FC) balance → 150,000 FC');
   }
 
   // -------------------------------------------------------------------------
@@ -2058,7 +2651,9 @@ async function seed() {
     UPDATE accounts SET created_at = '2025-02-10' WHERE account_number = '50 004\\2 serie 433' AND created_at::date = CURRENT_DATE;
     UPDATE accounts SET created_at = '2025-03-05' WHERE account_number = '50 005\\2 serie 433' AND created_at::date = CURRENT_DATE;
   `);
-  console.log('  backdated CL-000005/006/007 clients and accounts (if they were created today)');
+  console.log(
+    '  backdated CL-000005/006/007 clients and accounts (if they were created today)',
+  );
 
   // CL-000005 — Marie-Claire Bahati Ndagano
   if (!(await clientExists('CL-000005'))) {
@@ -2138,7 +2733,9 @@ async function seed() {
         `  created account: ${acc5Number} (CL-000005 SAVINGS USD, opened 2025-01-15)`,
       );
     }
-    console.log('  created client: CL-000005 Marie-Claire Bahati Ndagano (INDIVIDUAL, APPROVED)');
+    console.log(
+      '  created client: CL-000005 Marie-Claire Bahati Ndagano (INDIVIDUAL, APPROVED)',
+    );
   } else {
     console.log('  skip client: CL-000005 (already exists)');
   }
@@ -2221,7 +2818,9 @@ async function seed() {
         `  created account: ${acc6Number} (CL-000006 SAVINGS USD, opened 2025-02-10)`,
       );
     }
-    console.log('  created client: CL-000006 Théodore Muhigwa Kamosi (INDIVIDUAL, APPROVED)');
+    console.log(
+      '  created client: CL-000006 Théodore Muhigwa Kamosi (INDIVIDUAL, APPROVED)',
+    );
   } else {
     console.log('  skip client: CL-000006 (already exists)');
   }
@@ -2304,7 +2903,9 @@ async function seed() {
         `  created account: ${acc7Number} (CL-000007 SAVINGS USD, opened 2025-03-05)`,
       );
     }
-    console.log('  created client: CL-000007 Grâce Kiyana Mulonda (INDIVIDUAL, APPROVED)');
+    console.log(
+      '  created client: CL-000007 Grâce Kiyana Mulonda (INDIVIDUAL, APPROVED)',
+    );
   } else {
     console.log('  skip client: CL-000007 (already exists)');
   }
@@ -2325,7 +2926,9 @@ async function seed() {
         created_by: adminId,
       }),
     );
-    await ds.query(`UPDATE clients SET created_at = '2025-04-10' WHERE client_number = 'CL-000008'`);
+    await ds.query(
+      `UPDATE clients SET created_at = '2025-04-10' WHERE client_number = 'CL-000008'`,
+    );
     await profileRepo.save(
       profileRepo.create({
         client_id: c8Id,
@@ -2381,10 +2984,17 @@ async function seed() {
           opened_by: adminId,
         }),
       );
-      await ds.query(`UPDATE accounts SET created_at = '2025-04-12' WHERE account_number = $1`, [acc8Number]);
-      console.log(`  created account: ${acc8Number} (CL-000008 SAVINGS USD, opened 2025-04-12)`);
+      await ds.query(
+        `UPDATE accounts SET created_at = '2025-04-12' WHERE account_number = $1`,
+        [acc8Number],
+      );
+      console.log(
+        `  created account: ${acc8Number} (CL-000008 SAVINGS USD, opened 2025-04-12)`,
+      );
     }
-    console.log('  created client: CL-000008 Joséphine Zawadi Katembo (INDIVIDUAL, APPROVED)');
+    console.log(
+      '  created client: CL-000008 Joséphine Zawadi Katembo (INDIVIDUAL, APPROVED)',
+    );
   } else {
     console.log('  skip client: CL-000008 (already exists)');
   }
@@ -2405,7 +3015,9 @@ async function seed() {
         created_by: adminId,
       }),
     );
-    await ds.query(`UPDATE clients SET created_at = '2025-05-20' WHERE client_number = 'CL-000009'`);
+    await ds.query(
+      `UPDATE clients SET created_at = '2025-05-20' WHERE client_number = 'CL-000009'`,
+    );
     await profileRepo.save(
       profileRepo.create({
         client_id: c9Id,
@@ -2461,10 +3073,17 @@ async function seed() {
           opened_by: adminId,
         }),
       );
-      await ds.query(`UPDATE accounts SET created_at = '2025-05-22' WHERE account_number = $1`, [acc9Number]);
-      console.log(`  created account: ${acc9Number} (CL-000009 SAVINGS USD, opened 2025-05-22)`);
+      await ds.query(
+        `UPDATE accounts SET created_at = '2025-05-22' WHERE account_number = $1`,
+        [acc9Number],
+      );
+      console.log(
+        `  created account: ${acc9Number} (CL-000009 SAVINGS USD, opened 2025-05-22)`,
+      );
     }
-    console.log('  created client: CL-000009 Honoré Bisimwa Luanda (INDIVIDUAL, APPROVED)');
+    console.log(
+      '  created client: CL-000009 Honoré Bisimwa Luanda (INDIVIDUAL, APPROVED)',
+    );
   } else {
     console.log('  skip client: CL-000009 (already exists)');
   }
@@ -2485,7 +3104,9 @@ async function seed() {
         created_by: adminId,
       }),
     );
-    await ds.query(`UPDATE clients SET created_at = '2025-06-15' WHERE client_number = 'CL-000010'`);
+    await ds.query(
+      `UPDATE clients SET created_at = '2025-06-15' WHERE client_number = 'CL-000010'`,
+    );
     await profileRepo.save(
       profileRepo.create({
         client_id: c10Id,
@@ -2541,10 +3162,17 @@ async function seed() {
           opened_by: adminId,
         }),
       );
-      await ds.query(`UPDATE accounts SET created_at = '2025-06-18' WHERE account_number = $1`, [acc10Number]);
-      console.log(`  created account: ${acc10Number} (CL-000010 SAVINGS USD, opened 2025-06-18)`);
+      await ds.query(
+        `UPDATE accounts SET created_at = '2025-06-18' WHERE account_number = $1`,
+        [acc10Number],
+      );
+      console.log(
+        `  created account: ${acc10Number} (CL-000010 SAVINGS USD, opened 2025-06-18)`,
+      );
     }
-    console.log('  created client: CL-000010 Sylvie Mapendo Kasindi (INDIVIDUAL, APPROVED)');
+    console.log(
+      '  created client: CL-000010 Sylvie Mapendo Kasindi (INDIVIDUAL, APPROVED)',
+    );
   } else {
     console.log('  skip client: CL-000010 (already exists)');
   }

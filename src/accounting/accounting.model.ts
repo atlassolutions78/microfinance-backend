@@ -4,7 +4,6 @@
  */
 export type JournalLineSpec = {
   accountCode: string;
-  clientAccountId?: string;
   debit: number;
   credit: number;
   currency: string;
