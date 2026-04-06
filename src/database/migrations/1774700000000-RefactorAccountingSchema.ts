@@ -6,7 +6,52 @@ export class RefactorAccountingSchema1774700000000
   name = 'RefactorAccountingSchema1774700000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Drop existing tables (dev environment — all data is re-seeded)
+    // Ensure the transactions table exists — it may have been marked-as-run
+    // without actually executing (mark-migrations bootstrap pattern).
+    await queryRunner.query(`
+      DO $$ BEGIN
+        CREATE TYPE "public"."transactions_type_enum" AS ENUM(
+          'DEPOSIT','WITHDRAWAL','TRANSFER_IN','TRANSFER_OUT',
+          'LOAN_DISBURSEMENT','LOAN_REPAYMENT','FEE','PENALTY'
+        );
+      EXCEPTION WHEN duplicate_object THEN null; END $$
+    `);
+    await queryRunner.query(`
+      DO $$ BEGIN
+        CREATE TYPE "public"."transactions_currency_enum" AS ENUM('USD','FC');
+      EXCEPTION WHEN duplicate_object THEN null; END $$
+    `);
+    await queryRunner.query(`
+      CREATE TABLE IF NOT EXISTS "transactions" (
+        "id"            uuid          NOT NULL DEFAULT uuid_generate_v4(),
+        "account_id"    uuid          NOT NULL,
+        "branch_id"     uuid          NOT NULL,
+        "type"          "public"."transactions_type_enum"     NOT NULL,
+        "amount"        numeric(18,4) NOT NULL,
+        "currency"      "public"."transactions_currency_enum" NOT NULL,
+        "balance_after" numeric(18,4) NOT NULL,
+        "reference"     text          NOT NULL,
+        "description"   text,
+        "performed_by"  uuid          NOT NULL,
+        "created_at"    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+        CONSTRAINT "UQ_transactions_reference" UNIQUE ("reference"),
+        CONSTRAINT "PK_transactions" PRIMARY KEY ("id")
+      )
+    `);
+    await queryRunner.query(`
+      CREATE TABLE IF NOT EXISTS "transfers" (
+        "id"                    uuid          NOT NULL DEFAULT uuid_generate_v4(),
+        "debit_transaction_id"  uuid          NOT NULL,
+        "credit_transaction_id" uuid,
+        "is_internal"           boolean       NOT NULL,
+        "recipient_name"        text,
+        "fee_amount"            numeric(18,4) NOT NULL DEFAULT 0,
+        "claim_reference"       text,
+        CONSTRAINT "PK_transfers" PRIMARY KEY ("id")
+      )
+    `);
+
+    // Drop existing accounting tables (dev environment — all data is re-seeded)
     await queryRunner.query(`TRUNCATE TABLE "journal_lines" CASCADE`);
     await queryRunner.query(`TRUNCATE TABLE "journal_entries" CASCADE`);
     await queryRunner.query(`TRUNCATE TABLE "chart_of_accounts" CASCADE`);

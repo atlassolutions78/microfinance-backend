@@ -5,96 +5,41 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiBearerAuth,
-  ApiBody,
-  ApiOperation,
-  ApiParam,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { UserModel } from '../users/user.model';
 import { LoanService } from './loan.service';
-import { CreateLoanDto, ApproveLoanDto, RejectLoanDto } from './loan.dto';
+import {
+  ApplyLoanDto,
+  DisburseDto,
+  QueryLoansDto,
+  RecordPaymentDto,
+  RejectLoanDto,
+} from './loan.dto';
 
-/**
- * HTTP layer only — parse the request, call the service, return the result.
- * No business logic lives here.
- */
 @ApiTags('Loans')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('loans')
 export class LoanController {
   constructor(private readonly loanService: LoanService) {}
 
+  // ---------------------------------------------------------------------------
+  // Application
+  // ---------------------------------------------------------------------------
+
   @Post()
-  @ApiOperation({ summary: 'Submit a loan application' })
-  @ApiBody({
-    type: CreateLoanDto,
-    examples: {
-      default: {
-        value: {
-          memberId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-          amount: 500000,
-          interestRate: 0.15,
-          termMonths: 12,
-          type: 'INDIVIDUAL',
-          purpose: 'Purchase of agricultural equipment for farming season',
-        },
-      },
-    },
-  })
-  apply(@Body() dto: CreateLoanDto) {
-    return this.loanService.apply(dto);
-  }
-
-  @Post(':id/approve')
-  @ApiOperation({ summary: 'Approve a pending loan' })
-  @ApiParam({ name: 'id', description: 'Loan UUID' })
-  @ApiBody({
-    type: ApproveLoanDto,
-    examples: {
-      default: {
-        value: { approverId: 'd1b2c3d4-e5f6-7890-abcd-ef1234567890' },
-      },
-    },
-  })
-  approve(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ApproveLoanDto) {
-    return this.loanService.approve(id, dto);
-  }
-
-  @Post(':id/reject')
-  @ApiOperation({ summary: 'Reject a pending loan' })
-  @ApiParam({ name: 'id', description: 'Loan UUID' })
-  @ApiBody({
-    type: RejectLoanDto,
-    examples: {
-      default: {
-        value: { reason: 'Insufficient income documentation provided' },
-      },
-    },
-  })
-  reject(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RejectLoanDto) {
-    return this.loanService.reject(id, dto);
-  }
-
-  @Post(':id/disburse')
-  @ApiOperation({ summary: 'Disburse an approved loan' })
-  @ApiParam({ name: 'id', description: 'Loan UUID' })
-  disburse(@Param('id', ParseUUIDPipe) id: string) {
-    return this.loanService.disburse(id);
-  }
-
-  @Post(':id/close')
-  @ApiOperation({ summary: 'Close an active loan (fully repaid)' })
-  @ApiParam({ name: 'id', description: 'Loan UUID' })
-  close(@Param('id', ParseUUIDPipe) id: string) {
-    return this.loanService.close(id);
+  apply(@Body() dto: ApplyLoanDto, @CurrentUser() user: UserModel) {
+    return this.loanService.apply(dto, user);
   }
 
   @Get()
-  @ApiOperation({ summary: 'List all loans' })
-  findAll() {
-    return this.loanService.findAll();
+  findAll(@Query() query: QueryLoansDto) {
+    return this.loanService.findAll(query);
   }
 
   @Get(':id')
@@ -103,4 +48,84 @@ export class LoanController {
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.loanService.findById(id);
   }
+
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
+
+  @Post(':id/approve')
+  approve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.loanService.approve(id, user);
+  }
+
+  @Post(':id/reject')
+  reject(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RejectLoanDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.loanService.reject(id, dto, user);
+  }
+
+  @Post(':id/disburse')
+  disburse(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DisburseDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.loanService.disburse(id, dto, user);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Schedule & payments
+  // ---------------------------------------------------------------------------
+
+  @Get(':id/schedule')
+  getSchedule(@Param('id', ParseUUIDPipe) id: string) {
+    return this.loanService.getSchedule(id);
+  }
+
+  @Post(':id/payments')
+  recordPayment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RecordPaymentDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.loanService.recordPayment(id, dto, user);
+  }
+
+  @Get(':id/payments')
+  getPayments(@Param('id', ParseUUIDPipe) id: string) {
+    return this.loanService.getPayments(id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Penalties & documents
+  // ---------------------------------------------------------------------------
+
+  @Get(':id/penalties')
+  getPenalties(@Param('id', ParseUUIDPipe) id: string) {
+    return this.loanService.getPenalties(id);
+  }
+
+  @Get(':id/documents')
+  getDocuments(@Param('id', ParseUUIDPipe) id: string) {
+    return this.loanService.getDocuments(id);
+  }
+
+  /** Trigger the penalty processing cycle (admin / cron endpoint). */
+  @Post('admin/process-penalties')
+  processLatePenalties() {
+    return this.loanService.processLatePenalties();
+  }
+
+  /** Trigger the auto-repayment cycle (admin / cron endpoint). */
+  @Post('admin/process-repayments')
+  processScheduledRepayments() {
+    return this.loanService.processScheduledRepayments();
+  }
 }
+

@@ -14,6 +14,7 @@ import { AccountsModule } from './accounts/accounts.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { TellerModule } from './teller/teller.module';
 import { RemittanceModule } from './remittance/remittance.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { RemittanceModule } from './remittance/remittance.module';
     AccountingModule,
     TellerModule,
     RemittanceModule,
+    NotificationsModule,
     LoansModule,
     UsersModule,
     AuthModule,

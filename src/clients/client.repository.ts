@@ -110,12 +110,12 @@ export class ClientRepository {
   }
 
   async getLastClientNumber(): Promise<string | null> {
-    const entity = await this.repo.findOne({
-      where: {},
-      order: { created_at: 'DESC' },
-      select: ['client_number'],
-    });
-    return entity?.client_number ?? null;
+    const result = await this.repo
+      .createQueryBuilder('c')
+      .select(`MAX(CAST(REPLACE(c.client_number, 'CL-', '') AS INTEGER))`, 'max')
+      .getRawOne<{ max: string | null }>();
+    if (!result?.max) return null;
+    return `CL-${String(result.max).padStart(6, '0')}`;
   }
 
   async findRepresentativeByClientId(

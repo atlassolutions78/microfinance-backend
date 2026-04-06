@@ -311,6 +311,38 @@ export class ClientService {
     return ClientMapper.toApiResponse(data.client, data.individualProfile, data.orgProfile);
   }
 
+  /**
+   * Returns the contact info needed for notifications (name, phone, email).
+   * Returns null fields when the profile is unavailable.
+   */
+  async getContactInfo(clientId: string): Promise<{
+    name: string | null;
+    phone: string | null;
+    email: string | null;
+  }> {
+    const data = await this.clientRepository.findByIdFull(clientId);
+    if (!data) return { name: null, phone: null, email: null };
+
+    if (data.individualProfile) {
+      const p = data.individualProfile;
+      return {
+        name: `${p.first_name} ${p.last_name}`,
+        phone: p.phone ?? null,
+        email: p.email ?? null,
+      };
+    }
+
+    if (data.orgProfile) {
+      return {
+        name: data.orgProfile.organization_name ?? null,
+        phone: null,
+        email: null,
+      };
+    }
+
+    return { name: null, phone: null, email: null };
+  }
+
   async findAll(): Promise<ClientApiResponse[]> {
     const rows = await this.clientRepository.findAllFull();
     return rows.map((r) => ClientMapper.toApiResponse(r.client, r.individualProfile, r.orgProfile));

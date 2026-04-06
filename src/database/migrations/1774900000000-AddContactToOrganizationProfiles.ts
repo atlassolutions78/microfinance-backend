@@ -5,7 +5,7 @@ export class AddContactToOrganizationProfiles1774900000000
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      ALTER TABLE "organization_profiles"
+      ALTER TABLE IF EXISTS "organization_profiles"
         ADD COLUMN IF NOT EXISTS "phone"        text,
         ADD COLUMN IF NOT EXISTS "email"        text,
         ADD COLUMN IF NOT EXISTS "province"     text,
@@ -15,7 +15,7 @@ export class AddContactToOrganizationProfiles1774900000000
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      ALTER TABLE "organization_profiles"
+      ALTER TABLE IF EXISTS "organization_profiles"
         DROP COLUMN IF EXISTS "phone",
         DROP COLUMN IF EXISTS "email",
         DROP COLUMN IF EXISTS "province",

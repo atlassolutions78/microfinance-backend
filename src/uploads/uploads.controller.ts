@@ -1,16 +1,17 @@
 import {
-  Body,
   Controller,
-  Get,
   Post,
-  Query,
+  Body,
   UploadedFile,
-  UseGuards,
   UseInterceptors,
+  UseGuards,
+  BadRequestException,
+  Get,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiBearerAuth, ApiConsumes, ApiBody, ApiOperation } from '@nestjs/swagger';
 import { memoryStorage } from 'multer';
-import { ApiTags, ApiBearerAuth, ApiBody, ApiOperation } from '@nestjs/swagger';
 import { UploadsService } from './uploads.service';
 import { DownloadKeyDto, PresignDto } from './uploads.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -21,6 +22,26 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 export class UploadsController {
   constructor(private readonly uploadsService: UploadsService) {}
+
+  @Post()
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+    }),
+  )
+  async upload(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+    const { key } = await this.uploadsService.saveFile(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+    );
+    return { key };
+  }
 
   @Post('presign')
   @ApiOperation({ summary: 'Get a pre-signed S3 URL to upload a file' })
@@ -42,20 +63,5 @@ export class UploadsController {
   @Get('download')
   download(@Query() dto: DownloadKeyDto) {
     return this.uploadsService.getDownloadUrl(dto.key);
-  }
-
-  /**
-   * Direct file upload — used when S3 is not configured (local development).
-   * Returns the same { key } shape as the presign flow so frontend code is unified.
-   */
-  @Post('file')
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
-  async uploadFile(@UploadedFile() file: Express.Multer.File) {
-    const { key } = await this.uploadsService.saveFile(
-      file.buffer,
-      file.originalname,
-      file.mimetype,
-    );
-    return { key };
   }
 }
