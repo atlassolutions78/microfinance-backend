@@ -5,12 +5,11 @@
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { DataSource } from 'typeorm';
 import { AccountService } from '../accounts/account.service';
 import { ClientService } from '../clients/client.service';
 import { KycStatus } from '../clients/client.enums';
 import { UserModel } from '../users/user.model';
-import { TransactionService } from '../transactions/transaction.service';
-import { Currency } from '../transactions/transaction.enums';
 import { AccountingService } from '../accounting/accounting.service';
 import { COA_CODES } from '../accounting/accounting.enums';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -24,7 +23,14 @@ import {
   LoanReminder,
   RepaymentScheduleItem,
 } from './loan.model';
-import { LoanCurrency, LoanStatus, LoanType, ReminderChannel, ReminderStatus, RepaymentStatus } from './loan.enums';
+import {
+  LoanCurrency,
+  LoanStatus,
+  LoanType,
+  ReminderChannel,
+  ReminderStatus,
+  RepaymentStatus,
+} from './loan.enums';
 import {
   ApplyLoanDto,
   DisburseDto,
@@ -41,9 +47,9 @@ export class LoanService {
     private readonly loanRepository: LoanRepository,
     private readonly accountService: AccountService,
     private readonly clientService: ClientService,
-    private readonly transactionService: TransactionService,
     private readonly accountingService: AccountingService,
     private readonly notificationsService: NotificationsService,
+    private readonly dataSource: DataSource,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -60,14 +66,20 @@ export class LoanService {
     }
 
     // 2. Check active loan count
-    const activeCount = await this.loanRepository.countActiveByClient(dto.clientId);
+    const activeCount = await this.loanRepository.countActiveByClient(
+      dto.clientId,
+    );
     LoanPolicy.assertCanApply(activeCount);
 
     // 3. Validate the selected account
-    const clientAccounts = await this.accountService.findByClientId(dto.clientId);
+    const clientAccounts = await this.accountService.findByClientId(
+      dto.clientId,
+    );
     const account = clientAccounts.find((a) => a.id === dto.accountId);
     if (!account) {
-      throw new NotFoundException('Account not found or does not belong to this client.');
+      throw new NotFoundException(
+        'Account not found or does not belong to this client.',
+      );
     }
     LoanPolicy.assertAccountEligible(account);
 
@@ -132,7 +144,11 @@ export class LoanService {
     return loan;
   }
 
-  async reject(id: string, dto: RejectLoanDto, user: UserModel): Promise<LoanModel> {
+  async reject(
+    id: string,
+    dto: RejectLoanDto,
+    user: UserModel,
+  ): Promise<LoanModel> {
     const loan = await this.findOrFail(id);
     try {
       loan.reject(user.id, dto.reason);
@@ -147,15 +163,23 @@ export class LoanService {
   // Disbursement
   // ---------------------------------------------------------------------------
 
-  async disburse(id: string, dto: DisburseDto, user: UserModel): Promise<LoanModel> {
+  async disburse(
+    id: string,
+    dto: DisburseDto,
+    user: UserModel,
+  ): Promise<LoanModel> {
     const loan = await this.findOrFail(id);
 
     // If the officer chose a different disbursement account, validate and apply it now.
     if (dto.accountId && dto.accountId !== loan.accountId) {
-      const clientAccounts = await this.accountService.findByClientId(loan.clientId);
+      const clientAccounts = await this.accountService.findByClientId(
+        loan.clientId,
+      );
       const account = clientAccounts.find((a) => a.id === dto.accountId);
       if (!account) {
-        throw new NotFoundException('Account not found or does not belong to this client.');
+        throw new NotFoundException(
+          'Account not found or does not belong to this client.',
+        );
       }
       LoanPolicy.assertAccountEligible(account);
       loan.accountId = dto.accountId;
@@ -171,17 +195,25 @@ export class LoanService {
     const schedule = loan.computeSchedule(loan.disbursedAt!);
     await this.loanRepository.saveSchedule(schedule);
 
-    // Credit the disbursement amount to the client's account (atomic: tx + balance + journal)
-    const { loanReceivableCode, savingsCode } = this.getCoaCodes(loan.type, loan.currency);
-    await this.transactionService.loanDisbursement({
-      accountId: loan.accountId,
-      branchId: loan.branchId,
-      amount: loan.principalAmount,
-      currency: loan.currency as unknown as Currency,
-      performedBy: user.id,
-      loanReceivableCode,
-      savingsCode,
-      description: `Loan disbursement — ${loan.loanNumber}`,
+    // Credit the disbursement amount to the client's account (atomic: balance + journal)
+    const { loanReceivableCode, savingsCode } = this.getCoaCodes(
+      loan.type,
+      loan.currency,
+    );
+    const disbAccount = await this.accountService.findById(loan.accountId);
+    const newBalance = disbAccount.balance + loan.principalAmount;
+    await this.dataSource.transaction(async (em) => {
+      await this.accountService.recordBalance(loan.accountId, newBalance, em);
+      await this.accountingService.postLoanDisbursementToSavings(
+        loan.principalAmount,
+        loan.currency,
+        loanReceivableCode,
+        savingsCode,
+        loan.branchId,
+        user.id,
+        `Loan disbursement — ${loan.loanNumber}`,
+        em,
+      );
     });
 
     await this.loanRepository.save(loan);
@@ -199,7 +231,10 @@ export class LoanService {
   ): Promise<LoanModel> {
     const loan = await this.findOrFail(id);
 
-    if (loan.status !== LoanStatus.ACTIVE && loan.status !== LoanStatus.DEFAULTED) {
+    if (
+      loan.status !== LoanStatus.ACTIVE &&
+      loan.status !== LoanStatus.DEFAULTED
+    ) {
       throw new BadRequestException(
         `Payments can only be recorded on ACTIVE loans. Current status: ${loan.status}.`,
       );
@@ -225,7 +260,9 @@ export class LoanService {
     }
 
     // Fetch assessed penalties for this installment
-    const penalties = await this.loanRepository.findPenaltiesForScheduleItem(target.id);
+    const penalties = await this.loanRepository.findPenaltiesForScheduleItem(
+      target.id,
+    );
     const totalPenalty = penalties.reduce((sum, p) => sum + p.penaltyAmount, 0);
 
     // Repayment split:
@@ -243,19 +280,35 @@ export class LoanService {
         ? COA_CODES.PENALTY_INCOME_FC
         : COA_CODES.PENALTY_INCOME_USD;
 
-    // Atomic: debit account + create LOAN_REPAYMENT transaction + post journal
-    const tx = await this.transactionService.loanRepayment({
-      accountId: loan.accountId,
-      branchId: loan.branchId,
-      loanReceivableCredit,
-      interestCredit,
-      currency: loan.currency as unknown as Currency,
-      performedBy: user.id,
-      loanReceivableCode,
-      interestIncomeCode,
-      savingsCode,
-      penaltyIncomeCode,
-      description: `Loan repayment — ${loan.loanNumber} installment #${target.installmentNumber}`,
+    // Atomic: debit account + post journal
+    const totalDebit = loanReceivableCredit + interestCredit;
+    const repayAccount = await this.accountService.findById(loan.accountId);
+    if (repayAccount.balance < totalDebit) {
+      throw new BadRequestException(
+        `Insufficient account balance for repayment. Required: ${totalDebit}, available: ${repayAccount.balance}.`,
+      );
+    }
+    const repayNewBalance = repayAccount.balance - totalDebit;
+    await this.dataSource.transaction(async (em) => {
+      await this.accountService.recordBalance(
+        loan.accountId,
+        repayNewBalance,
+        em,
+      );
+      await this.accountingService.postLoanRepaymentFromSavings(
+        loanReceivableCredit,
+        interestCredit,
+        0,
+        loan.currency,
+        savingsCode,
+        loanReceivableCode,
+        interestIncomeCode,
+        penaltyIncomeCode,
+        loan.branchId,
+        user.id,
+        `Loan repayment — ${loan.loanNumber} installment #${target.installmentNumber}`,
+        em,
+      );
     });
 
     // Update domain objects
@@ -270,7 +323,7 @@ export class LoanService {
     payment.id = randomUUID();
     payment.loanId = id;
     payment.scheduleId = target.id;
-    payment.transactionId = tx.id;
+    payment.transactionId = null as any;
     payment.amount = loanReceivableCredit + interestCredit;
     payment.currency = loan.currency as unknown as LoanCurrency;
     payment.paymentDate = new Date();
@@ -292,7 +345,10 @@ export class LoanService {
    * Items 1â€“29 days overdue are marked LATE with no penalty.
    * Call this on a scheduler (e.g. daily cron) or trigger manually via the admin endpoint.
    */
-  async processLatePenalties(): Promise<{ processed: number; reminders: number }> {
+  async processLatePenalties(): Promise<{
+    processed: number;
+    reminders: number;
+  }> {
     const overdueItems = await this.loanRepository.findOverdueScheduleItems();
     let processed = 0;
     let reminders = 0;
@@ -303,11 +359,13 @@ export class LoanService {
 
       if (!item.reminderSentAt) {
         // First overdue detection: send reminder and start penalty clock
-        const contact = await this.clientService.getContactInfo(loan.clientId).catch(() => ({
-          name: null,
-          phone: null,
-          email: null,
-        }));
+        const contact = await this.clientService
+          .getContactInfo(loan.clientId)
+          .catch(() => ({
+            name: null,
+            phone: null,
+            email: null,
+          }));
 
         const results = await this.notificationsService.sendLoanReminder({
           loanNumber: loan.loanNumber,
@@ -344,7 +402,8 @@ export class LoanService {
 
         if (daysSinceReminder >= 30) {
           // Penalty threshold reached: apply once
-          const alreadyPenalised = await this.loanRepository.existsPenaltyForScheduleItem(item.id);
+          const alreadyPenalised =
+            await this.loanRepository.existsPenaltyForScheduleItem(item.id);
           if (!alreadyPenalised) {
             const overdueAmount = item.totalAmount - item.paidAmount;
             const penaltyAmount = LoanPolicy.computePenalty(overdueAmount);
@@ -360,7 +419,10 @@ export class LoanService {
             await this.loanRepository.savePenalty(penalty);
 
             // Post accounting entry at assessment time (accrual basis)
-            const { loanReceivableCode } = this.getCoaCodes(loan.type, loan.currency);
+            const { loanReceivableCode } = this.getCoaCodes(
+              loan.type,
+              loan.currency,
+            );
             const penaltyIncomeCode =
               loan.currency === LoanCurrency.FC
                 ? COA_CODES.PENALTY_INCOME_FC
@@ -401,7 +463,10 @@ export class LoanService {
    * Items with insufficient balance are skipped and remain in their current status.
    * Call this on a daily scheduler or trigger manually via the admin endpoint.
    */
-  async processScheduledRepayments(): Promise<{ processed: number; skipped: number }> {
+  async processScheduledRepayments(): Promise<{
+    processed: number;
+    skipped: number;
+  }> {
     const dueItems = await this.loanRepository.findDueScheduleItems();
     let processed = 0;
     let skipped = 0;
@@ -411,40 +476,60 @@ export class LoanService {
       if (!loan) continue;
 
       // Compute total due for this installment (principal + interest + any assessed penalties)
-      const penalties = await this.loanRepository.findPenaltiesForScheduleItem(item.id);
-      const totalPenalty = penalties.reduce((sum, p) => sum + p.penaltyAmount, 0);
-      const totalDue = item.principalAmount + item.interestAmount + totalPenalty;
+      const penalties = await this.loanRepository.findPenaltiesForScheduleItem(
+        item.id,
+      );
+      const totalPenalty = penalties.reduce(
+        (sum, p) => sum + p.penaltyAmount,
+        0,
+      );
+      const totalDue =
+        item.principalAmount + item.interestAmount + totalPenalty;
 
       // Check balance — skip the installment if funds are insufficient
-      const clientAccounts = await this.accountService.findByClientId(loan.clientId);
+      const clientAccounts = await this.accountService.findByClientId(
+        loan.clientId,
+      );
       const account = clientAccounts.find((a) => a.id === loan.accountId);
       if (!account || account.balance < totalDue) {
         skipped++;
         continue;
       }
 
-      const { loanReceivableCode, interestIncomeCode, savingsCode } = this.getCoaCodes(
-        loan.type,
-        loan.currency,
-      );
+      const { loanReceivableCode, interestIncomeCode, savingsCode } =
+        this.getCoaCodes(loan.type, loan.currency);
       const penaltyIncomeCode =
         loan.currency === LoanCurrency.FC
           ? COA_CODES.PENALTY_INCOME_FC
           : COA_CODES.PENALTY_INCOME_USD;
 
       try {
-        const tx = await this.transactionService.loanRepayment({
-          accountId: loan.accountId,
-          branchId: loan.branchId,
-          loanReceivableCredit: item.principalAmount + totalPenalty,
-          interestCredit: item.interestAmount,
-          currency: loan.currency as unknown as Currency,
-          performedBy: 'system',
-          loanReceivableCode,
-          interestIncomeCode,
-          savingsCode,
-          penaltyIncomeCode,
-          description: `Auto-repayment — ${loan.loanNumber} installment #${item.installmentNumber}`,
+        const autoAccount = await this.accountService.findById(loan.accountId);
+        if (autoAccount.balance < totalDue) {
+          skipped++;
+          continue;
+        }
+        const autoNewBalance = autoAccount.balance - totalDue;
+        await this.dataSource.transaction(async (em) => {
+          await this.accountService.recordBalance(
+            loan.accountId,
+            autoNewBalance,
+            em,
+          );
+          await this.accountingService.postLoanRepaymentFromSavings(
+            item.principalAmount + totalPenalty,
+            item.interestAmount,
+            0,
+            loan.currency,
+            savingsCode,
+            loanReceivableCode,
+            interestIncomeCode,
+            penaltyIncomeCode,
+            loan.branchId,
+            'system',
+            `Auto-repayment — ${loan.loanNumber} installment #${item.installmentNumber}`,
+            em,
+          );
         });
 
         item.markPaid();
@@ -456,7 +541,7 @@ export class LoanService {
         payment.id = randomUUID();
         payment.loanId = loan.id;
         payment.scheduleId = item.id;
-        payment.transactionId = tx.id;
+        payment.transactionId = null as any;
         payment.amount = totalDue;
         payment.currency = loan.currency as unknown as LoanCurrency;
         payment.paymentDate = new Date();
@@ -526,9 +611,15 @@ export class LoanService {
   private getCoaCodes(type: LoanType, currency: LoanCurrency) {
     const isFc = currency === LoanCurrency.FC;
     const loanReceivableCode = {
-      [LoanType.SALARY_ADVANCE]: isFc ? COA_CODES.LOANS_SALARY_FC : COA_CODES.LOANS_SALARY_USD,
-      [LoanType.PERSONAL_LOAN]: isFc ? COA_CODES.LOANS_ORDINARY_FC : COA_CODES.LOANS_ORDINARY_USD,
-      [LoanType.OVERDRAFT]: isFc ? COA_CODES.LOANS_OVERDRAFT_FC : COA_CODES.LOANS_OVERDRAFT_USD,
+      [LoanType.SALARY_ADVANCE]: isFc
+        ? COA_CODES.LOANS_SALARY_FC
+        : COA_CODES.LOANS_SALARY_USD,
+      [LoanType.PERSONAL_LOAN]: isFc
+        ? COA_CODES.LOANS_ORDINARY_FC
+        : COA_CODES.LOANS_ORDINARY_USD,
+      [LoanType.OVERDRAFT]: isFc
+        ? COA_CODES.LOANS_OVERDRAFT_FC
+        : COA_CODES.LOANS_OVERDRAFT_USD,
     }[type];
     const interestIncomeCode = {
       [LoanType.SALARY_ADVANCE]: isFc
@@ -541,7 +632,9 @@ export class LoanService {
         ? COA_CODES.INTEREST_OVERDRAFT_FC
         : COA_CODES.INTEREST_OVERDRAFT_USD,
     }[type];
-    const savingsCode = isFc ? COA_CODES.CUSTOMER_SAVINGS_FC : COA_CODES.CUSTOMER_SAVINGS_USD;
+    const savingsCode = isFc
+      ? COA_CODES.CUSTOMER_SAVINGS_FC
+      : COA_CODES.CUSTOMER_SAVINGS_USD;
     return { loanReceivableCode, interestIncomeCode, savingsCode };
   }
 }
