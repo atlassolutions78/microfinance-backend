@@ -2651,7 +2651,9 @@ async function seed() {
     UPDATE accounts SET created_at = '2025-02-10' WHERE account_number = '50 004\\2 serie 433' AND created_at::date = CURRENT_DATE;
     UPDATE accounts SET created_at = '2025-03-05' WHERE account_number = '50 005\\2 serie 433' AND created_at::date = CURRENT_DATE;
   `);
-  console.log('  backdated CL-000005/006/007 clients and accounts (if they were created today)');
+  console.log(
+    '  backdated CL-000005/006/007 clients and accounts (if they were created today)',
+  );
 
   // CL-000005 — Marie-Claire Bahati Ndagano
   if (!(await clientExists('CL-000005'))) {
@@ -2731,7 +2733,9 @@ async function seed() {
         `  created account: ${acc5Number} (CL-000005 SAVINGS USD, opened 2025-01-15)`,
       );
     }
-    console.log('  created client: CL-000005 Marie-Claire Bahati Ndagano (INDIVIDUAL, APPROVED)');
+    console.log(
+      '  created client: CL-000005 Marie-Claire Bahati Ndagano (INDIVIDUAL, APPROVED)',
+    );
   } else {
     console.log('  skip client: CL-000005 (already exists)');
   }
@@ -2814,7 +2818,9 @@ async function seed() {
         `  created account: ${acc6Number} (CL-000006 SAVINGS USD, opened 2025-02-10)`,
       );
     }
-    console.log('  created client: CL-000006 Théodore Muhigwa Kamosi (INDIVIDUAL, APPROVED)');
+    console.log(
+      '  created client: CL-000006 Théodore Muhigwa Kamosi (INDIVIDUAL, APPROVED)',
+    );
   } else {
     console.log('  skip client: CL-000006 (already exists)');
   }
@@ -2897,7 +2903,9 @@ async function seed() {
         `  created account: ${acc7Number} (CL-000007 SAVINGS USD, opened 2025-03-05)`,
       );
     }
-    console.log('  created client: CL-000007 Grâce Kiyana Mulonda (INDIVIDUAL, APPROVED)');
+    console.log(
+      '  created client: CL-000007 Grâce Kiyana Mulonda (INDIVIDUAL, APPROVED)',
+    );
   } else {
     console.log('  skip client: CL-000007 (already exists)');
   }
@@ -2918,7 +2926,9 @@ async function seed() {
         created_by: adminId,
       }),
     );
-    await ds.query(`UPDATE clients SET created_at = '2025-04-10' WHERE client_number = 'CL-000008'`);
+    await ds.query(
+      `UPDATE clients SET created_at = '2025-04-10' WHERE client_number = 'CL-000008'`,
+    );
     await profileRepo.save(
       profileRepo.create({
         client_id: c8Id,
@@ -2974,10 +2984,17 @@ async function seed() {
           opened_by: adminId,
         }),
       );
-      await ds.query(`UPDATE accounts SET created_at = '2025-04-12' WHERE account_number = $1`, [acc8Number]);
-      console.log(`  created account: ${acc8Number} (CL-000008 SAVINGS USD, opened 2025-04-12)`);
+      await ds.query(
+        `UPDATE accounts SET created_at = '2025-04-12' WHERE account_number = $1`,
+        [acc8Number],
+      );
+      console.log(
+        `  created account: ${acc8Number} (CL-000008 SAVINGS USD, opened 2025-04-12)`,
+      );
     }
-    console.log('  created client: CL-000008 Joséphine Zawadi Katembo (INDIVIDUAL, APPROVED)');
+    console.log(
+      '  created client: CL-000008 Joséphine Zawadi Katembo (INDIVIDUAL, APPROVED)',
+    );
   } else {
     console.log('  skip client: CL-000008 (already exists)');
   }
@@ -2998,7 +3015,9 @@ async function seed() {
         created_by: adminId,
       }),
     );
-    await ds.query(`UPDATE clients SET created_at = '2025-05-20' WHERE client_number = 'CL-000009'`);
+    await ds.query(
+      `UPDATE clients SET created_at = '2025-05-20' WHERE client_number = 'CL-000009'`,
+    );
     await profileRepo.save(
       profileRepo.create({
         client_id: c9Id,
@@ -3054,10 +3073,17 @@ async function seed() {
           opened_by: adminId,
         }),
       );
-      await ds.query(`UPDATE accounts SET created_at = '2025-05-22' WHERE account_number = $1`, [acc9Number]);
-      console.log(`  created account: ${acc9Number} (CL-000009 SAVINGS USD, opened 2025-05-22)`);
+      await ds.query(
+        `UPDATE accounts SET created_at = '2025-05-22' WHERE account_number = $1`,
+        [acc9Number],
+      );
+      console.log(
+        `  created account: ${acc9Number} (CL-000009 SAVINGS USD, opened 2025-05-22)`,
+      );
     }
-    console.log('  created client: CL-000009 Honoré Bisimwa Luanda (INDIVIDUAL, APPROVED)');
+    console.log(
+      '  created client: CL-000009 Honoré Bisimwa Luanda (INDIVIDUAL, APPROVED)',
+    );
   } else {
     console.log('  skip client: CL-000009 (already exists)');
   }
@@ -3078,7 +3104,9 @@ async function seed() {
         created_by: adminId,
       }),
     );
-    await ds.query(`UPDATE clients SET created_at = '2025-06-15' WHERE client_number = 'CL-000010'`);
+    await ds.query(
+      `UPDATE clients SET created_at = '2025-06-15' WHERE client_number = 'CL-000010'`,
+    );
     await profileRepo.save(
       profileRepo.create({
         client_id: c10Id,
@@ -3134,10 +3162,17 @@ async function seed() {
           opened_by: adminId,
         }),
       );
-      await ds.query(`UPDATE accounts SET created_at = '2025-06-18' WHERE account_number = $1`, [acc10Number]);
-      console.log(`  created account: ${acc10Number} (CL-000010 SAVINGS USD, opened 2025-06-18)`);
+      await ds.query(
+        `UPDATE accounts SET created_at = '2025-06-18' WHERE account_number = $1`,
+        [acc10Number],
+      );
+      console.log(
+        `  created account: ${acc10Number} (CL-000010 SAVINGS USD, opened 2025-06-18)`,
+      );
     }
-    console.log('  created client: CL-000010 Sylvie Mapendo Kasindi (INDIVIDUAL, APPROVED)');
+    console.log(
+      '  created client: CL-000010 Sylvie Mapendo Kasindi (INDIVIDUAL, APPROVED)',
+    );
   } else {
     console.log('  skip client: CL-000010 (already exists)');
   }
