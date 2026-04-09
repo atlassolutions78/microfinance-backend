@@ -1,10 +1,10 @@
-import { Currency, TransactionType } from './transaction.enums';
+import { AccountTxType, Currency } from './teller.enums';
 
-export interface TransactionModelProps {
+export interface AccountTxModelProps {
   id: string;
   accountId: string;
   branchId: string;
-  type: TransactionType;
+  type: AccountTxType;
   amount: number;
   currency: Currency;
   balanceAfter: number;
@@ -14,11 +14,11 @@ export interface TransactionModelProps {
   createdAt: Date;
 }
 
-export class TransactionModel {
+export class AccountTxModel {
   readonly id: string;
   readonly accountId: string;
   readonly branchId: string;
-  readonly type: TransactionType;
+  readonly type: AccountTxType;
   readonly amount: number;
   readonly currency: Currency;
   readonly balanceAfter: number;
@@ -27,7 +27,7 @@ export class TransactionModel {
   readonly performedBy: string;
   readonly createdAt: Date;
 
-  constructor(props: TransactionModelProps) {
+  constructor(props: AccountTxModelProps) {
     this.id = props.id;
     this.accountId = props.accountId;
     this.branchId = props.branchId;
@@ -41,23 +41,10 @@ export class TransactionModel {
     this.createdAt = props.createdAt;
   }
 
-  static create(props: TransactionModelProps): TransactionModel {
+  static create(props: AccountTxModelProps): AccountTxModel {
     if (props.amount <= 0) {
       throw new Error('Transaction amount must be positive');
     }
-    return new TransactionModel(props);
-  }
-
-  isDebit(): boolean {
-    return [
-      TransactionType.WITHDRAWAL,
-      TransactionType.TRANSFER_OUT,
-      TransactionType.FEE,
-      TransactionType.PENALTY,
-    ].includes(this.type);
-  }
-
-  isCredit(): boolean {
-    return !this.isDebit();
+    return new AccountTxModel(props);
   }
 }

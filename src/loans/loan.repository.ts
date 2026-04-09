@@ -7,6 +7,7 @@ import {
   LoanModel,
   LoanPayment,
   LoanPenalty,
+  LoanReminder,
   RepaymentScheduleItem,
 } from './loan.model';
 import {
@@ -14,10 +15,11 @@ import {
   LoanEntity,
   LoanPaymentEntity,
   LoanPenaltyEntity,
+  LoanReminderEntity,
   LoanSequenceEntity,
   RepaymentScheduleEntity,
 } from './loan.entity';
-import { LoanStatus, RepaymentStatus } from './loan.enums';
+import { LoanStatus, LoanType, RepaymentStatus } from './loan.enums';
 
 @Injectable()
 export class LoanRepository {
@@ -40,6 +42,9 @@ export class LoanRepository {
     @InjectRepository(LoanDocumentEntity)
     private readonly documentRepo: Repository<LoanDocumentEntity>,
 
+    @InjectRepository(LoanReminderEntity)
+    private readonly reminderRepo: Repository<LoanReminderEntity>,
+
     private readonly dataSource: DataSource,
   ) {}
 
@@ -56,10 +61,12 @@ export class LoanRepository {
 
   async findAll(filters: {
     status?: LoanStatus;
+    type?: LoanType;
     clientId?: string;
   } = {}): Promise<LoanModel[]> {
     const where: FindOptionsWhere<LoanEntity> = {};
     if (filters.status) where.status = filters.status;
+    if (filters.type) where.type = filters.type;
     if (filters.clientId) where.client_id = filters.clientId;
 
     const entities = await this.loanRepo.find({
@@ -127,6 +134,21 @@ export class LoanRepository {
     return entities.map(LoanMapper.scheduleItemToDomain);
   }
 
+  /** Returns all PENDING or LATE schedule items across ACTIVE loans due today or earlier. */
+  async findDueScheduleItems(): Promise<RepaymentScheduleItem[]> {
+    const entities = await this.scheduleRepo
+      .createQueryBuilder('s')
+      .innerJoin(LoanEntity, 'l', 'l.id = s.loan_id')
+      .where('l.status = :active', { active: LoanStatus.ACTIVE })
+      .andWhere('s.status IN (:...statuses)', {
+        statuses: [RepaymentStatus.PENDING, RepaymentStatus.LATE],
+      })
+      .andWhere('s.due_date <= CURRENT_DATE')
+      .orderBy('s.due_date', 'ASC')
+      .getMany();
+    return entities.map(LoanMapper.scheduleItemToDomain);
+  }
+
   // --- Payments ---
 
   async savePayment(payment: LoanPayment): Promise<void> {
@@ -159,6 +181,11 @@ export class LoanRepository {
     return (await this.penaltyRepo.count({ where: { schedule_id: scheduleId } })) > 0;
   }
 
+  async findPenaltiesForScheduleItem(scheduleId: string): Promise<LoanPenalty[]> {
+    const entities = await this.penaltyRepo.find({ where: { schedule_id: scheduleId } });
+    return entities.map(LoanMapper.penaltyToDomain);
+  }
+
   // --- Documents ---
 
   async saveDocument(doc: LoanDocument): Promise<void> {
@@ -171,5 +198,16 @@ export class LoanRepository {
       order: { uploaded_at: 'ASC' },
     });
     return entities.map(LoanMapper.documentToDomain);
+  }
+
+  // --- Reminders ---
+
+  async saveReminder(reminder: LoanReminder): Promise<void> {
+    await this.reminderRepo.save(LoanMapper.reminderToEntity(reminder));
+  }
+
+  async findRemindersByScheduleId(scheduleId: string): Promise<LoanReminder[]> {
+    const entities = await this.reminderRepo.find({ where: { schedule_id: scheduleId } });
+    return entities.map(LoanMapper.reminderToDomain);
   }
 }

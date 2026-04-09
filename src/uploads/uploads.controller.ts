@@ -1,25 +1,23 @@
 import {
-  BadRequestException,
-  Body,
   Controller,
-  Get,
   Post,
-  Query,
+  Body,
   UploadedFile,
-  UseGuards,
   UseInterceptors,
+  UseGuards,
+  BadRequestException,
+  Get,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage, memoryStorage } from 'multer';
-import { ApiTags, ApiBearerAuth, ApiBody, ApiOperation, ApiConsumes } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiConsumes, ApiBody, ApiOperation } from '@nestjs/swagger';
+import { memoryStorage } from 'multer';
 import { UploadsService } from './uploads.service';
 import { DownloadKeyDto, PresignDto } from './uploads.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { randomUUID } from 'crypto';
 import { existsSync, mkdirSync } from 'fs';
 import { join, extname } from 'path';
-
-const UPLOAD_DIR = join(process.cwd(), 'uploads');
 
 @ApiTags('Uploads')
 @ApiBearerAuth()
@@ -32,30 +30,20 @@ export class UploadsController {
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: (_req, _file, cb) => {
-          if (!existsSync(UPLOAD_DIR)) {
-            mkdirSync(UPLOAD_DIR, { recursive: true });
-          }
-          cb(null, UPLOAD_DIR);
-        },
-        filename: (_req, file, cb) => {
-          const ext = extname(file.originalname);
-          cb(null, `${randomUUID()}${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
     }),
   )
-  upload(@UploadedFile() file: Express.Multer.File) {
+  async upload(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('No file provided');
     }
-    const key = `uploads/${file.filename}`;
-    return {
-      key,
-      url: `/uploads/${file.filename}`,
-    };
+    const { key } = await this.uploadsService.saveFile(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+    );
+    return { key };
   }
 
   @Post('presign')
@@ -78,20 +66,5 @@ export class UploadsController {
   @Get('download')
   download(@Query() dto: DownloadKeyDto) {
     return this.uploadsService.getDownloadUrl(dto.key);
-  }
-
-  /**
-   * Direct file upload — used when S3 is not configured (local development).
-   * Returns the same { key } shape as the presign flow so frontend code is unified.
-   */
-  @Post('file')
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
-  async uploadFile(@UploadedFile() file: Express.Multer.File) {
-    const { key } = await this.uploadsService.saveFile(
-      file.buffer,
-      file.originalname,
-      file.mimetype,
-    );
-    return { key };
   }
 }

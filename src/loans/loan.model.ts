@@ -1,5 +1,5 @@
 ﻿import { randomUUID } from 'crypto';
-import { LoanCurrency, LoanDocumentType, LoanStatus, LoanType, RepaymentStatus } from './loan.enums';
+import { LoanCurrency, LoanDocumentType, LoanStatus, LoanType, ReminderChannel, ReminderStatus, RepaymentStatus } from './loan.enums';
 
 // ---------------------------------------------------------------------------
 // Repayment schedule item
@@ -16,6 +16,7 @@ export class RepaymentScheduleItem {
   paidAmount: number;
   status: RepaymentStatus;
   paidAt?: Date;
+  reminderSentAt?: Date;
 
   markPaid(): void {
     this.status = RepaymentStatus.PAID;
@@ -25,6 +26,7 @@ export class RepaymentScheduleItem {
 
   markLate(): void {
     if (this.status === RepaymentStatus.PAID) return;
+    if (this.status === RepaymentStatus.OVERDUE) return;
     this.status = RepaymentStatus.LATE;
   }
 
@@ -44,13 +46,28 @@ export class RepaymentScheduleItem {
 }
 
 // ---------------------------------------------------------------------------
-// Loan payment (value object â€” no business logic)
+// Loan reminder (value object)
+// ---------------------------------------------------------------------------
+
+export class LoanReminder {
+  id: string;
+  loanId: string;
+  scheduleId: string;
+  channel: ReminderChannel;
+  status: ReminderStatus;
+  errorMessage: string | null;
+  sentAt: Date;
+}
+
+// ---------------------------------------------------------------------------
+// Loan payment (value object — no business logic)
 // ---------------------------------------------------------------------------
 
 export class LoanPayment {
   id: string;
   loanId: string;
   scheduleId: string | null;
+  transactionId: string | null;
   amount: number;
   currency: LoanCurrency;
   paymentDate: Date;
@@ -103,7 +120,6 @@ export interface LoanModelProps {
   outstandingBalance: number;
   interestRate: number;   // monthly rate as a decimal, e.g. 0.025 = 2.5 %/month
   termMonths: number;
-  formFee: number;
   purpose?: string;
   status: LoanStatus;
   rejectionReason?: string;
@@ -121,14 +137,13 @@ export class LoanModel {
   readonly id: string;
   readonly loanNumber: string;
   readonly clientId: string;
-  readonly accountId: string;
+  accountId: string;
   readonly branchId: string;
   readonly type: LoanType;
   readonly currency: LoanCurrency;
   readonly principalAmount: number;
   readonly interestRate: number;
   readonly termMonths: number;
-  readonly formFee: number;
   readonly purpose?: string;
   readonly appliedBy: string;
   readonly createdAt: Date;
@@ -155,7 +170,6 @@ export class LoanModel {
     this.outstandingBalance = props.outstandingBalance;
     this.interestRate = props.interestRate;
     this.termMonths = props.termMonths;
-    this.formFee = props.formFee;
     this.purpose = props.purpose;
     this.status = props.status;
     this.rejectionReason = props.rejectionReason;

@@ -49,10 +49,13 @@ export const COA_CODES = {
 
   VAULT_MAIN_FC: '57010001',
   VAULT_MAIN_USD: '57010002',
-  VAULT_BRANCH_FC: '57020001',
-  VAULT_BRANCH_USD: '57020002',
-  TELLER_FC: '57030001',
-  TELLER_USD: '57030002',
+
+  // Header accounts — never posted to directly.
+  // Per-branch safe and teller accounts are provisioned as children
+  // when a branch is created (5702XXYY) or a teller's first session
+  // is requested (5703XXYY). XX = branch seq, YY = teller seq.
+  VAULT_BRANCH_HEADER: '5702',
+  TELLER_CASH_HEADER: '5703',
 
   // ── Liabilities — Customer Accounts (Classe 3 — Deposits) ────────────────
 
@@ -87,6 +90,19 @@ export const COA_CODES = {
   RENT: '64240000',
   IT_SERVICES: '64270000',
   SALARIES: '65010000',
+
+  // ── Teller variance / suspense (Classe 5) ────────────────────────────────
+  // Used to record EOD surplus (+) or deficit (-) after teller reconciliation.
+
+  TELLER_VARIANCE_FC: '57040001',
+  TELLER_VARIANCE_USD: '57040002',
+
+  // ── Remittance transit (Classe 4) ─────────────────────────────────────────
+  // Clearing liability that holds cash in transit between branches.
+  // Credited on Leg 1 (send), debited on Leg 2 (payout) or cancellation.
+
+  REMITTANCE_TRANSIT_FC: '45191001',
+  REMITTANCE_TRANSIT_USD: '45191002',
 } as const;
 
 export type CoaCode = (typeof COA_CODES)[keyof typeof COA_CODES];

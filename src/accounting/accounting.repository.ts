@@ -128,6 +128,66 @@ export class AccountingRepository {
     return entities.map(AccountingMapper.coaToDomain);
   }
 
+  /**
+   * Returns the highest branch sequence number already provisioned.
+   * Branch seq is encoded in digits 5–6 of any 5702XX01 vault FC code.
+   * Returns 0 if no branches have been provisioned yet.
+   */
+  async getMaxBranchSeq(): Promise<number> {
+    const result: Array<{ max_seq: number | null }> =
+      await this.coaRepo.manager.query(
+        `SELECT MAX(CAST(SUBSTRING(code, 5, 2) AS INTEGER)) AS max_seq
+         FROM chart_of_accounts
+         WHERE code ~ '^5702[0-9]{2}01$'`,
+      );
+    return result[0]?.max_seq ?? 0;
+  }
+
+  /**
+   * Returns the highest teller sequence number provisioned within a branch.
+   * Teller seq is encoded in digits 7–8 of a 5703XXYY code (01–49 = FC range).
+   * Returns 0 if no tellers have been provisioned for this branch yet.
+   */
+  async getMaxTellerSeqForBranch(branchSeq: number): Promise<number> {
+    const prefix = `5703${String(branchSeq).padStart(2, '0')}`;
+    const result: Array<{ max_seq: number | null }> =
+      await this.coaRepo.manager.query(
+        `SELECT MAX(CAST(SUBSTRING(code, 7, 2) AS INTEGER)) AS max_seq
+         FROM chart_of_accounts
+         WHERE code LIKE $1
+           AND LENGTH(code) = 8
+           AND CAST(SUBSTRING(code, 7, 2) AS INTEGER) BETWEEN 1 AND 49`,
+        [`${prefix}%`],
+      );
+    return result[0]?.max_seq ?? 0;
+  }
+
+  /**
+   * Creates a new chart-of-accounts entry.
+   * Used when provisioning per-branch and per-teller cash accounts.
+   */
+  async createChartAccount(
+    params: {
+      code: string;
+      name: string;
+      type: ChartAccountType;
+      parentId: string | null;
+      createdBy: string;
+    },
+    em?: EntityManager,
+  ): Promise<ChartOfAccountsEntity> {
+    const repo = em ? em.getRepository(ChartOfAccountsEntity) : this.coaRepo;
+    const entity = repo.create({
+      code: params.code,
+      name: params.name,
+      type: params.type,
+      parent_id: params.parentId,
+      is_active: true,
+      created_by: params.createdBy,
+    });
+    return repo.save(entity);
+  }
+
   private async resolveUserNames(ids: string[]): Promise<Map<string, string>> {
     if (ids.length === 0) return new Map();
     const users = await this.userRepo.find({

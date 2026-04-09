@@ -11,61 +11,63 @@
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
-import { LoanStatus, LoanType } from './loan.enums';
 import { Type } from 'class-transformer';
+import {
+  LoanCurrency,
+  LoanDocumentType,
+  LoanStatus,
+  LoanType,
+} from './loan.enums';
+import { ApiProperty } from '@nestjs/swagger';
 
-export class CreateLoanDto {
-  @ApiProperty({
-    description: 'UUID of the member applying for the loan',
-    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-  })
+// ---------------------------------------------------------------------------
+// Loan application
+// ---------------------------------------------------------------------------
+
+export class LoanDocumentInputDto {
+  @IsEnum(LoanDocumentType)
+  documentType!: LoanDocumentType;
+
+  @IsString()
+  fileName?: string;
+
+  @IsString()
+  fileUrl?: string;
+}
+
+export class ApplyLoanDto {
   @IsUUID()
-  clientId: string;
+  clientId?: string;
 
-  @ApiProperty({
-    description: 'Loan principal amount (minimum 10,000)',
-    minimum: 10000,
-    example: 500000,
-  })
-  @IsNumber()
-  @Min(10_000)
-  amount: number;
-
-  @ApiProperty({
-    description: 'Annual interest rate as a decimal, e.g. 0.15 for 15%',
-    minimum: 0.01,
-    maximum: 1,
-    example: 0.15,
-  })
-  @IsNumber()
-  @Min(0.01)
-  @Max(1)
-  interestRate: number;
-
-  @ApiProperty({
-    description: 'Loan term in months (1–60)',
-    minimum: 1,
-    maximum: 60,
-    example: 12,
-  })
-  @IsNumber()
-  @Min(1)
-  @Max(60)
-  termMonths: number;
+  /** Account to receive the disbursement. Must belong to the client. */
+  @IsUUID()
+  accountId?: string;
 
   @ApiProperty({
     enum: LoanType,
     description: 'Type of loan',
-    example: LoanType.SALARY_ADVANCE,
+    example: LoanType.PERSONAL_LOAN,
   })
   @IsEnum(LoanType)
-  type: LoanType;
+  type: LoanType = LoanType.SALARY_ADVANCE;
 
-  @ApiProperty({
-    description: 'Purpose of the loan (minimum 10 characters)',
-    example: 'Purchase of agricultural equipment for farming season',
-  })
+  @IsEnum(LoanCurrency)
+  currency?: LoanCurrency;
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  principalAmount?: number;
+
+  /**
+   * Required for PERSONAL_LOAN (10 or 12 months).
+   * Ignored for SALARY_ADVANCE (fixed 1 month) and OVERDRAFT (fixed 3 months).
+   */
+  @IsInt()
+  @Min(1)
+  @Max(60)
+  @IsOptional()
+  termMonths?: number;
+
   @IsString()
   @IsOptional()
   purpose?: string;
@@ -74,32 +76,18 @@ export class CreateLoanDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => LoanDocumentInputDto)
-  documents: LoanDocumentInputDto[];
+  documents?: LoanDocumentInputDto[];
 }
 
-export class ApproveLoanDto {
-  @ApiProperty({
-    description: 'UUID of the staff member approving the loan',
-    example: 'd1b2c3d4-e5f6-7890-abcd-ef1234567890',
-  })
+// ---------------------------------------------------------------------------
+// Review actions
+// ---------------------------------------------------------------------------
+
+export class DisburseDto {
+  /** Override the disbursement account. Must belong to the same client. Optional — defaults to the account set at application. */
   @IsUUID()
-  approverId: string;
-}
-
-export class LoanDocumentInputDto {
-  @ApiProperty({
-    description: 'Document type (MOU, Commitment Letter, Request Letter, etc.)',
-    example: 'MOU',
-  })
-  @IsString()
-  type: string;
-
-  @ApiProperty({
-    description: 'Base64-encoded document content or file URL',
-    example: 'data:application/pdf;base64,...',
-  })
-  @IsString()
-  content: string;
+  @IsOptional()
+  accountId?: string;
 }
 
 export class RejectLoanDto {
@@ -109,7 +97,7 @@ export class RejectLoanDto {
   })
   @IsString()
   @MinLength(5)
-  reason: string;
+  reason?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +107,7 @@ export class RejectLoanDto {
 export class RecordPaymentDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
-  amount: number;
+  amount?: number;
 
   /** Target a specific installment. If omitted, the next unpaid installment is used. */
   @IsUUID()
@@ -148,4 +136,3 @@ export class QueryLoansDto {
   @IsOptional()
   clientId?: string;
 }
-

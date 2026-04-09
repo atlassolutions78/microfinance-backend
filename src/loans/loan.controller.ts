@@ -15,6 +15,7 @@ import { UserModel } from '../users/user.model';
 import { LoanService } from './loan.service';
 import {
   ApplyLoanDto,
+  DisburseDto,
   QueryLoansDto,
   RecordPaymentDto,
   RejectLoanDto,
@@ -72,9 +73,10 @@ export class LoanController {
   @Post(':id/disburse')
   disburse(
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DisburseDto,
     @CurrentUser() user: UserModel,
   ) {
-    return this.loanService.disburse(id, user);
+    return this.loanService.disburse(id, dto, user);
   }
 
   // ---------------------------------------------------------------------------
@@ -118,6 +120,12 @@ export class LoanController {
   @Post('admin/process-penalties')
   processLatePenalties() {
     return this.loanService.processLatePenalties();
+  }
+
+  /** Trigger the auto-repayment cycle (admin / cron endpoint). */
+  @Post('admin/process-repayments')
+  processScheduledRepayments() {
+    return this.loanService.processScheduledRepayments();
   }
 }
 
