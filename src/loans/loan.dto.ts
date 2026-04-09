@@ -29,19 +29,19 @@ export class LoanDocumentInputDto {
   documentType!: LoanDocumentType;
 
   @IsString()
-  fileName?: string;
+  fileName!: string;
 
   @IsString()
-  fileUrl?: string;
+  fileUrl!: string;
 }
 
 export class ApplyLoanDto {
   @IsUUID()
-  clientId?: string;
+  clientId!: string;
 
   /** Account to receive the disbursement. Must belong to the client. */
   @IsUUID()
-  accountId?: string;
+  accountId!: string;
 
   @ApiProperty({
     enum: LoanType,
@@ -52,11 +52,11 @@ export class ApplyLoanDto {
   type: LoanType = LoanType.SALARY_ADVANCE;
 
   @IsEnum(LoanCurrency)
-  currency?: LoanCurrency;
+  currency!: LoanCurrency;
 
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
-  principalAmount?: number;
+  principalAmount!: number;
 
   /**
    * Required for PERSONAL_LOAN (10 or 12 months).
@@ -76,7 +76,7 @@ export class ApplyLoanDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => LoanDocumentInputDto)
-  documents?: LoanDocumentInputDto[];
+  documents!: LoanDocumentInputDto[];
 }
 
 // ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ export class RejectLoanDto {
   })
   @IsString()
   @MinLength(5)
-  reason?: string;
+  reason!: string;
 }
 
 // ---------------------------------------------------------------------------
