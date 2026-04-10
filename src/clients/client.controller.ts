@@ -222,7 +222,7 @@ export class ClientController {
   )
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateClientDto) {
     return this.clientService.updateClient(id, dto);
-  }
+  } 
 
   // --- Queries ---
 

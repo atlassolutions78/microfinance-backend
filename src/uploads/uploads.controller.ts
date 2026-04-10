@@ -15,6 +15,9 @@ import { memoryStorage } from 'multer';
 import { UploadsService } from './uploads.service';
 import { DownloadKeyDto, PresignDto } from './uploads.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { randomUUID } from 'crypto';
+import { existsSync, mkdirSync } from 'fs';
+import { join, extname } from 'path';
 
 @ApiTags('Uploads')
 @ApiBearerAuth()

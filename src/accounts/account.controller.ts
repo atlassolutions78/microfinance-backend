@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -67,6 +68,12 @@ export class AccountController {
   @ApiParam({ name: 'accountNumber', description: 'Account number string' })
   findByNumber(@Param('accountNumber') accountNumber: string) {
     return this.accountService.findByAccountNumber(accountNumber);
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search accounts by account number (partial match)' })
+  search(@Query('q') q: string) {
+    return this.accountService.searchByAccountNumber(q);
   }
 
   @Get(':id')

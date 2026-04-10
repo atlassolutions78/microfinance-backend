@@ -12,7 +12,12 @@
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { LoanCurrency, LoanDocumentType, LoanStatus, LoanType } from './loan.enums';
+import {
+  LoanCurrency,
+  LoanDocumentType,
+  LoanStatus,
+  LoanType,
+} from './loan.enums';
 import { ApiProperty } from '@nestjs/swagger';
 
 // ---------------------------------------------------------------------------
@@ -21,22 +26,22 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class LoanDocumentInputDto {
   @IsEnum(LoanDocumentType)
-  documentType: LoanDocumentType;
+  documentType!: LoanDocumentType;
 
   @IsString()
-  fileName: string;
+  fileName!: string;
 
   @IsString()
-  fileUrl: string;
+  fileUrl!: string;
 }
 
 export class ApplyLoanDto {
   @IsUUID()
-  clientId: string;
+  clientId!: string;
 
   /** Account to receive the disbursement. Must belong to the client. */
   @IsUUID()
-  accountId: string;
+  accountId!: string;
 
   @ApiProperty({
     enum: LoanType,
@@ -44,14 +49,14 @@ export class ApplyLoanDto {
     example: LoanType.PERSONAL_LOAN,
   })
   @IsEnum(LoanType)
-  type: LoanType;
+  type: LoanType = LoanType.SALARY_ADVANCE;
 
   @IsEnum(LoanCurrency)
-  currency: LoanCurrency;
+  currency!: LoanCurrency;
 
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
-  principalAmount: number;
+  principalAmount!: number;
 
   /**
    * Required for PERSONAL_LOAN (10 or 12 months).
@@ -71,7 +76,7 @@ export class ApplyLoanDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => LoanDocumentInputDto)
-  documents: LoanDocumentInputDto[];
+  documents!: LoanDocumentInputDto[];
 }
 
 // ---------------------------------------------------------------------------
@@ -92,7 +97,7 @@ export class RejectLoanDto {
   })
   @IsString()
   @MinLength(5)
-  reason: string;
+  reason!: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,7 +107,7 @@ export class RejectLoanDto {
 export class RecordPaymentDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
-  amount: number;
+  amount?: number;
 
   /** Target a specific installment. If omitted, the next unpaid installment is used. */
   @IsUUID()
@@ -131,4 +136,3 @@ export class QueryLoansDto {
   @IsOptional()
   clientId?: string;
 }
-
