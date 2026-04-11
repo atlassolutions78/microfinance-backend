@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -23,7 +24,6 @@ import {
   UploadOrgRepresentativeDocumentDto,
   RejectDocumentDto,
 } from './document.dto';
-import type { DocumentOwnerType } from './document.model';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -172,7 +172,7 @@ export class DocumentController {
   )
   accept(
     @Param('id', ParseUUIDPipe) id: string,
-    @Param('ownerType') ownerType: DocumentOwnerType,
+    @Param('ownerType') ownerType: string,
     @CurrentUser() user: UserModel,
   ) {
     return this.documentService.accept(id, ownerType, user.id);
@@ -205,11 +205,32 @@ export class DocumentController {
   })
   reject(
     @Param('id', ParseUUIDPipe) id: string,
-    @Param('ownerType') ownerType: DocumentOwnerType,
+    @Param('ownerType') ownerType: string,
     @Body() dto: RejectDocumentDto,
     @CurrentUser() user: UserModel,
   ) {
     return this.documentService.reject(id, ownerType, dto, user.id);
+  }
+
+  @Delete(':ownerType/:id')
+  @ApiOperation({ summary: 'Delete a submitted document' })
+  @ApiParam({
+    name: 'ownerType',
+    description:
+      'Owner type (client, representative, guardian, org-representative)',
+  })
+  @ApiParam({ name: 'id', description: 'Document UUID' })
+  @Roles(
+    UserRole.TELLER,
+    UserRole.LOAN_OFFICER,
+    UserRole.BRANCH_MANAGER,
+    UserRole.ADMIN,
+  )
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('ownerType') ownerType: string,
+  ) {
+    return this.documentService.delete(id, ownerType);
   }
 
   // --- Queries ---

@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { DocumentRepository } from './document.repository';
 import { DocumentModel, DocumentOwnerType } from './document.model';
 import { DocumentStatus } from './document.enums';
+import { UploadsService } from '../uploads/uploads.service';
 import {
   UploadClientDocumentDto,
   UploadRepresentativeDocumentDto,
@@ -13,7 +14,10 @@ import {
 
 @Injectable()
 export class DocumentService {
-  constructor(private readonly documentRepository: DocumentRepository) {}
+  constructor(
+    private readonly documentRepository: DocumentRepository,
+    private readonly uploadsService: UploadsService,
+  ) {}
 
   async uploadForClient(
     dto: UploadClientDocumentDto,
@@ -83,7 +87,7 @@ export class DocumentService {
 
   async accept(
     id: string,
-    ownerType: DocumentOwnerType,
+    ownerType: string,
     officerId: string,
   ): Promise<DocumentModel> {
     const doc = await this.findOrFail(id, ownerType);
@@ -94,7 +98,7 @@ export class DocumentService {
 
   async reject(
     id: string,
-    ownerType: DocumentOwnerType,
+    ownerType: string,
     dto: RejectDocumentDto,
     officerId: string,
   ): Promise<DocumentModel> {
@@ -102,6 +106,12 @@ export class DocumentService {
     doc.reject(officerId, dto.reason);
     await this.documentRepository.save(doc);
     return doc;
+  }
+
+  async delete(id: string, ownerType: string): Promise<void> {
+    const doc = await this.findOrFail(id, ownerType);
+    await this.uploadsService.deleteFile(doc.fileUrl);
+    await this.documentRepository.deleteById(doc.id, doc.ownerType);
   }
 
   async findByClient(clientId: string): Promise<DocumentModel[]> {
@@ -148,10 +158,25 @@ export class DocumentService {
 
   private async findOrFail(
     id: string,
-    ownerType: DocumentOwnerType,
+    ownerType: string,
   ): Promise<DocumentModel> {
-    const doc = await this.documentRepository.findById(id, ownerType);
+    const normalizedOwnerType = this.normalizeOwnerType(ownerType);
+    const doc = await this.documentRepository.findById(id, normalizedOwnerType);
     if (!doc) throw new NotFoundException(`Document ${id} not found.`);
     return doc;
+  }
+
+  private normalizeOwnerType(ownerType: string): DocumentOwnerType {
+    const normalized = ownerType.toUpperCase().replace(/-/g, '_');
+    if (
+      normalized === 'CLIENT' ||
+      normalized === 'REPRESENTATIVE' ||
+      normalized === 'GUARDIAN' ||
+      normalized === 'ORG_REPRESENTATIVE'
+    ) {
+      return normalized;
+    }
+
+    throw new NotFoundException(`Unsupported document owner type: ${ownerType}`);
   }
 }

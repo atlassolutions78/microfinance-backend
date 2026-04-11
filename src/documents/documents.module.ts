@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { UploadsModule } from '../uploads/uploads.module';
 import {
   ClientDocumentEntity,
   RepresentativeDocumentEntity,
@@ -12,6 +13,7 @@ import { DocumentController } from './document.controller';
 
 @Module({
   imports: [
+    UploadsModule,
     TypeOrmModule.forFeature([
       ClientDocumentEntity,
       RepresentativeDocumentEntity,
