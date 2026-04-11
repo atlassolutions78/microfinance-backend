@@ -1,11 +1,5 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import * as bcrypt from 'bcryptjs';
 import { BranchRepository } from './branch.repository';
 import { BranchEntity } from './branch.entity';
 import {
@@ -15,19 +9,18 @@ import {
   UpdateSettingsUserDto,
   UserFiltersQuery,
 } from './settings.dto';
-import { UserRepository } from '../users/user.repository';
+import { UserService } from '../users/user.service';
 import { UserModel } from '../users/user.model';
-import { UserRole } from '../users/user.enums';
+import { UserPolicy } from '../users/user.policy';
 
 @Injectable()
 export class SettingsService {
   constructor(
     private readonly branchRepository: BranchRepository,
-    private readonly userRepository: UserRepository,
+    private readonly userService: UserService,
   ) {}
 
-  // ─── Branch ─────────────────────────────────────────────────────────────────
-
+  // Branch methods
   async createBranch(
     dto: CreateBranchDto,
     createdById: string,
@@ -89,107 +82,63 @@ export class SettingsService {
     return this.findBranchById(id);
   }
 
-  // ─── Users ──────────────────────────────────────────────────────────────────
-
-  async createUser(
+  // User management methods
+  async createSettingsUser(
     dto: CreateSettingsUserDto,
     actor: UserModel,
   ): Promise<UserModel> {
-    if (actor.role === UserRole.BRANCH_MANAGER) {
-      const allowed = [UserRole.TELLER, UserRole.LOAN_OFFICER];
-      if (!allowed.includes(dto.role)) {
-        throw new ForbiddenException(
-          'Branch managers can only create Teller or Loan Officer accounts.',
-        );
-      }
-      dto = { ...dto, branchId: actor.branchId };
-    }
+    UserPolicy.assertCanCreateRole(actor.role, dto.role);
+    UserPolicy.assertCanAssignBranch(actor.role, actor.branchId, dto.branchId ?? null);
 
-    if (await this.userRepository.existsByEmail(dto.email)) {
-      throw new ConflictException(`Email '${dto.email}' is already registered.`);
-    }
-
-    const passwordHash = await bcrypt.hash(dto.password, 12);
-    const user = new UserModel({
-      id: randomUUID(),
+    return this.userService.create({
+      ...dto,
       branchId: dto.branchId ?? null,
-      firstName: dto.firstName,
       middleName: dto.middleName ?? null,
-      lastName: dto.lastName,
-      email: dto.email,
-      passwordHash,
+    });
+  }
+
+  async listUsers(filters: UserFiltersQuery): Promise<UserModel[]> {
+    return this.userService.findAllFiltered(filters);
+  }
+
+  async getSettingsUser(id: string): Promise<UserModel> {
+    return this.userService.findById(id);
+  }
+
+  async updateSettingsUser(
+    id: string,
+    dto: UpdateSettingsUserDto,
+    actor: UserModel,
+  ): Promise<UserModel> {
+    const target = await this.userService.findById(id);
+
+    if (dto.role !== undefined) {
+      UserPolicy.assertCanCreateRole(actor.role, dto.role);
+    }
+
+    if (dto.branchId !== undefined) {
+      UserPolicy.assertCanAssignBranch(actor.role, actor.branchId, dto.branchId ?? null);
+    }
+
+    return this.userService.updateUser(target.id, {
       role: dto.role,
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    await this.userRepository.save(user);
-    return user;
-  }
-
-  async findUsers(filters: UserFiltersQuery): Promise<UserModel[]> {
-    return this.userRepository.findByFilters({
-      branchId: filters.branchId,
-      role: filters.role,
-      isActive: filters.isActive,
+      branchId: dto.branchId,
     });
   }
 
-  async findUserById(id: string): Promise<UserModel> {
-    const user = await this.userRepository.findById(id);
-    if (!user) throw new NotFoundException(`User ${id} not found.`);
-    return user;
+  async deactivateSettingsUser(
+    id: string,
+    actor: UserModel,
+  ): Promise<UserModel> {
+    UserPolicy.assertNotSelf(actor.id, id);
+    return this.userService.deactivate(id);
   }
 
-  async updateUser(id: string, dto: UpdateSettingsUserDto): Promise<UserModel> {
-    await this.findUserById(id);
-    const fields: Parameters<UserRepository['updateById']>[1] = {};
-    if (dto.role !== undefined) fields.role = dto.role;
-    if (dto.branchId !== undefined) fields.branch_id = dto.branchId ?? null;
-    if (Object.keys(fields).length > 0) {
-      await this.userRepository.updateById(id, fields);
-    }
-    return this.findUserById(id);
-  }
-
-  async activateUser(id: string): Promise<UserModel> {
-    const user = await this.findUserById(id);
-    if (user.isActive) {
-      throw new ConflictException('User is already active.');
-    }
-    user.activate();
-    await this.userRepository.save(user);
-    return user;
-  }
-
-  async deactivateUser(id: string, actorId: string): Promise<UserModel> {
-    if (id === actorId) {
-      throw new ForbiddenException('You cannot deactivate your own account.');
-    }
-    const user = await this.findUserById(id);
-    if (!user.isActive) {
-      throw new ConflictException('User is already inactive.');
-    }
-    user.deactivate();
-    await this.userRepository.save(user);
-    return user;
+  async activateSettingsUser(id: string): Promise<UserModel> {
+    return this.userService.activate(id);
   }
 
   async resetUserPassword(id: string): Promise<{ tempPassword: string }> {
-    await this.findUserById(id);
-    const tempPassword = this.generateTempPassword();
-    const passwordHash = await bcrypt.hash(tempPassword, 12);
-    await this.userRepository.updateById(id, { password_hash: passwordHash });
-    return { tempPassword };
-  }
-
-  private generateTempPassword(): string {
-    const chars =
-      'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$';
-    return Array.from(
-      { length: 12 },
-      () => chars[Math.floor(Math.random() * chars.length)],
-    ).join('');
+    return this.userService.resetPassword(id);
   }
 }

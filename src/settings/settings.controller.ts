@@ -39,8 +39,7 @@ import { UserRole } from '../users/user.enums';
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
-  // ─── Branches ───────────────────────────────────────────────────────────────
-
+  // Branch endpoints
   @Post('branches')
   @ApiOperation({ summary: 'Create a new branch (Admin only)' })
   @Roles(UserRole.ADMIN)
@@ -99,47 +98,47 @@ export class SettingsController {
     return this.settingsService.deactivateBranch(id, user.id);
   }
 
-  // ─── Users ──────────────────────────────────────────────────────────────────
-
+  // User management endpoints
   @Post('users')
-  @ApiOperation({ summary: 'Create a staff user (Admin / Branch Manager)' })
+  @ApiOperation({ summary: 'Create a staff user' })
   @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER, UserRole.BRANCH_MANAGER)
   @ApiBody({ type: CreateSettingsUserDto })
   createUser(
     @Body() dto: CreateSettingsUserDto,
     @CurrentUser() actor: UserModel,
   ) {
-    return this.settingsService.createUser(dto, actor);
+    return this.settingsService.createSettingsUser(dto, actor);
   }
 
   @Get('users')
-  @ApiOperation({ summary: 'List users — filterable by branch, role, status' })
+  @ApiOperation({ summary: 'List users filtered by branch, role, or status' })
   @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER, UserRole.BRANCH_MANAGER)
   @ApiQuery({ name: 'branchId', required: false })
   @ApiQuery({ name: 'role', required: false, enum: UserRole })
   @ApiQuery({ name: 'isActive', required: false, type: Boolean })
-  findUsers(@Query() filters: UserFiltersQuery) {
-    return this.settingsService.findUsers(filters);
+  listUsers(@Query() filters: UserFiltersQuery) {
+    return this.settingsService.listUsers(filters);
   }
 
   @Get('users/:id')
   @ApiOperation({ summary: 'Get a user by ID' })
   @ApiParam({ name: 'id', description: 'User UUID' })
   @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER, UserRole.BRANCH_MANAGER)
-  findUserById(@Param('id', ParseUUIDPipe) id: string) {
-    return this.settingsService.findUserById(id);
+  getUser(@Param('id', ParseUUIDPipe) id: string) {
+    return this.settingsService.getSettingsUser(id);
   }
 
   @Patch('users/:id')
   @ApiOperation({ summary: 'Update user role and/or branch assignment' })
   @ApiParam({ name: 'id', description: 'User UUID' })
-  @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER, UserRole.BRANCH_MANAGER)
   @ApiBody({ type: UpdateSettingsUserDto })
   updateUser(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateSettingsUserDto,
+    @CurrentUser() actor: UserModel,
   ) {
-    return this.settingsService.updateUser(id, dto);
+    return this.settingsService.updateSettingsUser(id, dto, actor);
   }
 
   @Patch('users/:id/activate')
@@ -147,7 +146,7 @@ export class SettingsController {
   @ApiParam({ name: 'id', description: 'User UUID' })
   @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER)
   activateUser(@Param('id', ParseUUIDPipe) id: string) {
-    return this.settingsService.activateUser(id);
+    return this.settingsService.activateSettingsUser(id);
   }
 
   @Patch('users/:id/deactivate')
@@ -158,14 +157,14 @@ export class SettingsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() actor: UserModel,
   ) {
-    return this.settingsService.deactivateUser(id, actor.id);
+    return this.settingsService.deactivateSettingsUser(id, actor);
   }
 
   @Post('users/:id/reset-password')
-  @ApiOperation({ summary: 'Reset a user password — returns a temp password' })
+  @ApiOperation({ summary: 'Reset a user password and return a temporary password' })
   @ApiParam({ name: 'id', description: 'User UUID' })
   @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER)
-  resetUserPassword(@Param('id', ParseUUIDPipe) id: string) {
+  resetPassword(@Param('id', ParseUUIDPipe) id: string) {
     return this.settingsService.resetUserPassword(id);
   }
 }

@@ -36,7 +36,7 @@ export class UserRepository {
     return this.repo.existsBy({ email });
   }
 
-  async findByFilters(filters: {
+  async findAllFiltered(filters: {
     branchId?: string;
     role?: UserRole;
     isActive?: boolean;
@@ -49,6 +49,14 @@ export class UserRepository {
     return entities.map(UserMapper.toDomain);
   }
 
+  async findByFilters(filters: {
+    branchId?: string;
+    role?: UserRole;
+    isActive?: boolean;
+  }): Promise<UserModel[]> {
+    return this.findAllFiltered(filters);
+  }
+
   async updateById(
     id: string,
     fields: Partial<{
@@ -56,6 +64,7 @@ export class UserRepository {
       branch_id: string | null;
       password_hash: string;
       is_active: boolean;
+      must_change_password: boolean;
     }>,
   ): Promise<void> {
     await this.repo.update(id, fields);
