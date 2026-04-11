@@ -98,4 +98,16 @@ export class DocumentRepository {
     });
     return entities.map(DocumentMapper.fromOrgRepresentativeEntity);
   }
+
+  async deleteById(id: string, ownerType: DocumentOwnerType): Promise<void> {
+    if (ownerType === 'CLIENT') {
+      await this.clientRepo.delete({ id });
+    } else if (ownerType === 'REPRESENTATIVE') {
+      await this.representativeRepo.delete({ id });
+    } else if (ownerType === 'GUARDIAN') {
+      await this.guardianRepo.delete({ id });
+    } else {
+      await this.orgRepresentativeRepo.delete({ id });
+    }
+  }
 }

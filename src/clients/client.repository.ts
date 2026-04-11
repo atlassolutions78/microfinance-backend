@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
+import { GetClientsQueryDto } from './client.dto';
 import {
   ClientEntity,
   IndividualProfileEntity,
@@ -178,31 +179,105 @@ export class ClientRepository {
     client: ClientEntity;
     individualProfile?: IndividualProfileEntity;
     orgProfile?: OrganizationProfileEntity;
+    representative?: RepresentativeEntity;
+    guardian?: MinorGuardianEntity;
+    orgRepresentatives?: OrganizationRepresentativeEntity[];
   } | null> {
     const client = await this.repo.findOne({ where: { id } });
     if (!client) return null;
     if (client.type === 'INDIVIDUAL') {
-      const individualProfile = await this.individualProfileRepo.findOne({
-        where: { client_id: id },
-      });
-      return { client, individualProfile: individualProfile ?? undefined };
+      const [individualProfile, representative, guardian] = await Promise.all([
+        this.individualProfileRepo.findOne({ where: { client_id: id } }),
+        this.findRepresentativeByClientId(id),
+        this.findGuardianByClientId(id),
+      ]);
+      return {
+        client,
+        individualProfile: individualProfile ?? undefined,
+        representative: representative ?? undefined,
+        guardian: guardian ?? undefined,
+      };
     } else {
-      const orgProfile = await this.organizationProfileRepo.findOne({
-        where: { client_id: id },
-      });
-      return { client, orgProfile: orgProfile ?? undefined };
+      const [orgProfile, orgRepresentatives] = await Promise.all([
+        this.organizationProfileRepo.findOne({ where: { client_id: id } }),
+        this.orgRepRepo.find({ where: { client_id: id } }),
+      ]);
+      return {
+        client,
+        orgProfile: orgProfile ?? undefined,
+        orgRepresentatives,
+      };
     }
   }
 
-  async findAllFull(): Promise<
-    {
+  async findAllFull(query?: GetClientsQueryDto): Promise<{
+    rows: {
       client: ClientEntity;
       individualProfile?: IndividualProfileEntity;
       orgProfile?: OrganizationProfileEntity;
-    }[]
-  > {
-    const clients = await this.repo.find({ order: { created_at: 'DESC' } });
-    return Promise.all(
+    }[];
+    total: number;
+  }> {
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 20;
+    const search = query?.search?.trim();
+
+    // Build a QueryBuilder to support search/filter/pagination with profile joins
+    const qb = this.repo
+      .createQueryBuilder('c')
+      .leftJoin(
+        IndividualProfileEntity,
+        'ip',
+        'ip.client_id = c.id',
+      )
+      .leftJoin(
+        OrganizationProfileEntity,
+        'op',
+        'op.client_id = c.id',
+      )
+      .orderBy('c.created_at', 'DESC');
+
+    if (query?.type) {
+      qb.andWhere('c.type = :type', { type: query.type.toUpperCase() });
+    }
+
+    // Status filter maps to kyc_status values
+    if (query?.status) {
+      const statusMap: Record<string, string[]> = {
+        active: ['APPROVED'],
+        'kyc-pending': ['PENDING', 'UNDER_REVIEW', 'REQUIRES_UPDATE'],
+        rejected: ['REJECTED'],
+        inactive: ['PENDING'],
+      };
+      const kycStatuses = statusMap[query.status.toLowerCase()];
+      if (kycStatuses) {
+        qb.andWhere('c.kyc_status IN (:...kycStatuses)', { kycStatuses });
+      }
+    }
+
+    if (search) {
+      qb.andWhere(
+        `(
+          ip.first_name ILIKE :search
+          OR ip.last_name ILIKE :search
+          OR op.organization_name ILIKE :search
+          OR c.client_number ILIKE :search
+          OR ip.phone ILIKE :search
+          OR ip.email ILIKE :search
+          OR ip.id_number ILIKE :search
+          OR op.phone ILIKE :search
+        )`,
+        { search: `%${search}%` },
+      );
+    }
+
+    const total = await qb.getCount();
+    const clients = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    const rows = await Promise.all(
       clients.map(async (client) => {
         if (client.type === 'INDIVIDUAL') {
           const individualProfile = await this.individualProfileRepo.findOne({
@@ -217,5 +292,7 @@ export class ClientRepository {
         }
       }),
     );
+
+    return { rows, total };
   }
 }

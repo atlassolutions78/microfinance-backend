@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -22,6 +23,7 @@ import {
   AttachIndividualDocumentsDto,
   CreateIndividualClientDto,
   CreateOrganizationClientDto,
+  GetClientsQueryDto,
   RejectKycDto,
   RequestUpdateDto,
   UpdateClientDto,
@@ -233,8 +235,8 @@ export class ClientController {
     UserRole.HQ_MANAGER,
     UserRole.ADMIN,
   )
-  findAll() {
-    return this.clientService.findAll();
+  findAll(@Query() query: GetClientsQueryDto) {
+    return this.clientService.findAll(query);
   }
 
   @Get(':id')
