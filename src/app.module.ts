@@ -4,7 +4,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { LoansModule } from './loans/loans.module';
-import { TransactionsModule } from './transactions/transactions.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ClientsModule } from './clients/clients.module';
@@ -13,6 +12,9 @@ import { SettingsModule } from './settings/settings.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { AccountingModule } from './accounting/accounting.module';
+import { TellerModule } from './teller/teller.module';
+import { RemittanceModule } from './remittance/remittance.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -57,8 +59,10 @@ import { AccountingModule } from './accounting/accounting.module';
     UploadsModule,
     AccountsModule,
     AccountingModule,
+    TellerModule,
+    RemittanceModule,
+    NotificationsModule,
     LoansModule,
-    TransactionsModule,
     UsersModule,
     AuthModule,
     ClientsModule,

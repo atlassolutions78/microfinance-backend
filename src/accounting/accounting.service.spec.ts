@@ -76,7 +76,7 @@ describe('AccountingService', () => {
       const svc = new AccountingService(repo);
       await svc.postDeposit(
         500, 'USD',
-        COA_CODES.TELLER_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
         BRANCH_ID, USER_ID,
       );
       expect(saved).toHaveLength(1);
@@ -87,7 +87,7 @@ describe('AccountingService', () => {
       const svc = new AccountingService(repo);
       await svc.postDeposit(
         500, 'USD',
-        COA_CODES.TELLER_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
         BRANCH_ID, USER_ID,
       );
       expect(saved[0].entry.reference).toMatch(/^JE-\d{8}-[0-9A-F]{6}$/);
@@ -98,7 +98,7 @@ describe('AccountingService', () => {
       const svc = new AccountingService(repo);
       await svc.postDeposit(
         500, 'USD',
-        COA_CODES.TELLER_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
         BRANCH_ID, USER_ID,
       );
       expect(saved[0].lines).toHaveLength(2);
@@ -109,11 +109,11 @@ describe('AccountingService', () => {
       const svc = new AccountingService(repo);
       await svc.postDeposit(
         500, 'USD',
-        COA_CODES.TELLER_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
         BRANCH_ID, USER_ID,
       );
       expect(debitLines(saved)[0].account_id).toBe(
-        `coa-${COA_CODES.TELLER_USD}`,
+        `coa-${COA_CODES.VAULT_MAIN_USD}`,
       );
     });
 
@@ -122,7 +122,7 @@ describe('AccountingService', () => {
       const svc = new AccountingService(repo);
       await svc.postDeposit(
         500, 'USD',
-        COA_CODES.TELLER_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
         BRANCH_ID, USER_ID,
       );
       expect(creditLines(saved)[0].account_id).toBe(
@@ -135,7 +135,7 @@ describe('AccountingService', () => {
       const svc = new AccountingService(repo);
       await svc.postDeposit(
         500, 'USD',
-        COA_CODES.TELLER_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
         BRANCH_ID, USER_ID,
       );
       expect(Number(debitLines(saved)[0].debit)).toBe(500);
@@ -148,7 +148,7 @@ describe('AccountingService', () => {
       const svc = new AccountingService(repo);
       await svc.postDeposit(
         1000, 'USD',
-        COA_CODES.TELLER_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
         BRANCH_ID, USER_ID,
       );
       const debits  = saved[0].lines.reduce((s, l) => s + Number(l.debit), 0);
@@ -162,7 +162,7 @@ describe('AccountingService', () => {
       await expect(
         svc.postDeposit(
           500, 'USD',
-          COA_CODES.TELLER_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+          COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
           BRANCH_ID, USER_ID,
         ),
       ).rejects.toThrow(NotFoundException);
@@ -176,7 +176,7 @@ describe('AccountingService', () => {
       const svc = new AccountingService(repo);
       await svc.postWithdrawal(
         200, 'USD',
-        COA_CODES.TELLER_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
         BRANCH_ID, USER_ID,
       );
       expect(debitLines(saved)[0].account_id).toBe(
@@ -189,11 +189,11 @@ describe('AccountingService', () => {
       const svc = new AccountingService(repo);
       await svc.postWithdrawal(
         200, 'USD',
-        COA_CODES.TELLER_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
         BRANCH_ID, USER_ID,
       );
       expect(creditLines(saved)[0].account_id).toBe(
-        `coa-${COA_CODES.TELLER_USD}`,
+        `coa-${COA_CODES.VAULT_MAIN_USD}`,
       );
     });
 
@@ -202,7 +202,7 @@ describe('AccountingService', () => {
       const svc = new AccountingService(repo);
       await svc.postWithdrawal(
         300, 'USD',
-        COA_CODES.TELLER_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
+        COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
         BRANCH_ID, USER_ID,
       );
       const debits  = saved[0].lines.reduce((s, l) => s + Number(l.debit), 0);
@@ -259,7 +259,7 @@ describe('AccountingService', () => {
       const svc = new AccountingService(repo);
       await svc.postVaultToTeller(
         2000, 'USD',
-        COA_CODES.TELLER_USD, COA_CODES.VAULT_MAIN_USD,
+        COA_CODES.VAULT_MAIN_USD, COA_CODES.VAULT_MAIN_USD,
         BRANCH_ID, USER_ID,
       );
       expect(saved).toHaveLength(1);
@@ -275,7 +275,7 @@ describe('AccountingService', () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
       const originalLines = [
-        { accountCode: COA_CODES.TELLER_USD,          debit: 300, credit: 0,   currency: 'USD' },
+        { accountCode: COA_CODES.VAULT_MAIN_USD,          debit: 300, credit: 0,   currency: 'USD' },
         { accountCode: COA_CODES.CUSTOMER_SAVINGS_USD, debit: 0,   credit: 300, currency: 'USD' },
       ];
       await svc.postReversal(originalLines, 'JE-2026-022', BRANCH_ID, USER_ID);
@@ -285,7 +285,7 @@ describe('AccountingService', () => {
         `coa-${COA_CODES.CUSTOMER_SAVINGS_USD}`,
       );
       expect(creditLines(saved)[0].account_id).toBe(
-        `coa-${COA_CODES.TELLER_USD}`,
+        `coa-${COA_CODES.VAULT_MAIN_USD}`,
       );
     });
 
@@ -293,7 +293,7 @@ describe('AccountingService', () => {
       const { repo, saved } = makeStubRepo();
       const svc = new AccountingService(repo);
       const originalLines = [
-        { accountCode: COA_CODES.TELLER_USD,          debit: 300, credit: 0,   currency: 'USD' },
+        { accountCode: COA_CODES.VAULT_MAIN_USD,          debit: 300, credit: 0,   currency: 'USD' },
         { accountCode: COA_CODES.CUSTOMER_SAVINGS_USD, debit: 0,   credit: 300, currency: 'USD' },
       ];
       await svc.postReversal(originalLines, 'JE-2026-022', BRANCH_ID, USER_ID);

@@ -15,10 +15,16 @@ import {
   ApiBody,
   ApiOperation,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { SettingsService } from './settings.service';
-import { CreateBranchDto, UpdateBranchDto } from './settings.dto';
-import { CreateUserDto, UpdateUserDto, UserFilterDto } from '../users/user.dto';
+import {
+  CreateBranchDto,
+  UpdateBranchDto,
+  CreateSettingsUserDto,
+  UpdateSettingsUserDto,
+  UserFiltersQuery,
+} from './settings.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -33,25 +39,11 @@ import { UserRole } from '../users/user.enums';
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
-  // ─── Branch Endpoints ─────────────────────────────────────────────────────────
-
+  // Branch endpoints
   @Post('branches')
   @ApiOperation({ summary: 'Create a new branch (Admin only)' })
   @Roles(UserRole.ADMIN)
-  @ApiBody({
-    type: CreateBranchDto,
-    examples: {
-      default: {
-        value: {
-          name: 'Agence de Goma',
-          code: 'GOM-001',
-          type: 'NORMAL',
-          address: 'Avenue Président Mobutu 12, Goma, Nord-Kivu',
-          phone: '+243812345678',
-        },
-      },
-    },
-  })
+  @ApiBody({ type: CreateBranchDto })
   createBranch(@Body() dto: CreateBranchDto, @CurrentUser() user: UserModel) {
     return this.settingsService.createBranch(dto, user.id);
   }
@@ -75,24 +67,24 @@ export class SettingsController {
   @ApiOperation({ summary: 'Update branch details' })
   @ApiParam({ name: 'id', description: 'Branch UUID' })
   @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER)
-  @ApiBody({
-    type: UpdateBranchDto,
-    examples: {
-      default: {
-        value: {
-          name: 'Agence de Goma Nord',
-          address: 'Avenue Président Mobutu 12, Goma, Nord-Kivu',
-          phone: '+243898765432',
-        },
-      },
-    },
-  })
+  @ApiBody({ type: UpdateBranchDto })
   updateBranch(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateBranchDto,
     @CurrentUser() user: UserModel,
   ) {
     return this.settingsService.updateBranch(id, dto, user.id);
+  }
+
+  @Patch('branches/:id/activate')
+  @ApiOperation({ summary: 'Activate a branch (Admin only)' })
+  @ApiParam({ name: 'id', description: 'Branch UUID' })
+  @Roles(UserRole.ADMIN)
+  activateBranch(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.settingsService.activateBranch(id, user.id);
   }
 
   @Patch('branches/:id/deactivate')
@@ -106,53 +98,61 @@ export class SettingsController {
     return this.settingsService.deactivateBranch(id, user.id);
   }
 
-  @Patch('branches/:id/activate')
-  @Roles(UserRole.ADMIN)
-  activateBranch(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: UserModel,
-  ) {
-    return this.settingsService.activateBranch(id, user.id);
-  }
-
-  // ─── User Management Endpoints ────────────────────────────────────────────────
-
+  // User management endpoints
   @Post('users')
-  @Roles(UserRole.ADMIN, UserRole.BRANCH_MANAGER)
-  createUser(@Body() dto: CreateUserDto, @CurrentUser() actor: UserModel) {
+  @ApiOperation({ summary: 'Create a staff user' })
+  @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER, UserRole.BRANCH_MANAGER)
+  @ApiBody({ type: CreateSettingsUserDto })
+  createUser(
+    @Body() dto: CreateSettingsUserDto,
+    @CurrentUser() actor: UserModel,
+  ) {
     return this.settingsService.createSettingsUser(dto, actor);
   }
 
   @Get('users')
+  @ApiOperation({ summary: 'List users filtered by branch, role, or status' })
   @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER, UserRole.BRANCH_MANAGER)
-  listUsers(@Query() filters: UserFilterDto) {
+  @ApiQuery({ name: 'branchId', required: false })
+  @ApiQuery({ name: 'role', required: false, enum: UserRole })
+  @ApiQuery({ name: 'isActive', required: false, type: Boolean })
+  listUsers(@Query() filters: UserFiltersQuery) {
     return this.settingsService.listUsers(filters);
   }
 
   @Get('users/:id')
+  @ApiOperation({ summary: 'Get a user by ID' })
+  @ApiParam({ name: 'id', description: 'User UUID' })
   @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER, UserRole.BRANCH_MANAGER)
   getUser(@Param('id', ParseUUIDPipe) id: string) {
     return this.settingsService.getSettingsUser(id);
   }
 
   @Patch('users/:id')
-  @Roles(UserRole.ADMIN, UserRole.BRANCH_MANAGER)
+  @ApiOperation({ summary: 'Update user role and/or branch assignment' })
+  @ApiParam({ name: 'id', description: 'User UUID' })
+  @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER, UserRole.BRANCH_MANAGER)
+  @ApiBody({ type: UpdateSettingsUserDto })
   updateUser(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateUserDto,
+    @Body() dto: UpdateSettingsUserDto,
     @CurrentUser() actor: UserModel,
   ) {
     return this.settingsService.updateSettingsUser(id, dto, actor);
   }
 
   @Patch('users/:id/activate')
-  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Activate a user account' })
+  @ApiParam({ name: 'id', description: 'User UUID' })
+  @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER)
   activateUser(@Param('id', ParseUUIDPipe) id: string) {
     return this.settingsService.activateSettingsUser(id);
   }
 
   @Patch('users/:id/deactivate')
-  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Deactivate a user account' })
+  @ApiParam({ name: 'id', description: 'User UUID' })
+  @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER)
   deactivateUser(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() actor: UserModel,
@@ -161,7 +161,9 @@ export class SettingsController {
   }
 
   @Post('users/:id/reset-password')
-  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Reset a user password and return a temporary password' })
+  @ApiParam({ name: 'id', description: 'User UUID' })
+  @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER)
   resetPassword(@Param('id', ParseUUIDPipe) id: string) {
     return this.settingsService.resetUserPassword(id);
   }

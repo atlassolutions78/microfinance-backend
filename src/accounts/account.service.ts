@@ -73,6 +73,12 @@ export class AccountService {
     return this.findOrFail(id);
   }
 
+  async findByIdEnriched(id: string): Promise<AccountModel> {
+    const account = await this.findOrFail(id);
+    await this.enrichWithClientName(account);
+    return account;
+  }
+
   async findByClientId(clientId: string): Promise<AccountModel[]> {
     return this.accountRepository.findByClientId(clientId);
   }
@@ -82,7 +88,14 @@ export class AccountService {
       await this.accountRepository.findByAccountNumber(accountNumber);
     if (!account)
       throw new NotFoundException(`Account not found: ${accountNumber}`);
+    await this.enrichWithClientName(account);
     return account;
+  }
+
+  async searchByAccountNumber(query: string): Promise<AccountModel[]> {
+    const accounts = await this.accountRepository.searchByAccountNumber(query);
+    await Promise.all(accounts.map((a) => this.enrichWithClientName(a)));
+    return accounts;
   }
 
   /**
@@ -162,6 +175,16 @@ export class AccountService {
     }
     await this.accountRepository.save(account);
     return account;
+  }
+
+  private async enrichWithClientName(account: AccountModel): Promise<void> {
+    const client = await this.clientService.findById(account.clientId);
+    account.clientNumber = client.clientNumber;
+    if (client.firstName && client.lastName) {
+      account.clientName = `${client.firstName} ${client.lastName}`;
+    } else if (client.companyName) {
+      account.clientName = client.companyName;
+    }
   }
 
   private async findOrFail(id: string): Promise<AccountModel> {

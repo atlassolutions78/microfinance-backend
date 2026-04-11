@@ -48,4 +48,25 @@ export class UserRepository {
     const entities = await this.repo.find({ where });
     return entities.map(UserMapper.toDomain);
   }
+
+  async findByFilters(filters: {
+    branchId?: string;
+    role?: UserRole;
+    isActive?: boolean;
+  }): Promise<UserModel[]> {
+    return this.findAllFiltered(filters);
+  }
+
+  async updateById(
+    id: string,
+    fields: Partial<{
+      role: UserRole;
+      branch_id: string | null;
+      password_hash: string;
+      is_active: boolean;
+      must_change_password: boolean;
+    }>,
+  ): Promise<void> {
+    await this.repo.update(id, fields);
+  }
 }

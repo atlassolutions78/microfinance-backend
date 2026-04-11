@@ -35,6 +35,7 @@ export interface ClientApiResponse {
   placeOfBirth?: string;
   maritalStatus?: string;
   profession?: string;
+  provinceOfOrigin?: string;
   province?: string;
   municipality?: string;
   neighborhood?: string;
@@ -46,7 +47,41 @@ export interface ClientApiResponse {
   identificationNumber?: string;
   // Organization
   companyName?: string;
+  organizationType?: string;
   industry?: string;
+  // Representatives (individual client)
+  representative?: {
+    firstName: string;
+    middleName?: string;
+    lastName: string;
+    idType?: string;
+    idNumber: string;
+  };
+  guardian?: {
+    firstName: string;
+    middleName?: string;
+    lastName: string;
+  };
+  // Representatives (organization client)
+  representatives?: {
+    id: string;
+    firstName: string;
+    middleName?: string;
+    lastName: string;
+    idType?: string;
+    idNumber: string;
+    phone: string;
+    email?: string;
+    role?: string;
+    signatoryType: string;
+    address: {
+      province: string;
+      municipality: string;
+      neighborhood: string;
+      street: string;
+      plotNumber: string;
+    };
+  }[];
   // Common
   segment?: string;
 }
@@ -82,6 +117,9 @@ export class ClientMapper {
     entity: ClientEntity,
     individualProfile?: IndividualProfileEntity | null,
     orgProfile?: OrganizationProfileEntity | null,
+    representative?: RepresentativeEntity | null,
+    guardian?: MinorGuardianEntity | null,
+    orgRepresentatives?: OrganizationRepresentativeEntity[],
   ): ClientApiResponse {
     const base: ClientApiResponse = {
       id: entity.id,
@@ -109,6 +147,7 @@ export class ClientMapper {
       base.placeOfBirth = individualProfile.place_of_birth ?? undefined;
       base.maritalStatus = individualProfile.marital_status;
       base.profession = individualProfile.profession;
+      base.provinceOfOrigin = individualProfile.province_of_origin ?? undefined;
       base.province = individualProfile.province;
       base.municipality = individualProfile.municipality;
       base.neighborhood = individualProfile.neighborhood;
@@ -122,6 +161,7 @@ export class ClientMapper {
 
     if (orgProfile) {
       base.companyName = orgProfile.organization_name;
+      base.organizationType = orgProfile.organization_type;
       base.industry = orgProfile.industry ?? undefined;
       base.phone = orgProfile.phone ?? undefined;
       base.email = orgProfile.email ?? undefined;
@@ -129,6 +169,46 @@ export class ClientMapper {
       base.municipality = orgProfile.municipality ?? undefined;
       base.identificationType = orgProfile.registration_type ?? undefined;
       base.identificationNumber = orgProfile.registration_number ?? undefined;
+    }
+
+    if (representative) {
+      base.representative = {
+        firstName: representative.first_name,
+        middleName: representative.middle_name ?? undefined,
+        lastName: representative.last_name,
+        idType: representative.id_type ?? undefined,
+        idNumber: representative.id_number,
+      };
+    }
+
+    if (guardian) {
+      base.guardian = {
+        firstName: guardian.first_name,
+        middleName: guardian.middle_name ?? undefined,
+        lastName: guardian.last_name,
+      };
+    }
+
+    if (orgRepresentatives && orgRepresentatives.length > 0) {
+      base.representatives = orgRepresentatives.map((r) => ({
+        id: r.id,
+        firstName: r.first_name,
+        middleName: r.middle_name ?? undefined,
+        lastName: r.last_name,
+        idType: r.id_type ?? undefined,
+        idNumber: r.id_number,
+        phone: r.phone,
+        email: r.email ?? undefined,
+        role: r.role ?? undefined,
+        signatoryType: r.signatory_type,
+        address: {
+          province: r.province,
+          municipality: r.municipality,
+          neighborhood: r.neighborhood,
+          street: r.street,
+          plotNumber: r.plot_number,
+        },
+      }));
     }
 
     return base;

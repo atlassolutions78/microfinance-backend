@@ -40,7 +40,6 @@ export interface JournalLineRecord {
   accountId: string;
   accountCode?: string;
   accountName?: string;
-  clientAccountId: string | null;
   debit: number;
   credit: number;
   currency: string;
@@ -152,7 +151,7 @@ export class AccountingMapper {
       createdByName: createdByName ?? entity.created_by,
       description: entity.description ?? undefined,
       createdAt: entity.created_at,
-      lines: (entity.lines ?? []).map(AccountingMapper.lineToDomain),
+      lines: (entity.lines ?? []).map((l) => AccountingMapper.lineToDomain(l)),
     };
   }
 
@@ -163,7 +162,6 @@ export class AccountingMapper {
       accountId: entity.account_id,
       accountCode: entity.chartAccount?.code,
       accountName: entity.chartAccount?.name,
-      clientAccountId: entity.client_account_id,
       debit: Number(entity.debit),
       credit: Number(entity.credit),
       currency: entity.currency,

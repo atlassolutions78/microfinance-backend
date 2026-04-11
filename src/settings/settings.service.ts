@@ -2,10 +2,15 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { BranchRepository } from './branch.repository';
 import { BranchEntity } from './branch.entity';
-import { CreateBranchDto, UpdateBranchDto } from './settings.dto';
+import {
+  CreateBranchDto,
+  UpdateBranchDto,
+  CreateSettingsUserDto,
+  UpdateSettingsUserDto,
+  UserFiltersQuery,
+} from './settings.dto';
 import { UserService } from '../users/user.service';
 import { UserModel } from '../users/user.model';
-import { CreateUserDto, UpdateUserDto, UserFilterDto } from '../users/user.dto';
 import { UserPolicy } from '../users/user.policy';
 
 @Injectable()
@@ -15,8 +20,7 @@ export class SettingsService {
     private readonly userService: UserService,
   ) {}
 
-  // ─── Branch Methods ──────────────────────────────────────────────────────────
-
+  // Branch methods
   async createBranch(
     dto: CreateBranchDto,
     createdById: string,
@@ -54,18 +58,6 @@ export class SettingsService {
     return this.findBranchById(id);
   }
 
-  async deactivateBranch(
-    id: string,
-    updatedById: string,
-  ): Promise<BranchEntity> {
-    await this.findBranchById(id);
-    await this.branchRepository.update(id, {
-      is_active: false,
-      updated_by: updatedById,
-    });
-    return this.findBranchById(id);
-  }
-
   async activateBranch(
     id: string,
     updatedById: string,
@@ -78,18 +70,34 @@ export class SettingsService {
     return this.findBranchById(id);
   }
 
-  // ─── User Management Methods ─────────────────────────────────────────────────
+  async deactivateBranch(
+    id: string,
+    updatedById: string,
+  ): Promise<BranchEntity> {
+    await this.findBranchById(id);
+    await this.branchRepository.update(id, {
+      is_active: false,
+      updated_by: updatedById,
+    });
+    return this.findBranchById(id);
+  }
 
+  // User management methods
   async createSettingsUser(
-    dto: CreateUserDto,
+    dto: CreateSettingsUserDto,
     actor: UserModel,
   ): Promise<UserModel> {
     UserPolicy.assertCanCreateRole(actor.role, dto.role);
     UserPolicy.assertCanAssignBranch(actor.role, actor.branchId, dto.branchId ?? null);
-    return this.userService.create(dto);
+
+    return this.userService.create({
+      ...dto,
+      branchId: dto.branchId ?? null,
+      middleName: dto.middleName ?? null,
+    });
   }
 
-  async listUsers(filters: UserFilterDto): Promise<UserModel[]> {
+  async listUsers(filters: UserFiltersQuery): Promise<UserModel[]> {
     return this.userService.findAllFiltered(filters);
   }
 
@@ -99,17 +107,23 @@ export class SettingsService {
 
   async updateSettingsUser(
     id: string,
-    dto: UpdateUserDto,
+    dto: UpdateSettingsUserDto,
     actor: UserModel,
   ): Promise<UserModel> {
     const target = await this.userService.findById(id);
+
     if (dto.role !== undefined) {
       UserPolicy.assertCanCreateRole(actor.role, dto.role);
     }
+
     if (dto.branchId !== undefined) {
       UserPolicy.assertCanAssignBranch(actor.role, actor.branchId, dto.branchId ?? null);
     }
-    return this.userService.updateUser(target.id, dto);
+
+    return this.userService.updateUser(target.id, {
+      role: dto.role,
+      branchId: dto.branchId,
+    });
   }
 
   async deactivateSettingsUser(

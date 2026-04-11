@@ -4,9 +4,12 @@ import {
   IsDateString,
   IsEmail,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
+  Max,
+  Min,
   MinLength,
   ValidateIf,
   ValidateNested,
@@ -442,4 +445,31 @@ export class UpdateClientDto {
   @IsOptional()
   @IsString()
   segment?: string;
+}
+
+export class GetClientsQueryDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
 }
