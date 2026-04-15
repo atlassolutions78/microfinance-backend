@@ -20,6 +20,7 @@ export enum LoanStatus {
 
 export enum RepaymentStatus {
   PENDING = 'PENDING',  // installment not yet paid
+  PARTIAL = 'PARTIAL',  // partially paid, remaining balance outstanding
   PAID    = 'PAID',     // paid in full
   LATE    = 'LATE',     // 1–29 days past due date
   OVERDUE = 'OVERDUE',  // ≥ 30 days past due − penalty applied

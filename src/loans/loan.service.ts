@@ -242,35 +242,30 @@ export class LoanService {
 
     const allItems = await this.loanRepository.findScheduleByLoanId(id);
 
-    let target: RepaymentScheduleItem | undefined;
+    // Determine the starting installment
+    let startItem: RepaymentScheduleItem | undefined;
     if (dto.scheduleId) {
-      target = allItems.find(
+      startItem = allItems.find(
         (i) => i.id === dto.scheduleId && i.status !== RepaymentStatus.PAID,
       );
-      if (!target) {
+      if (!startItem) {
         throw new NotFoundException('Schedule item not found or already paid.');
       }
     } else {
-      target = allItems
+      startItem = allItems
         .filter((i) => i.status !== RepaymentStatus.PAID)
         .sort((a, b) => a.installmentNumber - b.installmentNumber)[0];
-      if (!target) {
+      if (!startItem) {
         throw new BadRequestException('All installments are already paid.');
       }
     }
 
-    // Fetch assessed penalties for this installment
-    const penalties = await this.loanRepository.findPenaltiesForScheduleItem(
-      target.id,
-    );
-    const totalPenalty = penalties.reduce((sum, p) => sum + p.penaltyAmount, 0);
-
-    // Repayment split:
-    //   loanReceivableCredit = principal + assessed penalty (clears the receivable)
-    //   interestCredit       = interest (goes to Interest Income)
-    // Penalty income was already recognised at assessment time — not credited again here.
-    const loanReceivableCredit = target.principalAmount + totalPenalty;
-    const interestCredit = target.interestAmount;
+    const repayAccount = await this.accountService.findById(loan.accountId);
+    if (repayAccount.balance < dto.amount) {
+      throw new BadRequestException(
+        `Insufficient account balance. Payment: ${dto.amount}, available: ${repayAccount.balance}.`,
+      );
+    }
 
     const { loanReceivableCode, interestIncomeCode, savingsCode } =
       this.getCoaCodes(loan.type, loan.currency);
@@ -280,51 +275,115 @@ export class LoanService {
         ? COA_CODES.PENALTY_INCOME_FC
         : COA_CODES.PENALTY_INCOME_USD;
 
-    // Atomic: debit account + post journal
-    const totalDebit = loanReceivableCredit + interestCredit;
-    const repayAccount = await this.accountService.findById(loan.accountId);
-    if (repayAccount.balance < totalDebit) {
-      throw new BadRequestException(
-        `Insufficient account balance for repayment. Required: ${totalDebit}, available: ${repayAccount.balance}.`,
-      );
+    // -----------------------------------------------------------------------
+    // Cascade allocation: apply dto.amount across installments in order,
+    // interest-first within each installment.
+    // -----------------------------------------------------------------------
+    const unpaidItems = allItems
+      .filter((i) => i.status !== RepaymentStatus.PAID)
+      .sort((a, b) => a.installmentNumber - b.installmentNumber);
+
+    // Fast-forward to the starting installment
+    const startIdx = unpaidItems.findIndex((i) => i.id === startItem!.id);
+    const itemsToProcess = unpaidItems.slice(startIdx);
+
+    let remaining = dto.amount;
+    let totalPrincipalApplied = 0;
+    let totalInterestApplied = 0;
+    let totalPenaltyApplied = 0;
+
+    const affectedItems: RepaymentScheduleItem[] = [];
+
+    for (const item of itemsToProcess) {
+      if (remaining <= 0) break;
+
+      // Fetch penalties for this installment
+      const penalties = await this.loanRepository.findPenaltiesForScheduleItem(item.id);
+      const totalPenalty = penalties.reduce((sum, p) => sum + p.penaltyAmount, 0);
+
+      // Already partially paid amount carried from a previous partial payment.
+      // Assume prior payment followed the same interest → penalty → principal order.
+      const alreadyPaid = item.paidAmount ?? 0;
+      const interestAlreadyPaid = round2(Math.min(alreadyPaid, item.interestAmount));
+      const penaltyAlreadyPaid = round2(Math.min(Math.max(0, alreadyPaid - interestAlreadyPaid), totalPenalty));
+      const principalAlreadyPaid = round2(Math.max(0, alreadyPaid - interestAlreadyPaid - penaltyAlreadyPaid));
+
+      const interestStillDue = round2(item.interestAmount - interestAlreadyPaid);
+      const penaltyStillDue = round2(totalPenalty - penaltyAlreadyPaid);
+      const principalStillDue = round2(item.principalAmount - principalAlreadyPaid);
+      const remainingDue = round2(interestStillDue + penaltyStillDue + principalStillDue);
+
+      if (remainingDue <= 0) continue;
+
+      const applied = round2(Math.min(remaining, remainingDue));
+      remaining = round2(remaining - applied);
+
+      // Allocate: interest first, then penalty, then principal
+      const interestApplied = round2(Math.min(applied, interestStillDue));
+      const afterInterest = round2(applied - interestApplied);
+      const penaltyApplied = round2(Math.min(afterInterest, penaltyStillDue));
+      const principalApplied = round2(afterInterest - penaltyApplied);
+
+      totalInterestApplied = round2(totalInterestApplied + interestApplied);
+      totalPenaltyApplied = round2(totalPenaltyApplied + penaltyApplied);
+      totalPrincipalApplied = round2(totalPrincipalApplied + principalApplied);
+
+      if (applied >= remainingDue) {
+        item.markPaid();
+      } else {
+        item.markPartial(round2(alreadyPaid + applied));
+      }
+
+      affectedItems.push(item);
     }
-    const repayNewBalance = repayAccount.balance - totalDebit;
+
+    // Any leftover (overpayment beyond last installment) remains in the account
+    // — the debit is only for what was actually applied to installments.
+    const totalApplied = round2(dto.amount - remaining);
+    const repayNewBalance = round2(repayAccount.balance - dto.amount);
+
+    // -----------------------------------------------------------------------
+    // Atomic: debit account + post journal for the applied portion
+    // -----------------------------------------------------------------------
     await this.dataSource.transaction(async (em) => {
-      await this.accountService.recordBalance(
-        loan.accountId,
-        repayNewBalance,
-        em,
-      );
-      await this.accountingService.postLoanRepaymentFromSavings(
-        loanReceivableCredit,
-        interestCredit,
-        0,
-        loan.currency,
-        savingsCode,
-        loanReceivableCode,
-        interestIncomeCode,
-        penaltyIncomeCode,
-        loan.branchId,
-        user.id,
-        `Loan repayment — ${loan.loanNumber} installment #${target.installmentNumber}`,
-        em,
-      );
+      await this.accountService.recordBalance(loan.accountId, repayNewBalance, em);
+
+      if (totalApplied > 0) {
+        await this.accountingService.postLoanRepaymentFromSavings(
+          totalPrincipalApplied,
+          totalInterestApplied,
+          totalPenaltyApplied,
+          loan.currency,
+          savingsCode,
+          loanReceivableCode,
+          interestIncomeCode,
+          penaltyIncomeCode,
+          loan.branchId,
+          user.id,
+          `Loan repayment — ${loan.loanNumber} (installment #${startItem.installmentNumber})`,
+          em,
+        );
+      }
     });
 
-    // Update domain objects
-    target.markPaid();
-    loan.applyPayment(target.principalAmount);
+    // -----------------------------------------------------------------------
+    // Persist domain objects and loan state
+    // -----------------------------------------------------------------------
+    for (const item of affectedItems) {
+      await this.loanRepository.saveScheduleItem(item);
+    }
 
-    await this.loanRepository.saveScheduleItem(target);
+    // Reduce outstanding balance by principal actually applied
+    loan.applyPayment(totalPrincipalApplied);
     await this.loanRepository.save(loan);
 
     // Record the payment receipt
     const payment = new LoanPayment();
     payment.id = randomUUID();
     payment.loanId = id;
-    payment.scheduleId = target.id;
+    payment.scheduleId = startItem.id;
     payment.transactionId = null as any;
-    payment.amount = loanReceivableCredit + interestCredit;
+    payment.amount = dto.amount;
     payment.currency = loan.currency as unknown as LoanCurrency;
     payment.paymentDate = new Date();
     payment.recordedBy = user.id;
@@ -637,4 +696,8 @@ export class LoanService {
       : COA_CODES.CUSTOMER_SAVINGS_USD;
     return { loanReceivableCode, interestIncomeCode, savingsCode };
   }
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }

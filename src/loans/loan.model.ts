@@ -24,6 +24,11 @@ export class RepaymentScheduleItem {
     this.paidAt = new Date();
   }
 
+  markPartial(paid: number): void {
+    this.paidAmount = round2(Math.min(paid, this.totalAmount));
+    this.status = RepaymentStatus.PARTIAL;
+  }
+
   markLate(): void {
     if (this.status === RepaymentStatus.PAID) return;
     if (this.status === RepaymentStatus.OVERDUE) return;

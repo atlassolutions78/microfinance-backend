@@ -107,7 +107,7 @@ export class RejectLoanDto {
 export class RecordPaymentDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
-  amount?: number;
+  amount!: number;
 
   /** Target a specific installment. If omitted, the next unpaid installment is used. */
   @IsUUID()
