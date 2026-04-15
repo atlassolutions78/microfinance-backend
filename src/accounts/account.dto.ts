@@ -1,5 +1,14 @@
-import { IsEnum, IsUUID } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AccountType, AccountCurrency } from './account.enums';
 
 export class OpenAccountDto {
@@ -26,4 +35,42 @@ export class OpenAccountDto {
   })
   @IsEnum(AccountCurrency)
   currency: AccountCurrency;
+}
+
+export class GetAccountsQueryDto {
+  @ApiPropertyOptional({
+    description: 'Search by account number or client name',
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by account status (e.g. ACTIVE, PENDING)',
+  })
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by account type (e.g. SAVINGS, CHECKING)',
+  })
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @ApiPropertyOptional({ description: 'Page number (1-based)', default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({ description: 'Items per page', default: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
 }

@@ -78,15 +78,38 @@ export class AccountingRepository {
     }
   }
 
-  async findAll(branchId?: string): Promise<JournalEntryRecord[]> {
-    const where: Record<string, any> = {};
-    if (branchId) where.branch_id = branchId;
+  async findAll(
+    branchId?: string,
+    search?: string,
+    page?: number,
+    limit?: number,
+  ): Promise<{ data: JournalEntryRecord[]; total: number }> {
+    const p = page ?? 1;
+    const l = limit ?? 20;
+    const s = search?.trim();
 
-    const entities = await this.entryRepo.find({
-      where,
-      relations: ['lines', 'lines.chartAccount'],
-      order: { created_at: 'DESC' },
-    });
+    const qb = this.entryRepo
+      .createQueryBuilder('e')
+      .leftJoinAndSelect('e.lines', 'line')
+      .leftJoinAndSelect('line.chartAccount', 'coa')
+      .orderBy('e.created_at', 'DESC');
+
+    if (branchId) {
+      qb.andWhere('e.branch_id = :branchId', { branchId });
+    }
+
+    if (s) {
+      qb.andWhere(
+        '(e.reference ILIKE :search OR e.description ILIKE :search)',
+        { search: `%${s}%` },
+      );
+    }
+
+    const total = await qb.getCount();
+    const entities = await qb
+      .skip((p - 1) * l)
+      .take(l)
+      .getMany();
 
     const userIds = new Set<string>();
     for (const e of entities) {
@@ -95,13 +118,15 @@ export class AccountingRepository {
     }
     const nameMap = await this.resolveUserNames([...userIds]);
 
-    return entities.map((e) =>
+    const data = entities.map((e) =>
       AccountingMapper.entryToDomain(
         e,
         nameMap.get(e.created_by),
         e.posted_by ? (nameMap.get(e.posted_by) ?? null) : null,
       ),
     );
+
+    return { data, total };
   }
 
   async findById(id: string): Promise<JournalEntryRecord | null> {
@@ -123,9 +148,26 @@ export class AccountingRepository {
     );
   }
 
-  async findChartAccounts(): Promise<ChartOfAccountsRecord[]> {
-    const entities = await this.coaRepo.find({ order: { code: 'ASC' } });
-    return entities.map(AccountingMapper.coaToDomain);
+  async findChartAccounts(
+    page = 1,
+    limit = 20,
+    search?: string,
+  ): Promise<{ data: ChartOfAccountsRecord[]; total: number }> {
+    const qb = this.coaRepo
+      .createQueryBuilder('coa')
+      .orderBy('coa.code', 'ASC');
+
+    if (search) {
+      qb.where('coa.code ILIKE :s OR coa.name ILIKE :s', { s: `%${search}%` });
+    }
+
+    const total = await qb.getCount();
+    const entities = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return { data: entities.map(AccountingMapper.coaToDomain), total };
   }
 
   /**

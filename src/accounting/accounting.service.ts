@@ -571,8 +571,13 @@ export class AccountingService {
 
   // ─── Query helpers ───────────────────────────────────────────────────────────
 
-  async findEntries(branchId?: string): Promise<JournalEntryRecord[]> {
-    return this.repo.findAll(branchId);
+  async findEntries(
+    branchId?: string,
+    search?: string,
+    page?: number,
+    limit?: number,
+  ): Promise<{ data: JournalEntryRecord[]; total: number }> {
+    return this.repo.findAll(branchId, search, page, limit);
   }
 
   /**
@@ -582,8 +587,16 @@ export class AccountingService {
    */
   async findGroupedEntries(
     branchId?: string,
-  ): Promise<JournalEntryGroupRecord[]> {
-    const entries = await this.repo.findAll(branchId);
+    search?: string,
+    page?: number,
+    limit?: number,
+  ): Promise<{ data: JournalEntryGroupRecord[]; total: number }> {
+    const { data: entries, total } = await this.repo.findAll(
+      branchId,
+      search,
+      page,
+      limit,
+    );
 
     const byId = new Map<string, JournalEntryRecord>();
     const reversalsMap = new Map<string, JournalEntryRecord[]>();
@@ -604,20 +617,26 @@ export class AccountingService {
       }
     }
 
-    return entries
+    const data = entries
       .filter((e) => !e.reversalOf || !byId.has(e.reversalOf))
       .map((e) => ({
         entry: e,
         reversals: reversalsMap.get(e.id) ?? [],
       }));
+
+    return { data, total };
   }
 
   async findEntryById(id: string): Promise<JournalEntryRecord | null> {
     return this.repo.findById(id);
   }
 
-  async findChartAccounts(): Promise<ChartOfAccountsRecord[]> {
-    return this.repo.findChartAccounts();
+  async findChartAccounts(
+    page?: number,
+    limit?: number,
+    search?: string,
+  ): Promise<{ data: ChartOfAccountsRecord[]; total: number }> {
+    return this.repo.findChartAccounts(page, limit, search);
   }
 
   async findChartAccountByCode(

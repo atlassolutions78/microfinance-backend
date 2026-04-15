@@ -15,6 +15,7 @@ import { TellerService } from './teller.service';
 import {
   ApproveSessionDto,
   DepositPreviewQuery,
+  ListSessionsQueryDto,
   RequestSessionDto,
   SubmitEodDto,
   TellerDepositDto,
@@ -177,8 +178,8 @@ export class TellerController {
    * GET /teller/sessions
    */
   @Get()
-  listSessions(@CurrentUser() user: UserModel) {
-    return this.tellerService.listSessions(user);
+  listSessions(@CurrentUser() user: UserModel, @Query() query: ListSessionsQueryDto) {
+    return this.tellerService.listSessions(user, query);
   }
 
   /**

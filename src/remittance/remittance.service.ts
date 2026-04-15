@@ -11,6 +11,7 @@ import { RemittanceModel } from './remittance.model';
 import { RemittanceStatus } from './remittance.enums';
 import {
   CancelRemittanceDto,
+  GetRemittancesQueryDto,
   PayoutRemittanceDto,
   PayoutRemittancePreviewQuery,
   SendRemittanceDto,
@@ -292,7 +293,11 @@ export class RemittanceService {
         em,
       );
       // Cash came into the teller's drawer from the sender
-      session.recordCashMovement(TellerTxType.DEPOSIT, dto.amount, dto.currency);
+      session.recordCashMovement(
+        TellerTxType.DEPOSIT,
+        dto.amount,
+        dto.currency,
+      );
       await this.tellerRepo.saveSession(session, em);
     });
 
@@ -354,7 +359,11 @@ export class RemittanceService {
         em,
       );
       // Cash left the teller's drawer, paid to recipient
-      session.recordCashMovement(TellerTxType.WITHDRAWAL, remittance.amount, remittance.currency);
+      session.recordCashMovement(
+        TellerTxType.WITHDRAWAL,
+        remittance.amount,
+        remittance.currency,
+      );
       await this.tellerRepo.saveSession(session, em);
     });
 
@@ -419,7 +428,11 @@ export class RemittanceService {
         em,
       );
       // Cash leaves the teller's drawer, returned to the original sender
-      session.recordCashMovement(TellerTxType.WITHDRAWAL, remittance.amount, remittance.currency);
+      session.recordCashMovement(
+        TellerTxType.WITHDRAWAL,
+        remittance.amount,
+        remittance.currency,
+      );
       await this.tellerRepo.saveSession(session, em);
     });
 
@@ -458,29 +471,36 @@ export class RemittanceService {
    * Remittances pending collection at the current user's branch.
    * Used by Teller B to see what they need to pay out.
    */
-  async listPendingForMyBranch(user: UserModel): Promise<RemittanceModel[]> {
-    if (!user.branchId) return [];
-    return this.repo.findPendingByReceivingBranch(user.branchId);
+  async listPendingForMyBranch(
+    user: UserModel,
+    query?: GetRemittancesQueryDto,
+  ): Promise<{ data: RemittanceModel[]; total: number }> {
+    if (!user.branchId) return { data: [], total: 0 };
+    return this.repo.findPendingByReceivingBranch(user.branchId, query);
   }
 
   /**
    * All remittances sent from the current user's branch.
    */
-  async listSentFromMyBranch(user: UserModel): Promise<RemittanceModel[]> {
-    if (!user.branchId) return [];
-    return this.repo.findBySendingBranch(user.branchId);
+  async listSentFromMyBranch(
+    user: UserModel,
+    query?: GetRemittancesQueryDto,
+  ): Promise<{ data: RemittanceModel[]; total: number }> {
+    if (!user.branchId) return { data: [], total: 0 };
+    return this.repo.findBySendingBranch(user.branchId, query);
   }
 
-  async listAll(): Promise<RemittanceModel[]> {
-    return this.repo.findAll();
+  async listAll(
+    query?: GetRemittancesQueryDto,
+  ): Promise<{ data: RemittanceModel[]; total: number }> {
+    return this.repo.findAll(query);
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
   private async findOrFail(id: string): Promise<RemittanceModel> {
     const remittance = await this.repo.findById(id);
-    if (!remittance)
-      throw new NotFoundException(`Remittance ${id} not found.`);
+    if (!remittance) throw new NotFoundException(`Remittance ${id} not found.`);
     return remittance;
   }
 

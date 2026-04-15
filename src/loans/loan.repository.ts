@@ -1,7 +1,12 @@
 ﻿import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, FindOptionsWhere, In, Not, Repository } from 'typeorm';
+import { QueryLoansDto } from './loan.dto';
 import { LoanMapper } from './loan.mapper';
+import {
+  IndividualProfileEntity,
+  OrganizationProfileEntity,
+} from '../clients/client.entity';
 import {
   LoanDocument,
   LoanModel,
@@ -59,26 +64,56 @@ export class LoanRepository {
     return e ? LoanMapper.toDomain(e) : null;
   }
 
-  async findAll(filters: {
-    status?: LoanStatus;
-    type?: LoanType;
-    clientId?: string;
-  } = {}): Promise<LoanModel[]> {
-    const where: FindOptionsWhere<LoanEntity> = {};
-    if (filters.status) where.status = filters.status;
-    if (filters.type) where.type = filters.type;
-    if (filters.clientId) where.client_id = filters.clientId;
+  async findAll(
+    query?: QueryLoansDto,
+  ): Promise<{ data: LoanModel[]; total: number }> {
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 20;
+    const search = query?.search?.trim();
 
-    const entities = await this.loanRepo.find({
-      where,
-      order: { created_at: 'DESC' },
-    });
-    return entities.map(LoanMapper.toDomain);
+    const qb = this.loanRepo
+      .createQueryBuilder('l')
+      .leftJoin(IndividualProfileEntity, 'ip', 'ip.client_id = l.client_id')
+      .leftJoin(OrganizationProfileEntity, 'op', 'op.client_id = l.client_id')
+      .orderBy('l.created_at', 'DESC');
+
+    if (query?.status) {
+      qb.andWhere('l.status = :status', { status: query.status });
+    }
+    if (query?.type) {
+      qb.andWhere('l.type = :type', { type: query.type });
+    }
+    if (query?.clientId) {
+      qb.andWhere('l.client_id = :clientId', { clientId: query.clientId });
+    }
+
+    if (search) {
+      qb.andWhere(
+        `(
+          l.loan_number ILIKE :search
+          OR ip.first_name ILIKE :search
+          OR ip.last_name ILIKE :search
+          OR op.organization_name ILIKE :search
+        )`,
+        { search: `%${search}%` },
+      );
+    }
+
+    const total = await qb.getCount();
+    const entities = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return { data: entities.map(LoanMapper.toDomain), total };
   }
 
   async countActiveByClient(clientId: string): Promise<number> {
     return this.loanRepo.count({
-      where: { client_id: clientId, status: In([LoanStatus.ACTIVE, LoanStatus.APPROVED]) },
+      where: {
+        client_id: clientId,
+        status: In([LoanStatus.ACTIVE, LoanStatus.APPROVED]),
+      },
     });
   }
 
@@ -178,11 +213,17 @@ export class LoanRepository {
   }
 
   async existsPenaltyForScheduleItem(scheduleId: string): Promise<boolean> {
-    return (await this.penaltyRepo.count({ where: { schedule_id: scheduleId } })) > 0;
+    return (
+      (await this.penaltyRepo.count({ where: { schedule_id: scheduleId } })) > 0
+    );
   }
 
-  async findPenaltiesForScheduleItem(scheduleId: string): Promise<LoanPenalty[]> {
-    const entities = await this.penaltyRepo.find({ where: { schedule_id: scheduleId } });
+  async findPenaltiesForScheduleItem(
+    scheduleId: string,
+  ): Promise<LoanPenalty[]> {
+    const entities = await this.penaltyRepo.find({
+      where: { schedule_id: scheduleId },
+    });
     return entities.map(LoanMapper.penaltyToDomain);
   }
 
@@ -207,7 +248,9 @@ export class LoanRepository {
   }
 
   async findRemindersByScheduleId(scheduleId: string): Promise<LoanReminder[]> {
-    const entities = await this.reminderRepo.find({ where: { schedule_id: scheduleId } });
+    const entities = await this.reminderRepo.find({
+      where: { schedule_id: scheduleId },
+    });
     return entities.map(LoanMapper.reminderToDomain);
   }
 }

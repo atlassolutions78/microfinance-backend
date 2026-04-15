@@ -566,12 +566,10 @@ export class LoanService {
   // Queries
   // ---------------------------------------------------------------------------
 
-  async findAll(query: QueryLoansDto): Promise<LoanModel[]> {
-    return this.loanRepository.findAll({
-      status: query.status,
-      type: query.type,
-      clientId: query.clientId,
-    });
+  async findAll(
+    query: QueryLoansDto,
+  ): Promise<{ data: LoanModel[]; total: number }> {
+    return this.loanRepository.findAll(query);
   }
 
   async findById(id: string): Promise<LoanModel> {

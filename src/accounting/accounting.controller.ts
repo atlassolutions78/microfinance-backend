@@ -26,22 +26,49 @@ export class AccountingController {
 
   @Get('accounts')
   @ApiOperation({ summary: 'List chart of accounts' })
-  findChartAccounts() {
-    return this.accountingService.findChartAccounts();
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  findChartAccounts(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : undefined;
+    const limitNum = limit ? parseInt(limit, 10) : undefined;
+    return this.accountingService.findChartAccounts(pageNum, limitNum, search);
   }
 
   @Get('entries')
   @ApiOperation({ summary: 'List journal entries with their lines' })
   @ApiQuery({ name: 'branchId', required: false })
   @ApiQuery({ name: 'grouped', required: false, type: Boolean })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
   findEntries(
     @Query('branchId') branchId?: string,
     @Query('grouped') grouped?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
+    const pageNum = page ? parseInt(page, 10) : undefined;
+    const limitNum = limit ? parseInt(limit, 10) : undefined;
     if (grouped === 'true') {
-      return this.accountingService.findGroupedEntries(branchId);
+      return this.accountingService.findGroupedEntries(
+        branchId,
+        search,
+        pageNum,
+        limitNum,
+      );
     }
-    return this.accountingService.findEntries(branchId);
+    return this.accountingService.findEntries(
+      branchId,
+      search,
+      pageNum,
+      limitNum,
+    );
   }
 
   @Get('entries/:id')

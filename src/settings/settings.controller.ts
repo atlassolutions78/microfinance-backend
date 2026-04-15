@@ -113,9 +113,12 @@ export class SettingsController {
   @Get('users')
   @ApiOperation({ summary: 'List users filtered by branch, role, or status' })
   @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER, UserRole.BRANCH_MANAGER)
+  @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'branchId', required: false })
   @ApiQuery({ name: 'role', required: false, enum: UserRole })
   @ApiQuery({ name: 'isActive', required: false, type: Boolean })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
   listUsers(@Query() filters: UserFiltersQuery) {
     return this.settingsService.listUsers(filters);
   }
@@ -161,7 +164,9 @@ export class SettingsController {
   }
 
   @Post('users/:id/reset-password')
-  @ApiOperation({ summary: 'Reset a user password and return a temporary password' })
+  @ApiOperation({
+    summary: 'Reset a user password and return a temporary password',
+  })
   @ApiParam({ name: 'id', description: 'User UUID' })
   @Roles(UserRole.ADMIN, UserRole.HQ_MANAGER)
   resetPassword(@Param('id', ParseUUIDPipe) id: string) {

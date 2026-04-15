@@ -5,7 +5,12 @@ import { AccountEntity, AccountSequenceEntity } from './account.entity';
 import { AccountModel } from './account.model';
 import { AccountMapper } from './account.mapper';
 import { AccountCurrency, AccountStatus, AccountType } from './account.enums';
+import { GetAccountsQueryDto } from './account.dto';
 import { UserEntity } from '../users/user.entity';
+import {
+  IndividualProfileEntity,
+  OrganizationProfileEntity,
+} from '../clients/client.entity';
 
 @Injectable()
 export class AccountRepository {
@@ -46,15 +51,54 @@ export class AccountRepository {
     });
   }
 
-  async findAll(): Promise<AccountModel[]> {
-    const entities = await this.repo.find({ order: { created_at: 'DESC' } });
+  async findAll(
+    query?: GetAccountsQueryDto,
+  ): Promise<{ data: AccountModel[]; total: number }> {
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 20;
+    const search = query?.search?.trim();
+
+    const qb = this.repo
+      .createQueryBuilder('a')
+      .leftJoin(IndividualProfileEntity, 'ip', 'ip.client_id = a.client_id')
+      .leftJoin(OrganizationProfileEntity, 'op', 'op.client_id = a.client_id')
+      .orderBy('a.created_at', 'DESC');
+
+    if (query?.type) {
+      qb.andWhere('a.account_type = :type', { type: query.type.toUpperCase() });
+    }
+
+    if (query?.status) {
+      qb.andWhere('a.status = :status', { status: query.status.toUpperCase() });
+    }
+
+    if (search) {
+      qb.andWhere(
+        `(
+          a.account_number ILIKE :search
+          OR ip.first_name ILIKE :search
+          OR ip.last_name ILIKE :search
+          OR op.organization_name ILIKE :search
+        )`,
+        { search: `%${search}%` },
+      );
+    }
+
+    const total = await qb.getCount();
+    const entities = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
     const userIds = new Set(entities.map((e) => e.opened_by));
     const nameMap = await this.resolveUserNames([...userIds]);
-    return entities.map((e) => {
+    const data = entities.map((e) => {
       const model = AccountMapper.toDomain(e);
       model.openedByName = nameMap.get(e.opened_by);
       return model;
     });
+
+    return { data, total };
   }
 
   async findByAccountNumber(

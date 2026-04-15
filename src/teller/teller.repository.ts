@@ -60,20 +60,38 @@ export class TellerRepository {
     return e ? TellerMapper.sessionToDomain(e) : null;
   }
 
-  async findSessionsByBranch(branchId: string): Promise<TellerSessionModel[]> {
-    const entities = await this.sessions.find({
+  async findSessionsByBranch(
+    branchId: string,
+    page = 1,
+    limit = 20,
+  ): Promise<{ data: TellerSessionModel[]; total: number }> {
+    const [entities, total] = await this.sessions.findAndCount({
       where: { branch_id: branchId },
       order: { date: 'DESC', created_at: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
-    return entities.map((e) => TellerMapper.sessionToDomain(e));
+    return {
+      data: entities.map((e) => TellerMapper.sessionToDomain(e)),
+      total,
+    };
   }
 
-  async findSessionsByTeller(tellerId: string): Promise<TellerSessionModel[]> {
-    const entities = await this.sessions.find({
+  async findSessionsByTeller(
+    tellerId: string,
+    page = 1,
+    limit = 20,
+  ): Promise<{ data: TellerSessionModel[]; total: number }> {
+    const [entities, total] = await this.sessions.findAndCount({
       where: { teller_id: tellerId },
       order: { date: 'DESC', created_at: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
-    return entities.map((e) => TellerMapper.sessionToDomain(e));
+    return {
+      data: entities.map((e) => TellerMapper.sessionToDomain(e)),
+      total,
+    };
   }
 
   async findPendingReconciliationByBranch(

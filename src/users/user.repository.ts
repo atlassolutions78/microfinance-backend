@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { UserModel } from './user.model';
 import { UserMapper } from './user.mapper';
@@ -37,24 +37,44 @@ export class UserRepository {
   }
 
   async findAllFiltered(filters: {
+    search?: string;
     branchId?: string;
     role?: UserRole;
     isActive?: boolean;
-  }): Promise<UserModel[]> {
-    const where: FindOptionsWhere<UserEntity> = {};
-    if (filters.branchId !== undefined) where.branch_id = filters.branchId;
-    if (filters.role !== undefined) where.role = filters.role;
-    if (filters.isActive !== undefined) where.is_active = filters.isActive;
-    const entities = await this.repo.find({ where });
-    return entities.map(UserMapper.toDomain);
-  }
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: UserModel[]; total: number }> {
+    const page = filters.page ?? 1;
+    const limit = filters.limit ?? 20;
+    const search = filters.search?.trim();
 
-  async findByFilters(filters: {
-    branchId?: string;
-    role?: UserRole;
-    isActive?: boolean;
-  }): Promise<UserModel[]> {
-    return this.findAllFiltered(filters);
+    const qb = this.repo
+      .createQueryBuilder('u')
+      .orderBy('u.created_at', 'DESC');
+
+    if (filters.branchId !== undefined) {
+      qb.andWhere('u.branch_id = :branchId', { branchId: filters.branchId });
+    }
+    if (filters.role !== undefined) {
+      qb.andWhere('u.role = :role', { role: filters.role });
+    }
+    if (filters.isActive !== undefined) {
+      qb.andWhere('u.is_active = :isActive', { isActive: filters.isActive });
+    }
+    if (search) {
+      qb.andWhere(
+        '(u.first_name ILIKE :search OR u.last_name ILIKE :search OR u.email ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    const total = await qb.getCount();
+    const entities = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return { data: entities.map(UserMapper.toDomain), total };
   }
 
   async updateById(

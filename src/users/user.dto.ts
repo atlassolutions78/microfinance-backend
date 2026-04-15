@@ -94,6 +94,10 @@ export class UpdateUserDto {
 }
 
 export class UserFilterDto {
+  @IsString()
+  @IsOptional()
+  search?: string;
+
   @IsUUID()
   @IsOptional()
   branchId?: string;
@@ -110,4 +114,10 @@ export class UserFilterDto {
     return value;
   })
   isActive?: boolean;
+
+  @IsOptional()
+  page?: number;
+
+  @IsOptional()
+  limit?: number;
 }
