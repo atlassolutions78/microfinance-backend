@@ -124,6 +124,10 @@ export class RecordPaymentDto {
 // ---------------------------------------------------------------------------
 
 export class QueryLoansDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
   @IsEnum(LoanStatus)
   @IsOptional()
   status?: LoanStatus;
@@ -135,4 +139,17 @@ export class QueryLoansDto {
   @IsUUID()
   @IsOptional()
   clientId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
 }

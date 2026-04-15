@@ -9,6 +9,7 @@ import {
   IsArray,
   ValidateNested,
   Min,
+  Max,
   IsDateString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -195,4 +196,17 @@ export class ListSessionsQueryDto {
   @IsDateString()
   @IsOptional()
   date?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
 }

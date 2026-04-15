@@ -7,7 +7,12 @@ import { randomBytes, randomUUID } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { UserRepository } from './user.repository';
 import { UserModel } from './user.model';
-import { ChangeRoleDto, CreateUserDto, UpdateUserDto, UserFilterDto } from './user.dto';
+import {
+  ChangeRoleDto,
+  CreateUserDto,
+  UpdateUserDto,
+  UserFilterDto,
+} from './user.dto';
 
 @Injectable()
 export class UserService {
@@ -69,7 +74,9 @@ export class UserService {
     return user;
   }
 
-  async findAllFiltered(filters: UserFilterDto): Promise<UserModel[]> {
+  async findAllFiltered(
+    filters: UserFilterDto,
+  ): Promise<{ data: UserModel[]; total: number }> {
     return this.userRepository.findAllFiltered(filters);
   }
 

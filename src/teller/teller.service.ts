@@ -14,8 +14,15 @@ import {
   TellerCoaAccountEntity,
   TellerTransactionEntity,
 } from './teller.entity';
-import { TellerSessionStatus, TellerTxType, DenominationType } from './teller.enums';
-import { SessionDenominationRecord, TellerTransactionRecord } from './teller.mapper';
+import {
+  TellerSessionStatus,
+  TellerTxType,
+  DenominationType,
+} from './teller.enums';
+import {
+  SessionDenominationRecord,
+  TellerTransactionRecord,
+} from './teller.mapper';
 import {
   RequestSessionDto,
   ApproveSessionDto,
@@ -27,6 +34,7 @@ import {
   DepositPreviewQuery,
   WithdrawalPreviewQuery,
   TransferPreviewQuery,
+  ListSessionsQueryDto,
 } from './teller.dto';
 import { AccountService } from '../accounts/account.service';
 import { AccountingService } from '../accounting/accounting.service';
@@ -153,7 +161,12 @@ export class TellerService {
     // Provision branch and teller COA accounts lazily on first session
     await this.ensureBranchCoaAccounts(user.branchId, user.id);
     const tellerName = `${user.firstName} ${user.lastName}`;
-    await this.ensureTellerCoaAccounts(user.id, tellerName, user.branchId, user.id);
+    await this.ensureTellerCoaAccounts(
+      user.id,
+      tellerName,
+      user.branchId,
+      user.id,
+    );
 
     const session = new TellerSessionModel({
       id: randomUUID(),
@@ -872,14 +885,20 @@ export class TellerService {
     return { session, transactions, denominations };
   }
 
-  async listSessions(requestingUser: UserModel): Promise<TellerSessionModel[]> {
-    if (!requestingUser.branchId) return [];
+  async listSessions(
+    requestingUser: UserModel,
+    query?: ListSessionsQueryDto,
+  ): Promise<{ data: TellerSessionModel[]; total: number }> {
+    if (!requestingUser.branchId) return { data: [], total: 0 };
+
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 20;
 
     if (requestingUser.role === UserRole.TELLER) {
-      return this.repo.findSessionsByTeller(requestingUser.id);
+      return this.repo.findSessionsByTeller(requestingUser.id, page, limit);
     }
 
-    return this.repo.findSessionsByBranch(requestingUser.branchId);
+    return this.repo.findSessionsByBranch(requestingUser.branchId, page, limit);
   }
 
   async listPendingReconciliation(

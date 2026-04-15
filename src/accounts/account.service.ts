@@ -10,7 +10,7 @@ import { AccountRepository } from './account.repository';
 import { AccountPolicy } from './account.policy';
 import { AccountModel } from './account.model';
 import { AccountCurrency, AccountStatus, AccountType } from './account.enums';
-import { OpenAccountDto } from './account.dto';
+import { OpenAccountDto, GetAccountsQueryDto } from './account.dto';
 import { ClientService } from '../clients/client.service';
 import { ClientType } from '../clients/client.enums';
 import { UserModel } from '../users/user.model';
@@ -65,8 +65,10 @@ export class AccountService {
     return account;
   }
 
-  async findAll(): Promise<AccountModel[]> {
-    return this.accountRepository.findAll();
+  async findAll(
+    query?: GetAccountsQueryDto,
+  ): Promise<{ data: AccountModel[]; total: number }> {
+    return this.accountRepository.findAll(query);
   }
 
   async findById(id: string): Promise<AccountModel> {

@@ -14,6 +14,7 @@ import { UserModel } from '../users/user.model';
 import { RemittanceService } from './remittance.service';
 import {
   CancelRemittanceDto,
+  GetRemittancesQueryDto,
   PayoutRemittanceDto,
   PayoutRemittancePreviewQuery,
   SendRemittanceDto,
@@ -116,8 +117,11 @@ export class RemittanceController {
    * GET /remittances/pending
    */
   @Get('pending')
-  listPending(@CurrentUser() user: UserModel) {
-    return this.remittanceService.listPendingForMyBranch(user);
+  listPending(
+    @Query() query: GetRemittancesQueryDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.remittanceService.listPendingForMyBranch(user, query);
   }
 
   /**
@@ -125,8 +129,11 @@ export class RemittanceController {
    * GET /remittances/sent
    */
   @Get('sent')
-  listSent(@CurrentUser() user: UserModel) {
-    return this.remittanceService.listSentFromMyBranch(user);
+  listSent(
+    @Query() query: GetRemittancesQueryDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.remittanceService.listSentFromMyBranch(user, query);
   }
 
   /**
@@ -134,8 +141,8 @@ export class RemittanceController {
    * GET /remittances
    */
   @Get()
-  listAll() {
-    return this.remittanceService.listAll();
+  listAll(@Query() query: GetRemittancesQueryDto) {
+    return this.remittanceService.listAll(query);
   }
 
   /**

@@ -5,6 +5,7 @@ import { RemittanceEntity } from './remittance.entity';
 import { RemittanceMapper } from './remittance.mapper';
 import { RemittanceModel } from './remittance.model';
 import { RemittanceStatus } from './remittance.enums';
+import { GetRemittancesQueryDto } from './remittance.dto';
 
 @Injectable()
 export class RemittanceRepository {
@@ -31,26 +32,94 @@ export class RemittanceRepository {
   /** Remittances waiting to be collected at a given receiving branch. */
   async findPendingByReceivingBranch(
     branchId: string,
-  ): Promise<RemittanceModel[]> {
-    const entities = await this.repo.find({
-      where: { receiving_branch_id: branchId, status: RemittanceStatus.PENDING },
-      order: { created_at: 'ASC' },
-    });
-    return entities.map(RemittanceMapper.toDomain);
+    query?: GetRemittancesQueryDto,
+  ): Promise<{ data: RemittanceModel[]; total: number }> {
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 20;
+    const search = query?.search?.trim();
+
+    const qb = this.repo
+      .createQueryBuilder('r')
+      .where('r.receiving_branch_id = :branchId', { branchId })
+      .andWhere('r.status = :status', { status: RemittanceStatus.PENDING })
+      .orderBy('r.created_at', 'ASC');
+
+    if (search) {
+      qb.andWhere(
+        '(r.reference ILIKE :search OR r.recipient_name ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    const total = await qb.getCount();
+    const entities = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+    return { data: entities.map(RemittanceMapper.toDomain), total };
   }
 
   /** All remittances sent from a given branch (any status). */
-  async findBySendingBranch(branchId: string): Promise<RemittanceModel[]> {
-    const entities = await this.repo.find({
-      where: { sending_branch_id: branchId },
-      order: { created_at: 'DESC' },
-    });
-    return entities.map(RemittanceMapper.toDomain);
+  async findBySendingBranch(
+    branchId: string,
+    query?: GetRemittancesQueryDto,
+  ): Promise<{ data: RemittanceModel[]; total: number }> {
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 20;
+    const search = query?.search?.trim();
+
+    const qb = this.repo
+      .createQueryBuilder('r')
+      .where('r.sending_branch_id = :branchId', { branchId })
+      .orderBy('r.created_at', 'DESC');
+
+    if (query?.status) {
+      qb.andWhere('r.status = :status', { status: query.status.toUpperCase() });
+    }
+
+    if (search) {
+      qb.andWhere(
+        '(r.reference ILIKE :search OR r.recipient_name ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    const total = await qb.getCount();
+    const entities = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+    return { data: entities.map(RemittanceMapper.toDomain), total };
   }
 
   /** All remittances across the institution (manager/admin view). */
-  async findAll(): Promise<RemittanceModel[]> {
-    const entities = await this.repo.find({ order: { created_at: 'DESC' } });
-    return entities.map(RemittanceMapper.toDomain);
+  async findAll(
+    query?: GetRemittancesQueryDto,
+  ): Promise<{ data: RemittanceModel[]; total: number }> {
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 20;
+    const search = query?.search?.trim();
+
+    const qb = this.repo
+      .createQueryBuilder('r')
+      .orderBy('r.created_at', 'DESC');
+
+    if (query?.status) {
+      qb.andWhere('r.status = :status', { status: query.status.toUpperCase() });
+    }
+
+    if (search) {
+      qb.andWhere(
+        '(r.reference ILIKE :search OR r.recipient_name ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    const total = await qb.getCount();
+    const entities = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+    return { data: entities.map(RemittanceMapper.toDomain), total };
   }
 }

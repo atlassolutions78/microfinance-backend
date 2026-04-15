@@ -77,3 +77,25 @@ export class CancelRemittanceDto {
   @IsOptional()
   reason?: string;
 }
+
+export class GetRemittancesQueryDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @IsPositive()
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @IsPositive()
+  limit?: number;
+}

@@ -16,7 +16,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { AccountService } from './account.service';
-import { OpenAccountDto } from './account.dto';
+import { OpenAccountDto, GetAccountsQueryDto } from './account.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UserModel } from '../users/user.model';
@@ -52,8 +52,8 @@ export class AccountController {
 
   @Get()
   @ApiOperation({ summary: 'List all accounts' })
-  findAll() {
-    return this.accountService.findAll();
+  findAll(@Query() query: GetAccountsQueryDto) {
+    return this.accountService.findAll(query);
   }
 
   @Get('client/:clientId')
@@ -71,7 +71,9 @@ export class AccountController {
   }
 
   @Get('search')
-  @ApiOperation({ summary: 'Search accounts by account number (partial match)' })
+  @ApiOperation({
+    summary: 'Search accounts by account number (partial match)',
+  })
   search(@Query('q') q: string) {
     return this.accountService.searchByAccountNumber(q);
   }

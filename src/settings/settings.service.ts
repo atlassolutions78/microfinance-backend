@@ -58,10 +58,7 @@ export class SettingsService {
     return this.findBranchById(id);
   }
 
-  async activateBranch(
-    id: string,
-    updatedById: string,
-  ): Promise<BranchEntity> {
+  async activateBranch(id: string, updatedById: string): Promise<BranchEntity> {
     await this.findBranchById(id);
     await this.branchRepository.update(id, {
       is_active: true,
@@ -88,7 +85,11 @@ export class SettingsService {
     actor: UserModel,
   ): Promise<UserModel> {
     UserPolicy.assertCanCreateRole(actor.role, dto.role);
-    UserPolicy.assertCanAssignBranch(actor.role, actor.branchId, dto.branchId ?? null);
+    UserPolicy.assertCanAssignBranch(
+      actor.role,
+      actor.branchId,
+      dto.branchId ?? null,
+    );
 
     return this.userService.create({
       ...dto,
@@ -97,7 +98,9 @@ export class SettingsService {
     });
   }
 
-  async listUsers(filters: UserFiltersQuery): Promise<UserModel[]> {
+  async listUsers(
+    filters: UserFiltersQuery,
+  ): Promise<{ data: UserModel[]; total: number }> {
     return this.userService.findAllFiltered(filters);
   }
 
@@ -117,7 +120,11 @@ export class SettingsService {
     }
 
     if (dto.branchId !== undefined) {
-      UserPolicy.assertCanAssignBranch(actor.role, actor.branchId, dto.branchId ?? null);
+      UserPolicy.assertCanAssignBranch(
+        actor.role,
+        actor.branchId,
+        dto.branchId ?? null,
+      );
     }
 
     return this.userService.updateUser(target.id, {
