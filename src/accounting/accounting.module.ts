@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { SequenceModule } from '../sequences/sequence.module';
 import {
   ChartOfAccountsEntity,
   JournalEntryEntity,
@@ -18,6 +19,7 @@ import { UserEntity } from 'src/users/user.entity';
       JournalLineEntity,
       UserEntity,
     ]),
+    SequenceModule,
   ],
   providers: [AccountingService, AccountingRepository],
   controllers: [AccountingController],

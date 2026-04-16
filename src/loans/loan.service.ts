@@ -5,6 +5,7 @@
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import Decimal from 'decimal.js';
 import { DataSource } from 'typeorm';
 import { AccountService } from '../accounts/account.service';
 import { ClientService } from '../clients/client.service';
@@ -100,9 +101,9 @@ export class LoanService {
       branchId: user.branchId!,
       type: dto.type,
       currency: dto.currency,
-      principalAmount: dto.principalAmount,
-      outstandingBalance: 0,
-      interestRate: product.monthlyRate,
+      principalAmount: new Decimal(dto.principalAmount).toFixed(2),
+      outstandingBalance: '0.00',
+      interestRate: new Decimal(product.monthlyRate).toFixed(10),
       termMonths,
       purpose: dto.purpose,
       status: LoanStatus.PENDING,
@@ -201,11 +202,11 @@ export class LoanService {
       loan.currency,
     );
     const disbAccount = await this.accountService.findById(loan.accountId);
-    const newBalance = disbAccount.balance + loan.principalAmount;
+    const newBalance = new Decimal(disbAccount.balance).plus(loan.principalAmount).toFixed(2);
     await this.dataSource.transaction(async (em) => {
       await this.accountService.recordBalance(loan.accountId, newBalance, em);
       await this.accountingService.postLoanDisbursementToSavings(
-        loan.principalAmount,
+        new Decimal(loan.principalAmount).toNumber(),
         loan.currency,
         loanReceivableCode,
         savingsCode,
@@ -263,13 +264,13 @@ export class LoanService {
     const penalties = await this.loanRepository.findPenaltiesForScheduleItem(
       target.id,
     );
-    const totalPenalty = penalties.reduce((sum, p) => sum + p.penaltyAmount, 0);
+    const totalPenalty = penalties.reduce((sum, p) => new Decimal(sum).plus(p.penaltyAmount).toFixed(2), '0.00');
 
     // Repayment split:
     //   loanReceivableCredit = principal + assessed penalty (clears the receivable)
     //   interestCredit       = interest (goes to Interest Income)
     // Penalty income was already recognised at assessment time — not credited again here.
-    const loanReceivableCredit = target.principalAmount + totalPenalty;
+    const loanReceivableCredit = new Decimal(target.principalAmount).plus(totalPenalty).toFixed(2);
     const interestCredit = target.interestAmount;
 
     const { loanReceivableCode, interestIncomeCode, savingsCode } =
@@ -281,14 +282,14 @@ export class LoanService {
         : COA_CODES.PENALTY_INCOME_USD;
 
     // Atomic: debit account + post journal
-    const totalDebit = loanReceivableCredit + interestCredit;
+    const totalDebit = new Decimal(loanReceivableCredit).plus(interestCredit).toFixed(2);
     const repayAccount = await this.accountService.findById(loan.accountId);
-    if (repayAccount.balance < totalDebit) {
+    if (new Decimal(repayAccount.balance).lessThan(totalDebit)) {
       throw new BadRequestException(
         `Insufficient account balance for repayment. Required: ${totalDebit}, available: ${repayAccount.balance}.`,
       );
     }
-    const repayNewBalance = repayAccount.balance - totalDebit;
+    const repayNewBalance = new Decimal(repayAccount.balance).minus(totalDebit).toFixed(2);
     await this.dataSource.transaction(async (em) => {
       await this.accountService.recordBalance(
         loan.accountId,
@@ -296,8 +297,8 @@ export class LoanService {
         em,
       );
       await this.accountingService.postLoanRepaymentFromSavings(
-        loanReceivableCredit,
-        interestCredit,
+        new Decimal(loanReceivableCredit).toNumber(),
+        new Decimal(interestCredit).toNumber(),
         0,
         loan.currency,
         savingsCode,
@@ -324,7 +325,7 @@ export class LoanService {
     payment.loanId = id;
     payment.scheduleId = target.id;
     payment.transactionId = null as any;
-    payment.amount = loanReceivableCredit + interestCredit;
+    payment.amount = new Decimal(loanReceivableCredit).plus(interestCredit).toFixed(2);
     payment.currency = loan.currency as unknown as LoanCurrency;
     payment.paymentDate = new Date();
     payment.recordedBy = user.id;
@@ -371,7 +372,7 @@ export class LoanService {
           loanNumber: loan.loanNumber,
           installmentNumber: item.installmentNumber,
           dueDate: item.dueDate,
-          amount: item.totalAmount,
+          amount: new Decimal(item.totalAmount).toNumber(),
           currency: loan.currency,
           clientName: contact.name ?? undefined,
           clientPhone: contact.phone ?? undefined,
@@ -405,15 +406,15 @@ export class LoanService {
           const alreadyPenalised =
             await this.loanRepository.existsPenaltyForScheduleItem(item.id);
           if (!alreadyPenalised) {
-            const overdueAmount = item.totalAmount - item.paidAmount;
+            const overdueAmount = new Decimal(item.totalAmount).minus(item.paidAmount).toDecimalPlaces(2).toNumber();
             const penaltyAmount = LoanPolicy.computePenalty(overdueAmount);
 
             const penalty = new LoanPenalty();
             penalty.id = randomUUID();
             penalty.loanId = loan.id;
             penalty.scheduleId = item.id;
-            penalty.penaltyRate = 0.11;
-            penalty.penaltyAmount = penaltyAmount;
+            penalty.penaltyRate = new Decimal(0.11).toFixed(4);
+            penalty.penaltyAmount = new Decimal(penaltyAmount).toFixed(2);
             penalty.appliedAt = new Date();
             penalty.createdAt = new Date();
             await this.loanRepository.savePenalty(penalty);
@@ -480,18 +481,21 @@ export class LoanService {
         item.id,
       );
       const totalPenalty = penalties.reduce(
-        (sum, p) => sum + p.penaltyAmount,
+        (sum, p) => new Decimal(sum).plus(p.penaltyAmount).toNumber(),
         0,
       );
-      const totalDue =
-        item.principalAmount + item.interestAmount + totalPenalty;
+      const totalDue = new Decimal(item.principalAmount)
+        .plus(item.interestAmount)
+        .plus(totalPenalty)
+        .toDecimalPlaces(2)
+        .toNumber();
 
       // Check balance — skip the installment if funds are insufficient
       const clientAccounts = await this.accountService.findByClientId(
         loan.clientId,
       );
       const account = clientAccounts.find((a) => a.id === loan.accountId);
-      if (!account || account.balance < totalDue) {
+      if (!account || new Decimal(account.balance).lessThan(totalDue)) {
         skipped++;
         continue;
       }
@@ -505,11 +509,11 @@ export class LoanService {
 
       try {
         const autoAccount = await this.accountService.findById(loan.accountId);
-        if (autoAccount.balance < totalDue) {
+        if (new Decimal(autoAccount.balance).lessThan(totalDue)) {
           skipped++;
           continue;
         }
-        const autoNewBalance = autoAccount.balance - totalDue;
+        const autoNewBalance = new Decimal(autoAccount.balance).minus(totalDue).toFixed(2);
         await this.dataSource.transaction(async (em) => {
           await this.accountService.recordBalance(
             loan.accountId,
@@ -517,8 +521,8 @@ export class LoanService {
             em,
           );
           await this.accountingService.postLoanRepaymentFromSavings(
-            item.principalAmount + totalPenalty,
-            item.interestAmount,
+            new Decimal(item.principalAmount).plus(totalPenalty).toDecimalPlaces(2).toNumber(),
+            new Decimal(item.interestAmount).toNumber(),
             0,
             loan.currency,
             savingsCode,
@@ -542,7 +546,7 @@ export class LoanService {
         payment.loanId = loan.id;
         payment.scheduleId = item.id;
         payment.transactionId = null as any;
-        payment.amount = totalDue;
+        payment.amount = new Decimal(totalDue).toFixed(2);
         payment.currency = loan.currency as unknown as LoanCurrency;
         payment.paymentDate = new Date();
         payment.recordedBy = 'system';

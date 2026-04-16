@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
+import Decimal from 'decimal.js';
 import {
   BranchCoaAccountEntity,
   SessionDenominationEntity,
@@ -117,11 +118,67 @@ export class TellerRepository {
   async findTxsBySession(
     sessionId: string,
   ): Promise<TellerTransactionRecord[]> {
-    const entities = await this.txs.find({
-      where: { session_id: sessionId },
-      order: { created_at: 'ASC' },
+    const rows = await this.txs.manager.query<
+      Array<{
+        id: string;
+        session_id: string;
+        type: string;
+        amount: string;
+        currency: string;
+        account_id: string;
+        reference: string;
+        description: string | null;
+        created_at: Date;
+        account_number: string | null;
+        balance_after: string | null;
+        client_name: string | null;
+      }>
+    >(
+      `
+      SELECT
+        tt.id, tt.session_id, tt.type, tt.amount, tt.currency,
+        tt.account_id, tt.reference, tt.description, tt.created_at,
+        a.account_number,
+        ct.balance_after,
+        COALESCE(
+          ip.first_name || ' ' || ip.last_name,
+          op.organization_name
+        ) AS client_name
+      FROM teller_transactions tt
+      LEFT JOIN accounts a
+             ON a.id = tt.account_id
+      LEFT JOIN client_transactions ct
+             ON ct.reference = tt.reference
+            AND ct.account_id = tt.account_id
+      LEFT JOIN individual_profiles ip
+             ON ip.client_id = a.client_id
+      LEFT JOIN organization_profiles op
+             ON op.client_id = a.client_id
+      WHERE tt.session_id = $1
+      ORDER BY tt.created_at ASC
+      `,
+      [sessionId],
+    );
+
+    return rows.map((r) => {
+      const entity = this.txs.create({
+        id: r.id,
+        session_id: r.session_id,
+        type: r.type as any,
+        amount: r.amount as any,
+        currency: r.currency,
+        account_id: r.account_id,
+        reference: r.reference,
+        description: r.description,
+        created_at: r.created_at,
+      });
+      return TellerMapper.txToRecord(
+        entity,
+        r.account_number,
+        r.client_name,
+        r.balance_after !== null ? new Decimal(r.balance_after).toFixed(2) : null,
+      );
     });
-    return entities.map((e) => TellerMapper.txToRecord(e));
   }
 
   // ── Branch COA account mapping ────────────────────────────────────────────────
@@ -194,9 +251,9 @@ export class TellerRepository {
       account_id: tx.accountId,
       branch_id: tx.branchId,
       type: tx.type,
-      amount: tx.amount,
+      amount: new Decimal(tx.amount).toDecimalPlaces(4).toNumber(),
       currency: tx.currency,
-      balance_after: tx.balanceAfter,
+      balance_after: new Decimal(tx.balanceAfter).toDecimalPlaces(4).toNumber(),
       reference: tx.reference,
       description: tx.description ?? null,
       performed_by: tx.performedBy,

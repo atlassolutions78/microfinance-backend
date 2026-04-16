@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import { AccountTxType, Currency } from './teller.enums';
 
 export interface AccountTxModelProps {
@@ -5,9 +6,9 @@ export interface AccountTxModelProps {
   accountId: string;
   branchId: string;
   type: AccountTxType;
-  amount: number;
+  amount: string;
   currency: Currency;
-  balanceAfter: number;
+  balanceAfter: string;
   reference: string;
   description: string | undefined;
   performedBy: string;
@@ -19,9 +20,9 @@ export class AccountTxModel {
   readonly accountId: string;
   readonly branchId: string;
   readonly type: AccountTxType;
-  readonly amount: number;
+  readonly amount: string;
   readonly currency: Currency;
-  readonly balanceAfter: number;
+  readonly balanceAfter: string;
   readonly reference: string;
   readonly description: string | undefined;
   readonly performedBy: string;
@@ -42,7 +43,7 @@ export class AccountTxModel {
   }
 
   static create(props: AccountTxModelProps): AccountTxModel {
-    if (props.amount <= 0) {
+    if (new Decimal(props.amount).lessThanOrEqualTo(0)) {
       throw new Error('Transaction amount must be positive');
     }
     return new AccountTxModel(props);

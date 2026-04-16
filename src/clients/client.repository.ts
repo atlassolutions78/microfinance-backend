@@ -113,10 +113,13 @@ export class ClientRepository {
   async getLastClientNumber(): Promise<string | null> {
     const result = await this.repo
       .createQueryBuilder('c')
-      .select(`MAX(CAST(REPLACE(c.client_number, 'CL-', '') AS INTEGER))`, 'max')
+      .select(
+        `MAX(CAST(REPLACE(c.client_number, 'CL-', '') AS INTEGER))`,
+        'max',
+      )
       .getRawOne<{ max: string | null }>();
     if (!result?.max) return null;
-    return `CL-${String(result.max).padStart(6, '0')}`;
+    return `CL-${String(result.max).padStart(8, '0')}`;
   }
 
   async findRepresentativeByClientId(
@@ -225,16 +228,8 @@ export class ClientRepository {
     // Build a QueryBuilder to support search/filter/pagination with profile joins
     const qb = this.repo
       .createQueryBuilder('c')
-      .leftJoin(
-        IndividualProfileEntity,
-        'ip',
-        'ip.client_id = c.id',
-      )
-      .leftJoin(
-        OrganizationProfileEntity,
-        'op',
-        'op.client_id = c.id',
-      )
+      .leftJoin(IndividualProfileEntity, 'ip', 'ip.client_id = c.id')
+      .leftJoin(OrganizationProfileEntity, 'op', 'op.client_id = c.id')
       .orderBy('c.created_at', 'DESC');
 
     if (query?.type) {

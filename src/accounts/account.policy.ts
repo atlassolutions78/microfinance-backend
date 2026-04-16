@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import Decimal from 'decimal.js';
 import { ClientType } from '../clients/client.enums';
 import { AccountType } from './account.enums';
 
@@ -18,8 +19,8 @@ export class AccountPolicy {
    * Asserts that a deposit amount is sufficient to activate a PENDING account.
    * Called by the transaction service before applying the activation rule.
    */
-  static meetsActivationThreshold(newBalance: number): boolean {
-    return newBalance >= AccountPolicy.MIN_ACTIVATION_BALANCE;
+  static meetsActivationThreshold(newBalance: string): boolean {
+    return new Decimal(newBalance).greaterThanOrEqualTo(AccountPolicy.MIN_ACTIVATION_BALANCE);
   }
 
   /**

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DocumentsModule } from '../documents/documents.module';
+import { SequenceModule } from '../sequences/sequence.module';
 import {
   ClientEntity,
   IndividualProfileEntity,
@@ -17,6 +18,7 @@ import { ClientController } from './client.controller';
 @Module({
   imports: [
     DocumentsModule,
+    SequenceModule,
     TypeOrmModule.forFeature([
       ClientEntity,
       IndividualProfileEntity,

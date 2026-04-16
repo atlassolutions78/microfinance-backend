@@ -10,6 +10,8 @@ export type JournalLineSpec = {
   description?: string;
 };
 
+import Decimal from 'decimal.js';
+
 /**
  * A draft journal entry — not yet persisted.
  *
@@ -27,10 +29,10 @@ export class JournalEntryDraft {
   ) {}
 
   assertBalanced(): void {
-    const totalDebit = this.lines.reduce((s, l) => s + l.debit, 0);
-    const totalCredit = this.lines.reduce((s, l) => s + l.credit, 0);
+    const totalDebit = this.lines.reduce((s, l) => new Decimal(s).plus(l.debit), new Decimal(0));
+    const totalCredit = this.lines.reduce((s, l) => new Decimal(s).plus(l.credit), new Decimal(0));
 
-    if (Math.abs(totalDebit - totalCredit) > 0.0001) {
+    if (!totalDebit.equals(totalCredit)) {
       throw new Error(
         `Unbalanced journal entry: debits=${totalDebit} credits=${totalCredit}`,
       );

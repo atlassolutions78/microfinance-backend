@@ -134,11 +134,11 @@ export class AccountRepository {
 
   async updateBalance(
     id: string,
-    newBalance: number,
+    newBalance: string,
     em?: EntityManager,
   ): Promise<void> {
     const repo = em ? em.getRepository(AccountEntity) : this.repo;
-    await repo.update(id, { balance: newBalance.toString() });
+    await repo.update(id, { balance: newBalance });
   }
 
   async updateStatus(

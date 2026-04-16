@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import { AccountModel } from './account.model';
 import { AccountEntity } from './account.entity';
 
@@ -15,7 +16,7 @@ export class AccountMapper {
       accountType: entity.account_type,
       currency: entity.currency,
       status: entity.status,
-      balance: Number(entity.balance),
+      balance: new Decimal(entity.balance).toFixed(2),
       openedBy: entity.opened_by,
       createdAt: entity.created_at,
       updatedAt: entity.updated_at,
@@ -31,7 +32,7 @@ export class AccountMapper {
     entity.account_type = model.accountType;
     entity.currency = model.currency;
     entity.status = model.status;
-    entity.balance = String(model.balance);
+    entity.balance = new Decimal(model.balance).toFixed(2);
     entity.opened_by = model.openedBy;
     return entity;
   }

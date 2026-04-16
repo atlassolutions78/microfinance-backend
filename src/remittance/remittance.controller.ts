@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   ParseUUIDPipe,
   Post,
@@ -12,6 +13,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UserModel } from '../users/user.model';
 import { RemittanceService } from './remittance.service';
+import { ReceiptService } from '../receipt/receipt.service';
 import {
   CancelRemittanceDto,
   GetRemittancesQueryDto,
@@ -24,7 +26,10 @@ import {
 @UseGuards(JwtAuthGuard)
 @Controller('remittances')
 export class RemittanceController {
-  constructor(private readonly remittanceService: RemittanceService) {}
+  constructor(
+    private readonly remittanceService: RemittanceService,
+    private readonly receiptService: ReceiptService,
+  ) {}
 
   /**
    * Leg 1 — Teller receives cash from sender and creates the remittance.
@@ -152,5 +157,15 @@ export class RemittanceController {
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.remittanceService.findById(id);
+  }
+
+  /**
+   * Returns a printable HTML receipt for a remittance (send or payout).
+   * GET /remittances/:id/receipt
+   */
+  @Get(':id/receipt')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  getReceipt(@Param('id', ParseUUIDPipe) id: string): Promise<string> {
+    return this.receiptService.forRemittance(id);
   }
 }

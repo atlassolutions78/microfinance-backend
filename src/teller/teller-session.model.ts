@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import { TellerSessionStatus, TellerTxType } from './teller.enums';
 
 export interface TellerSessionModelProps {
@@ -8,26 +9,26 @@ export interface TellerSessionModelProps {
   status: TellerSessionStatus;
 
   // Float request
-  requestedAmountFC: number;
-  requestedAmountUSD: number;
+  requestedAmountFC: string;
+  requestedAmountUSD: string;
 
   // Approved by manager
-  approvedAmountFC: number;
-  approvedAmountUSD: number;
+  approvedAmountFC: string;
+  approvedAmountUSD: string;
   approvedBy: string | undefined;
   approvedAt: Date | undefined;
 
   // Running cash position — updated with each transaction
-  openingCashFC: number;
-  openingCashUSD: number;
-  cashInFC: number; // sum of all deposits (FC)
-  cashInUSD: number; // sum of all deposits (USD)
-  cashOutFC: number; // sum of all withdrawals (FC)
-  cashOutUSD: number; // sum of all withdrawals (USD)
+  openingCashFC: string;
+  openingCashUSD: string;
+  cashInFC: string; // sum of all deposits (FC)
+  cashInUSD: string; // sum of all deposits (USD)
+  cashOutFC: string; // sum of all withdrawals (FC)
+  cashOutUSD: string; // sum of all withdrawals (USD)
 
   // EOD — submitted by teller
-  declaredClosingCashFC: number | undefined;
-  declaredClosingCashUSD: number | undefined;
+  declaredClosingCashFC: string | undefined;
+  declaredClosingCashUSD: string | undefined;
   submittedAt: Date | undefined;
 
   // Reconciliation — confirmed by manager
@@ -55,20 +56,20 @@ export class TellerSessionModel {
   readonly createdAt: Date;
 
   status: TellerSessionStatus;
-  requestedAmountFC: number;
-  requestedAmountUSD: number;
-  approvedAmountFC: number;
-  approvedAmountUSD: number;
+  requestedAmountFC: string;
+  requestedAmountUSD: string;
+  approvedAmountFC: string;
+  approvedAmountUSD: string;
   approvedBy: string | undefined;
   approvedAt: Date | undefined;
-  openingCashFC: number;
-  openingCashUSD: number;
-  cashInFC: number;
-  cashInUSD: number;
-  cashOutFC: number;
-  cashOutUSD: number;
-  declaredClosingCashFC: number | undefined;
-  declaredClosingCashUSD: number | undefined;
+  openingCashFC: string;
+  openingCashUSD: string;
+  cashInFC: string;
+  cashInUSD: string;
+  cashOutFC: string;
+  cashOutUSD: string;
+  declaredClosingCashFC: string | undefined;
+  declaredClosingCashUSD: string | undefined;
   submittedAt: Date | undefined;
   reconciledBy: string | undefined;
   reconciledAt: Date | undefined;
@@ -115,10 +116,10 @@ export class TellerSessionModel {
         'At least one currency amount must be greater than zero.',
       );
     }
-    this.approvedAmountFC = amountFC;
-    this.approvedAmountUSD = amountUSD;
-    this.openingCashFC = amountFC;
-    this.openingCashUSD = amountUSD;
+    this.approvedAmountFC = new Decimal(amountFC).toFixed(2);
+    this.approvedAmountUSD = new Decimal(amountUSD).toFixed(2);
+    this.openingCashFC = this.approvedAmountFC;
+    this.openingCashUSD = this.approvedAmountUSD;
     this.approvedBy = managerId;
     this.approvedAt = new Date();
     this.status = TellerSessionStatus.APPROVED;
@@ -151,11 +152,11 @@ export class TellerSessionModel {
       throw new Error('Movement amount must be positive.');
     }
     if (type === TellerTxType.DEPOSIT) {
-      if (currency === 'FC') this.cashInFC += amount;
-      else this.cashInUSD += amount;
+      if (currency === 'FC') this.cashInFC = new Decimal(this.cashInFC).plus(amount).toFixed(2);
+      else this.cashInUSD = new Decimal(this.cashInUSD).plus(amount).toFixed(2);
     } else {
-      if (currency === 'FC') this.cashOutFC += amount;
-      else this.cashOutUSD += amount;
+      if (currency === 'FC') this.cashOutFC = new Decimal(this.cashOutFC).plus(amount).toFixed(2);
+      else this.cashOutUSD = new Decimal(this.cashOutUSD).plus(amount).toFixed(2);
     }
     this.updatedAt = new Date();
   }
@@ -164,7 +165,7 @@ export class TellerSessionModel {
    * Teller submits EOD with their physical cash count.
    * Moves session to PENDING_RECONCILIATION.
    */
-  submitForReconciliation(declaredFC: number, declaredUSD: number): void {
+  submitForReconciliation(declaredFC: number, declaredUSD: number): void {  // amounts come from DTO as numbers
     if (this.status !== TellerSessionStatus.OPEN) {
       throw new Error(
         `Cannot submit EOD for a session in status: ${this.status}`,
@@ -173,8 +174,8 @@ export class TellerSessionModel {
     if (declaredFC < 0 || declaredUSD < 0) {
       throw new Error('Declared closing cash cannot be negative.');
     }
-    this.declaredClosingCashFC = declaredFC;
-    this.declaredClosingCashUSD = declaredUSD;
+    this.declaredClosingCashFC = new Decimal(declaredFC).toFixed(2);
+    this.declaredClosingCashUSD = new Decimal(declaredUSD).toFixed(2);
     this.submittedAt = new Date();
     this.status = TellerSessionStatus.PENDING_RECONCILIATION;
     this.updatedAt = new Date();
@@ -195,23 +196,33 @@ export class TellerSessionModel {
 
   // ── Computed cash position ───────────────────────────────────────────────────
 
-  get expectedClosingCashFC(): number {
-    return this.openingCashFC + this.cashInFC - this.cashOutFC;
+  get expectedClosingCashFC(): string {
+    return new Decimal(this.openingCashFC)
+      .plus(this.cashInFC)
+      .minus(this.cashOutFC)
+      .toFixed(2);
   }
 
-  get expectedClosingCashUSD(): number {
-    return this.openingCashUSD + this.cashInUSD - this.cashOutUSD;
+  get expectedClosingCashUSD(): string {
+    return new Decimal(this.openingCashUSD)
+      .plus(this.cashInUSD)
+      .minus(this.cashOutUSD)
+      .toFixed(2);
   }
 
   /** Positive = surplus, negative = deficit. Defined only after EOD submission. */
-  get varianceFC(): number {
-    if (this.declaredClosingCashFC === undefined) return 0;
-    return this.declaredClosingCashFC - this.expectedClosingCashFC;
+  get varianceFC(): string {
+    if (this.declaredClosingCashFC === undefined) return '0.00';
+    return new Decimal(this.declaredClosingCashFC)
+      .minus(this.expectedClosingCashFC)
+      .toFixed(2);
   }
 
-  get varianceUSD(): number {
-    if (this.declaredClosingCashUSD === undefined) return 0;
-    return this.declaredClosingCashUSD - this.expectedClosingCashUSD;
+  get varianceUSD(): string {
+    if (this.declaredClosingCashUSD === undefined) return '0.00';
+    return new Decimal(this.declaredClosingCashUSD)
+      .minus(this.expectedClosingCashUSD)
+      .toFixed(2);
   }
 
   assertCanProcessTransaction(): void {
@@ -223,11 +234,10 @@ export class TellerSessionModel {
   }
 
   assertHasCashFor(amount: number, currency: 'FC' | 'USD'): void {
-    const available =
-      currency === 'FC'
-        ? this.expectedClosingCashFC
-        : this.expectedClosingCashUSD;
-    if (available < amount) {
+    const available = currency === 'FC'
+      ? this.expectedClosingCashFC
+      : this.expectedClosingCashUSD;
+    if (new Decimal(available).lessThan(amount)) {
       throw new Error(
         `Insufficient teller cash for this withdrawal. Available: ${available} ${currency}, requested: ${amount} ${currency}`,
       );

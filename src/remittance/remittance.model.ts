@@ -8,7 +8,7 @@ export interface RemittanceModelProps {
   sendingTellerId: string;
   sendingBranchId: string;
   receivingBranchId: string;
-  amount: number;
+  amount: string;
   currency: Currency;
   recipientName: string;
   recipientIdNumber: string;
@@ -41,7 +41,7 @@ export class RemittanceModel {
   readonly sendingTellerId: string;
   readonly sendingBranchId: string;
   readonly receivingBranchId: string;
-  readonly amount: number;
+  readonly amount: string;
   readonly currency: Currency;
   readonly recipientName: string;
   readonly recipientIdNumber: string;

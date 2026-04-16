@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { randomBytes } from 'crypto';
 import { EntityManager } from 'typeorm';
+import Decimal from 'decimal.js';
+import { SequenceService } from '../sequences/sequence.service';
 import {
   ChartOfAccountsEntity,
   JournalEntryEntity,
@@ -20,7 +21,10 @@ import {
 
 @Injectable()
 export class AccountingService {
-  constructor(private readonly repo: AccountingRepository) {}
+  constructor(
+    private readonly repo: AccountingRepository,
+    private readonly sequenceService: SequenceService,
+  ) {}
 
   // ─── Posting helpers ─────────────────────────────────────────────────────────
 
@@ -33,12 +37,13 @@ export class AccountingService {
     createdBy: string,
     description?: string,
     em?: EntityManager,
+    transactionId?: string,
   ): Promise<string> {
     const draft = new JournalEntryDraft(branchId, createdBy, description, [
       { accountCode: tellerCode, debit: amount, credit: 0, currency },
       { accountCode: clientSavingsCode, debit: 0, credit: amount, currency },
     ]);
-    return this.post(draft, em);
+    return this.post(draft, em, transactionId);
   }
 
   async postWithdrawal(
@@ -50,12 +55,13 @@ export class AccountingService {
     createdBy: string,
     description?: string,
     em?: EntityManager,
+    transactionId?: string,
   ): Promise<string> {
     const draft = new JournalEntryDraft(branchId, createdBy, description, [
       { accountCode: clientSavingsCode, debit: amount, credit: 0, currency },
       { accountCode: tellerCode, debit: 0, credit: amount, currency },
     ]);
-    return this.post(draft, em);
+    return this.post(draft, em, transactionId);
   }
 
   /**
@@ -212,12 +218,13 @@ export class AccountingService {
     createdBy: string,
     description?: string,
     em?: EntityManager,
+    transactionId?: string,
   ): Promise<string> {
     const draft = new JournalEntryDraft(branchId, createdBy, description, [
       { accountCode: sourceCoaCode, debit: amount, credit: 0, currency },
       { accountCode: destCoaCode, debit: 0, credit: amount, currency },
     ]);
-    return this.post(draft, em);
+    return this.post(draft, em, transactionId);
   }
 
   /**
@@ -257,25 +264,25 @@ export class AccountingService {
       currency: string,
     ) => {
       if (expected === 0 && declared === 0) return;
-      const variance = declared - expected; // positive = surplus, negative = deficit
+      const variance = new Decimal(declared).minus(expected); // positive = surplus, negative = deficit
       const lines: JournalLineSpec[] = [
         { accountCode: vaultCode, debit: declared, credit: 0, currency },
         { accountCode: tellerCode, debit: 0, credit: expected, currency },
       ];
-      if (Math.abs(variance) > 0.0001) {
-        if (variance > 0) {
+      if (!variance.isZero()) {
+        if (variance.isPositive()) {
           // surplus: vault gets more than expected → credit variance
           lines.push({
             accountCode: varianceCode,
             debit: 0,
-            credit: variance,
+            credit: variance.toNumber(),
             currency,
           });
         } else {
           // deficit: teller short → debit variance
           lines.push({
             accountCode: varianceCode,
-            debit: Math.abs(variance),
+            debit: variance.abs().toNumber(),
             credit: 0,
             currency,
           });
@@ -672,6 +679,7 @@ export class AccountingService {
   private async post(
     draft: JournalEntryDraft,
     em?: EntityManager,
+    transactionId?: string,
   ): Promise<string> {
     draft.assertBalanced();
 
@@ -684,7 +692,7 @@ export class AccountingService {
     }
 
     const entry = new JournalEntryEntity();
-    entry.reference = this.generateReference();
+    entry.reference = await this.sequenceService.nextReference(draft.branchId, 'JE');
     entry.branch_id = draft.branchId;
     entry.created_by = draft.createdBy;
     entry.description = draft.description ?? null;
@@ -692,7 +700,7 @@ export class AccountingService {
     entry.reversal_of = draft.reversalOf ?? null;
     entry.posted_by = draft.createdBy;
     entry.posted_at = new Date();
-    entry.transaction_id = null;
+    entry.transaction_id = transactionId ?? null;
 
     const lines: JournalLineEntity[] = draft.lines.map((spec) => {
       const coa = resolvedAccounts.get(spec.accountCode)!;
@@ -709,10 +717,4 @@ export class AccountingService {
     return entry.reference;
   }
 
-  private generateReference(): string {
-    const date = new Date();
-    const yyyymmdd = date.toISOString().slice(0, 10).replace(/-/g, '');
-    const hex = randomBytes(3).toString('hex').toUpperCase();
-    return `JE-${yyyymmdd}-${hex}`;
-  }
 }

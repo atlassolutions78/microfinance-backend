@@ -1,4 +1,5 @@
-﻿import {
+﻿import Decimal from 'decimal.js';
+import {
   LoanCurrency,
   LoanDocumentType,
   LoanStatus,
@@ -43,9 +44,9 @@ export class LoanMapper {
       branchId: e.branch_id,
       type: e.type as LoanType,
       currency: e.currency as LoanCurrency,
-      principalAmount: Number(e.principal_amount),
-      outstandingBalance: Number(e.outstanding_balance),
-      interestRate: Number(e.interest_rate),
+      principalAmount: new Decimal(e.principal_amount).toFixed(2),
+      outstandingBalance: new Decimal(e.outstanding_balance).toFixed(2),
+      interestRate: new Decimal(e.interest_rate).toFixed(6),
       termMonths: e.term_months,
       purpose: e.purpose ?? undefined,
       status: e.status as LoanStatus,
@@ -71,9 +72,9 @@ export class LoanMapper {
     e.branch_id = m.branchId;
     e.type = m.type;
     e.currency = m.currency;
-    e.principal_amount = String(m.principalAmount);
-    e.outstanding_balance = String(m.outstandingBalance);
-    e.interest_rate = String(m.interestRate);
+    e.principal_amount = new Decimal(m.principalAmount).toFixed(2);
+    e.outstanding_balance = new Decimal(m.outstandingBalance).toFixed(2);
+    e.interest_rate = new Decimal(m.interestRate).toFixed(6);
     e.term_months = m.termMonths;
     e.purpose = m.purpose ?? null;
     e.status = m.status;
@@ -97,10 +98,10 @@ export class LoanMapper {
     item.loanId = e.loan_id;
     item.installmentNumber = e.installment_number;
     item.dueDate = new Date(e.due_date);
-    item.principalAmount = Number(e.principal_amount);
-    item.interestAmount = Number(e.interest_amount);
-    item.totalAmount = Number(e.total_amount);
-    item.paidAmount = Number(e.paid_amount);
+    item.principalAmount = new Decimal(e.principal_amount).toFixed(2);
+    item.interestAmount = new Decimal(e.interest_amount).toFixed(2);
+    item.totalAmount = new Decimal(e.total_amount).toFixed(2);
+    item.paidAmount = new Decimal(e.paid_amount).toFixed(2);
     item.status = e.status as RepaymentStatus;
     item.paidAt = e.paid_at ?? undefined;
     item.reminderSentAt = e.reminder_sent_at ?? undefined;
@@ -113,10 +114,10 @@ export class LoanMapper {
     e.loan_id = item.loanId;
     e.installment_number = item.installmentNumber;
     e.due_date = item.dueDate.toISOString().split('T')[0];
-    e.principal_amount = String(item.principalAmount);
-    e.interest_amount = String(item.interestAmount);
-    e.total_amount = String(item.totalAmount);
-    e.paid_amount = String(item.paidAmount);
+    e.principal_amount = new Decimal(item.principalAmount).toFixed(2);
+    e.interest_amount = new Decimal(item.interestAmount).toFixed(2);
+    e.total_amount = new Decimal(item.totalAmount).toFixed(2);
+    e.paid_amount = new Decimal(item.paidAmount).toFixed(2);
     e.status = item.status;
     e.paid_at = item.paidAt ?? null;
     e.reminder_sent_at = item.reminderSentAt ?? null;
@@ -131,7 +132,7 @@ export class LoanMapper {
     p.loanId = e.loan_id;
     p.scheduleId = e.schedule_id;
     p.transactionId = e.transaction_id;
-    p.amount = Number(e.amount);
+    p.amount = new Decimal(e.amount).toFixed(2);
     p.currency = e.currency as LoanCurrency;
     p.paymentDate = e.payment_date;
     p.recordedBy = e.recorded_by;
@@ -146,7 +147,7 @@ export class LoanMapper {
     e.loan_id = p.loanId;
     e.schedule_id = p.scheduleId ?? null;
     e.transaction_id = p.transactionId ?? null;
-    e.amount = String(p.amount);
+    e.amount = new Decimal(p.amount).toFixed(2);
     e.currency = p.currency;
     e.payment_date = p.paymentDate;
     e.recorded_by = p.recordedBy;
@@ -162,8 +163,8 @@ export class LoanMapper {
     p.id = e.id;
     p.loanId = e.loan_id;
     p.scheduleId = e.schedule_id;
-    p.penaltyRate = Number(e.penalty_rate);
-    p.penaltyAmount = Number(e.penalty_amount);
+    p.penaltyRate = new Decimal(e.penalty_rate).toFixed(4);
+    p.penaltyAmount = new Decimal(e.penalty_amount).toFixed(2);
     p.appliedAt = e.applied_at;
     p.createdAt = e.created_at;
     return p;
@@ -174,8 +175,8 @@ export class LoanMapper {
     e.id = p.id;
     e.loan_id = p.loanId;
     e.schedule_id = p.scheduleId;
-    e.penalty_rate = String(p.penaltyRate);
-    e.penalty_amount = String(p.penaltyAmount);
+    e.penalty_rate = new Decimal(p.penaltyRate).toFixed(4);
+    e.penalty_amount = new Decimal(p.penaltyAmount).toFixed(2);
     e.applied_at = p.appliedAt;
     e.created_at = p.createdAt;
     return e;
