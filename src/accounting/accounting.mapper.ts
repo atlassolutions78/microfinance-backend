@@ -59,11 +59,11 @@ export interface GeneralLedgerLineRecord {
   reference: string;
   date: Date;
   description: string | null;
-  debit: number;
-  credit: number;
+  debit: string;
+  credit: string;
   currency: string;
   /** Running balance in account's normal direction (positive = healthy). */
-  runningBalance: number;
+  runningBalance: string;
 }
 
 export interface GeneralLedgerAccountRecord {
@@ -71,9 +71,9 @@ export interface GeneralLedgerAccountRecord {
   code: string;
   name: string;
   type: ChartAccountType;
-  totalDebit: number;
-  totalCredit: number;
-  closingBalance: number;
+  totalDebit: string;
+  totalCredit: string;
+  closingBalance: string;
   lines: GeneralLedgerLineRecord[];
 }
 
@@ -83,13 +83,13 @@ export interface BalanceSheetLineRecord {
   accountId: string;
   code: string;
   name: string;
-  balance: number;
+  balance: string;
 }
 
 export interface BalanceSheetSectionRecord {
   type: ChartAccountType;
   accounts: BalanceSheetLineRecord[];
-  total: number;
+  total: string;
 }
 
 export interface BalanceSheetRecord {
@@ -97,7 +97,7 @@ export interface BalanceSheetRecord {
   assets: BalanceSheetSectionRecord;
   liabilities: BalanceSheetSectionRecord;
   equity: BalanceSheetSectionRecord;
-  totalLiabilitiesAndEquity: number;
+  totalLiabilitiesAndEquity: string;
   isBalanced: boolean;
 }
 
@@ -107,15 +107,37 @@ export interface IncomeStatementLineRecord {
   accountId: string;
   code: string;
   name: string;
-  amount: number;
+  amount: string;
 }
 
 export interface IncomeStatementRecord {
   from: Date;
   to: Date;
-  income: { accounts: IncomeStatementLineRecord[]; total: number };
-  expenses: { accounts: IncomeStatementLineRecord[]; total: number };
-  netProfit: number;
+  income: { accounts: IncomeStatementLineRecord[]; total: string };
+  expenses: { accounts: IncomeStatementLineRecord[]; total: string };
+  netProfit: string;
+}
+
+// ── Trial Balance ─────────────────────────────────────────────────────────────
+
+export interface TrialBalanceLineRecord {
+  accountId: string;
+  code: string;
+  name: string;
+  type: ChartAccountType;
+  totalDebit: string;
+  totalCredit: string;
+  /** Net balance in the account's normal direction. */
+  balance: string;
+  normalBalance: 'DEBIT' | 'CREDIT';
+}
+
+export interface TrialBalanceRecord {
+  asOf: Date;
+  lines: TrialBalanceLineRecord[];
+  totalDebits: string;
+  totalCredits: string;
+  isBalanced: boolean;
 }
 
 export class AccountingMapper {

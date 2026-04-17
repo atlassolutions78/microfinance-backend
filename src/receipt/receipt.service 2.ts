@@ -328,9 +328,8 @@ function wrapHtml(body: string, title: string): string {
     }
     .print-btn:hover { background: #1e429f; }
 
-    @page { margin: 0; }
     @media print {
-      body { background: white; padding: 2mm; display: block; }
+      body { background: white; padding: 0; display: block; }
       .receipt-wrapper { width: 100%; padding: 2mm; box-shadow: none; }
       .print-btn { display: none !important; }
     }

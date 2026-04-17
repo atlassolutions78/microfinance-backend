@@ -2,6 +2,36 @@ import Decimal from 'decimal.js';
 import { AccountModel } from './account.model';
 import { AccountEntity } from './account.entity';
 
+// ── Account Statement ─────────────────────────────────────────────────────────
+
+export interface AccountStatementLineRecord {
+  date: Date;
+  reference: string;
+  description: string | null;
+  /** Amount if this line reduces the balance, otherwise "0.00". */
+  debit: string;
+  /** Amount if this line increases the balance, otherwise "0.00". */
+  credit: string;
+  balance: string;
+}
+
+export interface AccountStatementRecord {
+  account: {
+    id: string;
+    accountNumber: string;
+    type: string;
+    currency: string;
+  };
+  client: {
+    name: string;
+    clientNumber: string;
+  };
+  period: { from: Date; to: Date };
+  openingBalance: string;
+  closingBalance: string;
+  transactions: AccountStatementLineRecord[];
+}
+
 /**
  * Translates between the DB record shape (AccountEntity) and the
  * domain model (AccountModel). This is the only place that knows about both.

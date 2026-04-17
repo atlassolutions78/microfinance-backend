@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, ILike, In, Repository } from 'typeorm';
+import Decimal from 'decimal.js';
 import { AccountEntity, AccountSequenceEntity } from './account.entity';
 import { AccountModel } from './account.model';
-import { AccountMapper } from './account.mapper';
+import { AccountMapper, AccountStatementRecord, AccountStatementLineRecord } from './account.mapper';
 import { AccountCurrency, AccountStatus, AccountType } from './account.enums';
 import { GetAccountsQueryDto } from './account.dto';
 import { UserEntity } from '../users/user.entity';
@@ -218,6 +219,113 @@ export class AccountRepository {
     const series = accountType === AccountType.BUSINESS_CURRENT ? 'B' : 'A';
     const currencySymbol = currency === AccountCurrency.USD ? '$' : 'FC';
     return `${base} ${series}/${currencySymbol}`;
+  }
+
+  async getStatement(
+    accountId: string,
+    from: Date,
+    to: Date,
+  ): Promise<AccountStatementRecord | null> {
+    // ── 1. Account + client info ─────────────────────────────────────────────
+    const accountRows: Array<{
+      id: string;
+      account_number: string;
+      account_type: string;
+      currency: string;
+      client_name: string | null;
+      client_number: string;
+    }> = await this.dataSource.query(
+      `SELECT
+         a.id,
+         a.account_number,
+         a.account_type,
+         a.currency,
+         COALESCE(
+           ip.first_name || ' ' || ip.last_name,
+           op.organization_name
+         ) AS client_name,
+         c.client_number
+       FROM accounts a
+       JOIN clients c              ON c.id = a.client_id
+       LEFT JOIN individual_profiles ip  ON ip.client_id = a.client_id
+       LEFT JOIN organization_profiles op ON op.client_id = a.client_id
+       WHERE a.id = $1`,
+      [accountId],
+    );
+
+    if (accountRows.length === 0) return null;
+    const acct = accountRows[0];
+
+    // ── 2. Opening balance — last balance_after strictly before `from` ───────
+    const openingRows: Array<{ balance_after: string }> =
+      await this.dataSource.query(
+        `SELECT balance_after
+         FROM client_transactions
+         WHERE account_id = $1
+           AND created_at::date < $2
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [accountId, from],
+      );
+
+    const openingBalance = openingRows.length > 0
+      ? new Decimal(openingRows[0].balance_after).toFixed(2)
+      : '0.00';
+
+    // ── 3. Transactions in period ────────────────────────────────────────────
+    const txRows: Array<{
+      created_at: Date;
+      reference: string;
+      description: string | null;
+      amount: string;
+      balance_after: string;
+    }> = await this.dataSource.query(
+      `SELECT created_at, reference, description, amount, balance_after
+       FROM client_transactions
+       WHERE account_id = $1
+         AND created_at::date BETWEEN $2 AND $3
+       ORDER BY created_at ASC`,
+      [accountId, from, to],
+    );
+
+    // Determine debit/credit by comparing consecutive balances
+    let prevBalance = new Decimal(openingBalance);
+    const transactions: AccountStatementLineRecord[] = txRows.map((row) => {
+      const balanceAfter = new Decimal(row.balance_after);
+      const amount = new Decimal(row.amount).abs();
+      const isCredit = balanceAfter.greaterThanOrEqualTo(prevBalance);
+      prevBalance = balanceAfter;
+
+      return {
+        date: row.created_at,
+        reference: row.reference,
+        description: row.description,
+        debit:   isCredit ? '0.00' : amount.toFixed(2),
+        credit:  isCredit ? amount.toFixed(2) : '0.00',
+        balance: balanceAfter.toFixed(2),
+      };
+    });
+
+    const closingBalance = txRows.length > 0
+      ? new Decimal(txRows[txRows.length - 1].balance_after).toFixed(2)
+      : openingBalance;
+
+    return {
+      account: {
+        id: acct.id,
+        accountNumber: acct.account_number,
+        type: acct.account_type,
+        currency: acct.currency,
+      },
+      client: {
+        name: acct.client_name ?? 'Unknown',
+        clientNumber: acct.client_number,
+      },
+      period: { from, to },
+      openingBalance,
+      closingBalance,
+      transactions,
+    };
   }
 
   private async resolveUserNames(ids: string[]): Promise<Map<string, string>> {

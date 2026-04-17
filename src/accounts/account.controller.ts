@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -6,6 +7,7 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -14,8 +16,11 @@ import {
   ApiBody,
   ApiOperation,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { AccountService } from './account.service';
+import { AccountFormatter } from './account.formatter';
 import { OpenAccountDto, GetAccountsQueryDto } from './account.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -118,5 +123,37 @@ export class AccountController {
   @ApiParam({ name: 'id', description: 'Account UUID' })
   close(@Param('id', ParseUUIDPipe) id: string) {
     return this.accountService.close(id);
+  }
+
+  @Get(':id/statement')
+  @ApiOperation({ summary: 'Generate an account statement for a given period' })
+  @ApiParam({ name: 'id', description: 'Account UUID' })
+  @ApiQuery({ name: 'from',   required: true,  description: 'Start date YYYY-MM-DD' })
+  @ApiQuery({ name: 'to',     required: true,  description: 'End date YYYY-MM-DD' })
+  @ApiQuery({ name: 'format', required: false, description: 'json (default) | html | csv' })
+  async getStatement(
+    @Res() res: Response,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('from')   from: string,
+    @Query('to')     to: string,
+    @Query('format') format?: string,
+  ) {
+    const fromDate = new Date(from);
+    const toDate   = new Date(to);
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+      throw new BadRequestException('Invalid date range. Use YYYY-MM-DD format.');
+    }
+    if (fromDate > toDate) {
+      throw new BadRequestException('"from" must be before or equal to "to".');
+    }
+
+    const data = await this.accountService.getStatement(id, fromDate, toDate);
+    const filename = `statement-${data.account.accountNumber.replace(/[^a-zA-Z0-9]/g, '-')}-${toDate.toISOString().split('T')[0]}.csv`;
+
+    AccountFormatter.respond(res, format, data,
+      () => AccountFormatter.statementHtml(data),
+      () => AccountFormatter.statementCsv(data),
+      filename,
+    );
   }
 }
