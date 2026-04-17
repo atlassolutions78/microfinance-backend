@@ -6,6 +6,7 @@ import {
   Param,
   ParseUUIDPipe,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -14,8 +15,10 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AccountingService } from './accounting.service';
+import { AccountingFormatter } from './accounting.formatter';
 
 @ApiTags('Accounting')
 @ApiBearerAuth()
@@ -80,71 +83,112 @@ export class AccountingController {
   }
 
   @Get('ledger')
-  @ApiOperation({
-    summary:
-      'General ledger — all posted lines grouped by account with running balances',
-  })
+  @ApiOperation({ summary: 'General ledger — posted lines grouped by account with running balances' })
+  @ApiQuery({ name: 'branchId',  required: false })
+  @ApiQuery({ name: 'from',      required: false, description: 'Start date YYYY-MM-DD' })
+  @ApiQuery({ name: 'to',        required: false, description: 'End date YYYY-MM-DD' })
+  @ApiQuery({ name: 'currency',  required: false, description: 'FC or USD' })
+  @ApiQuery({ name: 'format',    required: false, description: 'json (default) | html | csv' })
+  async getGeneralLedger(
+    @Res() res: Response,
+    @Query('branchId')  branchId?: string,
+    @Query('from')      from?: string,
+    @Query('to')        to?: string,
+    @Query('currency')  currency?: string,
+    @Query('format')    format?: string,
+  ) {
+    const fromDate = from ? new Date(from) : undefined;
+    const toDate   = to   ? new Date(to)   : undefined;
+    if (fromDate && isNaN(fromDate.getTime())) throw new BadRequestException(`Invalid from date: ${from}`);
+    if (toDate   && isNaN(toDate.getTime()))   throw new BadRequestException(`Invalid to date: ${to}`);
+
+    const data = await this.accountingService.getGeneralLedger(branchId, fromDate, toDate, currency);
+    const filename = `general-ledger-${(toDate ?? new Date()).toISOString().split('T')[0]}.csv`;
+    AccountingFormatter.respond(res, format, data,
+      () => AccountingFormatter.generalLedgerHtml(data, currency, fromDate, toDate, branchId),
+      () => AccountingFormatter.generalLedgerCsv(data),
+      filename,
+    );
+  }
+
+  @Get('reports/trial-balance')
+  @ApiOperation({ summary: 'Trial balance — cumulative debits and credits per account as of a date' })
+  @ApiQuery({ name: 'asOf',     required: false, description: 'ISO date YYYY-MM-DD. Defaults to today.' })
+  @ApiQuery({ name: 'currency', required: false, description: 'FC or USD' })
   @ApiQuery({ name: 'branchId', required: false })
-  getGeneralLedger(@Query('branchId') branchId?: string) {
-    return this.accountingService.getGeneralLedger(branchId);
+  @ApiQuery({ name: 'format',   required: false, description: 'json (default) | html | csv' })
+  async getTrialBalance(
+    @Res() res: Response,
+    @Query('asOf')     asOf?: string,
+    @Query('currency') currency?: string,
+    @Query('branchId') branchId?: string,
+    @Query('format')   format?: string,
+  ) {
+    const date = asOf ? new Date(asOf) : new Date();
+    if (isNaN(date.getTime())) throw new BadRequestException(`Invalid date: ${asOf}`);
+
+    const data = await this.accountingService.getTrialBalance(date, branchId, currency);
+    const filename = `trial-balance-${date.toISOString().split('T')[0]}.csv`;
+    AccountingFormatter.respond(res, format, data,
+      () => AccountingFormatter.trialBalanceHtml(data, currency, branchId),
+      () => AccountingFormatter.trialBalanceCsv(data),
+      filename,
+    );
   }
 
   @Get('reports/balance-sheet')
-  @ApiOperation({
-    summary:
-      'Balance sheet — assets vs liabilities + equity as of a given date',
-  })
-  @ApiQuery({
-    name: 'asOf',
-    required: false,
-    description: 'ISO date (YYYY-MM-DD). Defaults to today.',
-  })
+  @ApiOperation({ summary: 'Balance sheet — assets vs liabilities + equity as of a given date' })
+  @ApiQuery({ name: 'asOf',     required: false, description: 'ISO date YYYY-MM-DD. Defaults to today.' })
+  @ApiQuery({ name: 'currency', required: false, description: 'FC or USD' })
   @ApiQuery({ name: 'branchId', required: false })
-  getBalanceSheet(
-    @Query('asOf') asOf?: string,
+  @ApiQuery({ name: 'format',   required: false, description: 'json (default) | html | csv' })
+  async getBalanceSheet(
+    @Res() res: Response,
+    @Query('asOf')     asOf?: string,
+    @Query('currency') currency?: string,
     @Query('branchId') branchId?: string,
+    @Query('format')   format?: string,
   ) {
     const date = asOf ? new Date(asOf) : new Date();
-    if (isNaN(date.getTime())) {
-      throw new BadRequestException(`Invalid date: ${asOf}`);
-    }
-    return this.accountingService.getBalanceSheet(date, branchId);
+    if (isNaN(date.getTime())) throw new BadRequestException(`Invalid date: ${asOf}`);
+
+    const data = await this.accountingService.getBalanceSheet(date, branchId, currency);
+    const filename = `balance-sheet-${date.toISOString().split('T')[0]}.csv`;
+    AccountingFormatter.respond(res, format, data,
+      () => AccountingFormatter.balanceSheetHtml(data, currency, branchId),
+      () => AccountingFormatter.balanceSheetCsv(data),
+      filename,
+    );
   }
 
   @Get('reports/income-statement')
-  @ApiOperation({
-    summary: 'Income statement — revenue vs expenses over a date range',
-  })
-  @ApiQuery({
-    name: 'from',
-    required: true,
-    description: 'Start date ISO (YYYY-MM-DD)',
-  })
-  @ApiQuery({
-    name: 'to',
-    required: true,
-    description: 'End date ISO (YYYY-MM-DD)',
-  })
+  @ApiOperation({ summary: 'Income statement — revenue vs expenses over a date range' })
+  @ApiQuery({ name: 'from',     required: true,  description: 'Start date YYYY-MM-DD' })
+  @ApiQuery({ name: 'to',       required: true,  description: 'End date YYYY-MM-DD' })
+  @ApiQuery({ name: 'currency', required: false, description: 'FC or USD' })
   @ApiQuery({ name: 'branchId', required: false })
-  getIncomeStatement(
-    @Query('from') from: string,
-    @Query('to') to: string,
+  @ApiQuery({ name: 'format',   required: false, description: 'json (default) | html | csv' })
+  async getIncomeStatement(
+    @Res() res: Response,
+    @Query('from')     from: string,
+    @Query('to')       to: string,
+    @Query('currency') currency?: string,
     @Query('branchId') branchId?: string,
+    @Query('format')   format?: string,
   ) {
     const fromDate = new Date(from);
-    const toDate = new Date(to);
+    const toDate   = new Date(to);
     if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-      throw new BadRequestException(
-        'Invalid date range. Use YYYY-MM-DD format.',
-      );
+      throw new BadRequestException('Invalid date range. Use YYYY-MM-DD format.');
     }
-    if (fromDate > toDate) {
-      throw new BadRequestException('"from" must be before or equal to "to".');
-    }
-    return this.accountingService.getIncomeStatement(
-      fromDate,
-      toDate,
-      branchId,
+    if (fromDate > toDate) throw new BadRequestException('"from" must be before or equal to "to".');
+
+    const data = await this.accountingService.getIncomeStatement(fromDate, toDate, branchId, currency);
+    const filename = `income-statement-${toDate.toISOString().split('T')[0]}.csv`;
+    AccountingFormatter.respond(res, format, data,
+      () => AccountingFormatter.incomeStatementHtml(data, currency, branchId),
+      () => AccountingFormatter.incomeStatementCsv(data),
+      filename,
     );
   }
 }

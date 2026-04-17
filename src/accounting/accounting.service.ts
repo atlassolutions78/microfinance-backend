@@ -17,6 +17,7 @@ import {
   IncomeStatementRecord,
   JournalEntryGroupRecord,
   JournalEntryRecord,
+  TrialBalanceRecord,
 } from './accounting.mapper';
 
 @Injectable()
@@ -655,23 +656,36 @@ export class AccountingService {
 
   async getGeneralLedger(
     branchId?: string,
+    from?: Date,
+    to?: Date,
+    currency?: string,
   ): Promise<GeneralLedgerAccountRecord[]> {
-    return this.repo.getGeneralLedger(branchId);
+    return this.repo.getGeneralLedger(branchId, from, to, currency);
   }
 
   async getBalanceSheet(
     asOf: Date,
     branchId?: string,
+    currency?: string,
   ): Promise<BalanceSheetRecord> {
-    return this.repo.getBalanceSheet(asOf, branchId);
+    return this.repo.getBalanceSheet(asOf, branchId, currency);
   }
 
   async getIncomeStatement(
     from: Date,
     to: Date,
     branchId?: string,
+    currency?: string,
   ): Promise<IncomeStatementRecord> {
-    return this.repo.getIncomeStatement(from, to, branchId);
+    return this.repo.getIncomeStatement(from, to, branchId, currency);
+  }
+
+  async getTrialBalance(
+    asOf: Date,
+    branchId?: string,
+    currency?: string,
+  ): Promise<TrialBalanceRecord> {
+    return this.repo.getTrialBalance(asOf, branchId, currency);
   }
 
   // ─── Core private method ─────────────────────────────────────────────────────

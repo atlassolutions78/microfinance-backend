@@ -11,6 +11,7 @@ import { AccountPolicy } from './account.policy';
 import { AccountModel } from './account.model';
 import { AccountCurrency, AccountStatus, AccountType } from './account.enums';
 import { OpenAccountDto, GetAccountsQueryDto } from './account.dto';
+import { AccountStatementRecord } from './account.mapper';
 import { ClientService } from '../clients/client.service';
 import { ClientType } from '../clients/client.enums';
 import { UserModel } from '../users/user.model';
@@ -177,6 +178,16 @@ export class AccountService {
     }
     await this.accountRepository.save(account);
     return account;
+  }
+
+  async getStatement(
+    accountId: string,
+    from: Date,
+    to: Date,
+  ): Promise<AccountStatementRecord> {
+    const statement = await this.accountRepository.getStatement(accountId, from, to);
+    if (!statement) throw new NotFoundException(`Account ${accountId} not found.`);
+    return statement;
   }
 
   private async enrichWithClientName(account: AccountModel): Promise<void> {
