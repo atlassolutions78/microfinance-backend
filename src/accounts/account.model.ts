@@ -8,7 +8,7 @@ export interface AccountModelProps {
   accountType: AccountType;
   currency: AccountCurrency;
   status: AccountStatus;
-  balance: number;
+  balance: string;
   openedBy: string;
   openedByName?: string;
   clientName?: string;
@@ -34,7 +34,7 @@ export class AccountModel {
   readonly createdAt: Date;
 
   status: AccountStatus;
-  balance: number;
+  balance: string;
   updatedAt: Date;
 
   /** Resolved display name — populated at read time, not persisted. */

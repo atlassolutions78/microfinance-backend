@@ -1,5 +1,14 @@
 ﻿import { randomUUID } from 'crypto';
-import { LoanCurrency, LoanDocumentType, LoanStatus, LoanType, ReminderChannel, ReminderStatus, RepaymentStatus } from './loan.enums';
+import Decimal from 'decimal.js';
+import {
+  LoanCurrency,
+  LoanDocumentType,
+  LoanStatus,
+  LoanType,
+  ReminderChannel,
+  ReminderStatus,
+  RepaymentStatus,
+} from './loan.enums';
 
 // ---------------------------------------------------------------------------
 // Repayment schedule item
@@ -10,17 +19,17 @@ export class RepaymentScheduleItem {
   loanId: string;
   installmentNumber: number;
   dueDate: Date;
-  principalAmount: number;
-  interestAmount: number;
-  totalAmount: number;
-  paidAmount: number;
+  principalAmount: string;
+  interestAmount: string;
+  totalAmount: string;
+  paidAmount: string;
   status: RepaymentStatus;
   paidAt?: Date;
   reminderSentAt?: Date;
 
   markPaid(): void {
     this.status = RepaymentStatus.PAID;
-    this.paidAmount = this.totalAmount;
+    this.paidAmount = this.totalAmount; // string = string ✓
     this.paidAt = new Date();
   }
 
@@ -68,7 +77,7 @@ export class LoanPayment {
   loanId: string;
   scheduleId: string | null;
   transactionId: string | null;
-  amount: number;
+  amount: string;
   currency: LoanCurrency;
   paymentDate: Date;
   recordedBy: string;
@@ -84,8 +93,8 @@ export class LoanPenalty {
   id: string;
   loanId: string;
   scheduleId: string;
-  penaltyRate: number;
-  penaltyAmount: number;
+  penaltyRate: string;
+  penaltyAmount: string;
   appliedAt: Date;
   createdAt: Date;
 }
@@ -116,9 +125,9 @@ export interface LoanModelProps {
   branchId: string;
   type: LoanType;
   currency: LoanCurrency;
-  principalAmount: number;
-  outstandingBalance: number;
-  interestRate: number;   // monthly rate as a decimal, e.g. 0.025 = 2.5 %/month
+  principalAmount: string;
+  outstandingBalance: string;
+  interestRate: string; // monthly rate as a decimal, e.g. 0.025 = 2.5 %/month
   termMonths: number;
   purpose?: string;
   status: LoanStatus;
@@ -141,14 +150,14 @@ export class LoanModel {
   readonly branchId: string;
   readonly type: LoanType;
   readonly currency: LoanCurrency;
-  readonly principalAmount: number;
-  readonly interestRate: number;
+  readonly principalAmount: string;
+  readonly interestRate: string;
   readonly termMonths: number;
   readonly purpose?: string;
   readonly appliedBy: string;
   readonly createdAt: Date;
 
-  outstandingBalance: number;
+  outstandingBalance: string;
   status: LoanStatus;
   rejectionReason?: string;
   reviewedBy?: string;
@@ -221,10 +230,13 @@ export class LoanModel {
    * Called when a schedule installment's principal portion has been collected.
    * Reduces outstanding balance. When fully paid, transitions to CLOSED.
    */
-  applyPayment(principalCollected: number): void {
-    this.outstandingBalance = round2(Math.max(0, this.outstandingBalance - principalCollected));
+  applyPayment(principalCollected: string): void {
+    const reduced = new Decimal(this.outstandingBalance).minus(principalCollected);
+    this.outstandingBalance = (reduced.isNegative() ? new Decimal(0) : reduced)
+      .toDecimalPlaces(2)
+      .toString();
     this.updatedAt = new Date();
-    if (this.outstandingBalance === 0) {
+    if (new Decimal(this.outstandingBalance).isZero()) {
       this.status = LoanStatus.CLOSED;
       this.closedAt = new Date();
     }
@@ -232,7 +244,9 @@ export class LoanModel {
 
   markDefaulted(): void {
     if (this.status !== LoanStatus.ACTIVE) {
-      throw new Error(`Cannot mark as defaulted a loan in status: ${this.status}`);
+      throw new Error(
+        `Cannot mark as defaulted a loan in status: ${this.status}`,
+      );
     }
     this.status = LoanStatus.DEFAULTED;
     this.updatedAt = new Date();
@@ -241,21 +255,24 @@ export class LoanModel {
   // --- Business calculations ---
 
   /** Monthly instalment using standard amortisation formula. */
-  monthlyInstalment(): number {
-    const r = this.interestRate;
+  monthlyInstalment(): string {
+    const r = new Decimal(this.interestRate);
     const n = this.termMonths;
-    const P = this.principalAmount;
+    const P = new Decimal(this.principalAmount);
 
-    if (r === 0) return round2(P / n);
+    if (r.isZero()) return P.div(n).toFixed(2);
 
     if (n === 1) {
       // Salary Advance: flat single payment
-      return round2(P * (1 + r));
+      return P.times(r.plus(1)).toFixed(2);
     }
 
-    // Amortisation: P Ã— r(1+r)^n / [(1+r)^n - 1]
-    const factor = Math.pow(1 + r, n);
-    return round2(P * (r * factor) / (factor - 1));
+    // Amortisation: P × r(1+r)^n / [(1+r)^n - 1]
+    const factor = r.plus(1).pow(n);
+    return P.times(r.times(factor))
+      .div(factor.minus(1))
+      .toDecimalPlaces(2)
+      .toString();
   }
 
   /**
@@ -264,29 +281,35 @@ export class LoanModel {
    */
   computeSchedule(disbursedAt: Date): RepaymentScheduleItem[] {
     const items: RepaymentScheduleItem[] = [];
-    const monthlyPayment = this.monthlyInstalment();
-    let balance = this.principalAmount;
+    const monthlyPayment = new Decimal(this.monthlyInstalment());
+    let balance = new Decimal(this.principalAmount);
+    const rate = new Decimal(this.interestRate);
 
     for (let i = 1; i <= this.termMonths; i++) {
       const dueDate = new Date(disbursedAt);
       dueDate.setMonth(dueDate.getMonth() + i);
 
       const isLast = i === this.termMonths;
-      const interestPortion = round2(balance * this.interestRate);
+      const interestPortion = balance.times(rate).toDecimalPlaces(2);
       // On the last installment, mop up any rounding residual
-      const principalPortion = isLast ? round2(balance) : round2(monthlyPayment - interestPortion);
-      const total = isLast ? round2(principalPortion + interestPortion) : monthlyPayment;
-      balance = round2(Math.max(0, balance - principalPortion));
+      const principalPortion = isLast
+        ? balance.toDecimalPlaces(2)
+        : monthlyPayment.minus(interestPortion).toDecimalPlaces(2);
+      const total = isLast
+        ? principalPortion.plus(interestPortion).toDecimalPlaces(2)
+        : monthlyPayment;
+      const newBalance = balance.minus(principalPortion);
+      balance = newBalance.isNegative() ? new Decimal(0) : newBalance;
 
       const item = new RepaymentScheduleItem();
       item.id = randomUUID();
       item.loanId = this.id;
       item.installmentNumber = i;
       item.dueDate = dueDate;
-      item.principalAmount = principalPortion;
-      item.interestAmount = interestPortion;
-      item.totalAmount = total;
-      item.paidAmount = 0;
+      item.principalAmount = principalPortion.toString();
+      item.interestAmount = interestPortion.toString();
+      item.totalAmount = total.toString();
+      item.paidAmount = '0.00';
       item.status = RepaymentStatus.PENDING;
 
       items.push(item);
@@ -295,8 +318,3 @@ export class LoanModel {
     return items;
   }
 }
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-

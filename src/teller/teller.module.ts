@@ -14,6 +14,8 @@ import { TellerService } from './teller.service';
 import { TellerController } from './teller.controller';
 import { AccountsModule } from '../accounts/accounts.module';
 import { AccountingModule } from '../accounting/accounting.module';
+import { SequenceModule } from '../sequences/sequence.module';
+import { ReceiptModule } from '../receipt/receipt.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { AccountingModule } from '../accounting/accounting.module';
     ]),
     AccountsModule,
     AccountingModule,
+    SequenceModule,
+    ReceiptModule,
   ],
   providers: [TellerService, TellerRepository],
   controllers: [TellerController],

@@ -135,7 +135,7 @@ export class LoanRepository {
       seq.last_seq += 1;
       await manager.save(LoanSequenceEntity, seq);
 
-      return `LN-${year}-${String(seq.last_seq).padStart(3, '0')}`;
+      return `LN-${year}-${String(seq.last_seq).padStart(7, '0')}`;
     });
   }
 

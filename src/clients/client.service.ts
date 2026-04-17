@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { basename } from 'path';
+import { SequenceService } from '../sequences/sequence.service';
 import { ClientRepository } from './client.repository';
 import { ClientModel } from './client.model';
 import { ClientType, KycStatus } from './client.enums';
@@ -31,6 +32,7 @@ export class ClientService {
   constructor(
     private readonly clientRepository: ClientRepository,
     private readonly documentService: DocumentService,
+    private readonly sequenceService: SequenceService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -254,46 +256,62 @@ export class ClientService {
     return client;
   }
 
-  async updateClient(clientId: string, dto: UpdateClientDto): Promise<ClientApiResponse> {
+  async updateClient(
+    clientId: string,
+    dto: UpdateClientDto,
+  ): Promise<ClientApiResponse> {
     const client = await this.findOrFail(clientId);
 
     // Segment applies to both client types — stored on the clients table
     if (dto.segment !== undefined) {
       const normalized = dto.segment.toUpperCase();
-      await this.clientRepository.updateClientEntity(clientId, { segment: normalized });
+      await this.clientRepository.updateClientEntity(clientId, {
+        segment: normalized,
+      });
     }
 
     if (client.type === ClientType.INDIVIDUAL) {
-      const profile = await this.clientRepository.findIndividualProfileByClientId(clientId);
+      const profile =
+        await this.clientRepository.findIndividualProfileByClientId(clientId);
       if (profile) {
         if (dto.firstName !== undefined) profile.first_name = dto.firstName;
         if (dto.middleName !== undefined) profile.middle_name = dto.middleName;
         if (dto.lastName !== undefined) profile.last_name = dto.lastName;
         if (dto.gender !== undefined) profile.gender = dto.gender;
-        if (dto.nationality !== undefined) profile.nationality = dto.nationality;
+        if (dto.nationality !== undefined)
+          profile.nationality = dto.nationality;
         if (dto.profession !== undefined) profile.profession = dto.profession;
         if (dto.phoneNumber !== undefined) profile.phone = dto.phoneNumber;
         if (dto.email !== undefined) profile.email = dto.email;
         if (dto.province !== undefined) profile.province = dto.province;
-        if (dto.municipality !== undefined) profile.municipality = dto.municipality;
-        if (dto.neighborhood !== undefined) profile.neighborhood = dto.neighborhood;
+        if (dto.municipality !== undefined)
+          profile.municipality = dto.municipality;
+        if (dto.neighborhood !== undefined)
+          profile.neighborhood = dto.neighborhood;
         if (dto.street !== undefined) profile.street = dto.street;
-        if (dto.identificationType !== undefined) profile.id_type = dto.identificationType;
-        if (dto.identificationNumber !== undefined) profile.id_number = dto.identificationNumber;
+        if (dto.identificationType !== undefined)
+          profile.id_type = dto.identificationType;
+        if (dto.identificationNumber !== undefined)
+          profile.id_number = dto.identificationNumber;
         await this.clientRepository.updateIndividualProfile(profile);
         return this.findById(clientId);
       }
     } else {
-      const profile = await this.clientRepository.findOrganizationProfileByClientId(clientId);
+      const profile =
+        await this.clientRepository.findOrganizationProfileByClientId(clientId);
       if (profile) {
-        if (dto.organizationName !== undefined) profile.organization_name = dto.organizationName;
+        if (dto.organizationName !== undefined)
+          profile.organization_name = dto.organizationName;
         if (dto.profession !== undefined) profile.industry = dto.profession;
         if (dto.phoneNumber !== undefined) profile.phone = dto.phoneNumber;
         if (dto.email !== undefined) profile.email = dto.email;
         if (dto.province !== undefined) profile.province = dto.province;
-        if (dto.municipality !== undefined) profile.municipality = dto.municipality;
-        if (dto.identificationType !== undefined) profile.registration_type = dto.identificationType;
-        if (dto.identificationNumber !== undefined) profile.registration_number = dto.identificationNumber;
+        if (dto.municipality !== undefined)
+          profile.municipality = dto.municipality;
+        if (dto.identificationType !== undefined)
+          profile.registration_type = dto.identificationType;
+        if (dto.identificationNumber !== undefined)
+          profile.registration_number = dto.identificationNumber;
         await this.clientRepository.updateOrganizationProfile(profile);
         return this.findById(clientId);
       }
@@ -351,10 +369,14 @@ export class ClientService {
     return { name: null, phone: null, email: null };
   }
 
-  async findAll(query?: GetClientsQueryDto): Promise<{ data: ClientApiResponse[]; total: number }> {
+  async findAll(
+    query?: GetClientsQueryDto,
+  ): Promise<{ data: ClientApiResponse[]; total: number }> {
     const { rows, total } = await this.clientRepository.findAllFull(query);
     return {
-      data: rows.map((r) => ClientMapper.toApiResponse(r.client, r.individualProfile, r.orgProfile)),
+      data: rows.map((r) =>
+        ClientMapper.toApiResponse(r.client, r.individualProfile, r.orgProfile),
+      ),
       total,
     };
   }
@@ -370,8 +392,6 @@ export class ClientService {
   }
 
   private async generateClientNumber(): Promise<string> {
-    const last = await this.clientRepository.getLastClientNumber();
-    const lastSeq = last ? parseInt(last.replace('CL-', ''), 10) : 0;
-    return `CL-${String(lastSeq + 1).padStart(6, '0')}`;
+    return this.sequenceService.nextClientNumber();
   }
 }

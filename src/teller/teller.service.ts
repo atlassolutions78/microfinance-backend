@@ -4,7 +4,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { randomUUID, randomBytes } from 'crypto';
+import { randomUUID } from 'crypto';
+import Decimal from 'decimal.js';
+import { SequenceService } from '../sequences/sequence.service';
 import { TellerRepository } from './teller.repository';
 import { TellerPolicy } from './teller.policy';
 import { TellerSessionModel } from './teller-session.model';
@@ -58,19 +60,19 @@ export interface WithdrawalPreview {
     accountType: string;
     currency: string;
     status: string;
-    currentBalance: number;
-    balanceAfter: number;
+    currentBalance: string;
+    balanceAfter: string;
     clientId: string;
     clientName?: string;
     clientNumber?: string;
   };
   journalEntry: {
-    debit: { code: string; name: string; amount: number; currency: string };
-    credit: { code: string; name: string; amount: number; currency: string };
+    debit: { code: string; name: string; amount: string; currency: string };
+    credit: { code: string; name: string; amount: string; currency: string };
   };
   tellerCashPosition: {
-    currentFC: number;
-    currentUSD: number;
+    currentFC: string;
+    currentUSD: string;
   };
 }
 
@@ -81,8 +83,8 @@ export interface TransferPreview {
     accountType: string;
     currency: string;
     status: string;
-    currentBalance: number;
-    balanceAfter: number;
+    currentBalance: string;
+    balanceAfter: string;
     clientId: string;
     clientName?: string;
     clientNumber?: string;
@@ -93,15 +95,15 @@ export interface TransferPreview {
     accountType: string;
     currency: string;
     status: string;
-    currentBalance: number;
-    balanceAfter: number;
+    currentBalance: string;
+    balanceAfter: string;
     clientId: string;
     clientName?: string;
     clientNumber?: string;
   };
   journalEntry: {
-    debit: { code: string; name: string; amount: number; currency: string };
-    credit: { code: string; name: string; amount: number; currency: string };
+    debit: { code: string; name: string; amount: string; currency: string };
+    credit: { code: string; name: string; amount: string; currency: string };
   };
 }
 
@@ -112,19 +114,19 @@ export interface DepositPreview {
     accountType: string;
     currency: string;
     status: string;
-    currentBalance: number;
-    balanceAfter: number;
+    currentBalance: string;
+    balanceAfter: string;
     clientId: string;
     clientName?: string;
     clientNumber?: string;
   };
   journalEntry: {
-    debit: { code: string; name: string; amount: number; currency: string };
-    credit: { code: string; name: string; amount: number; currency: string };
+    debit: { code: string; name: string; amount: string; currency: string };
+    credit: { code: string; name: string; amount: string; currency: string };
   };
   tellerCashPosition: {
-    currentFC: number;
-    currentUSD: number;
+    currentFC: string;
+    currentUSD: string;
   };
 }
 
@@ -134,6 +136,7 @@ export class TellerService {
     private readonly repo: TellerRepository,
     private readonly accountService: AccountService,
     private readonly accountingService: AccountingService,
+    private readonly sequenceService: SequenceService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -174,18 +177,18 @@ export class TellerService {
       branchId: user.branchId,
       date: today,
       status: TellerSessionStatus.REQUESTED,
-      requestedAmountFC: dto.requestedAmountFC,
-      requestedAmountUSD: dto.requestedAmountUSD,
-      approvedAmountFC: 0,
-      approvedAmountUSD: 0,
+      requestedAmountFC: new Decimal(dto.requestedAmountFC).toFixed(2),
+      requestedAmountUSD: new Decimal(dto.requestedAmountUSD).toFixed(2),
+      approvedAmountFC: '0.00',
+      approvedAmountUSD: '0.00',
       approvedBy: undefined,
       approvedAt: undefined,
-      openingCashFC: 0,
-      openingCashUSD: 0,
-      cashInFC: 0,
-      cashInUSD: 0,
-      cashOutFC: 0,
-      cashOutUSD: 0,
+      openingCashFC: '0.00',
+      openingCashUSD: '0.00',
+      cashInFC: '0.00',
+      cashInUSD: '0.00',
+      cashOutFC: '0.00',
+      cashOutUSD: '0.00',
       declaredClosingCashFC: undefined,
       declaredClosingCashUSD: undefined,
       submittedAt: undefined,
@@ -317,7 +320,7 @@ export class TellerService {
         currency: account.currency,
         status: account.status,
         currentBalance: account.balance,
-        balanceAfter: account.balance + query.amount,
+        balanceAfter: new Decimal(account.balance).plus(query.amount).toFixed(2),
         clientId: account.clientId,
         clientName: account.clientName,
         clientNumber: account.clientNumber,
@@ -326,13 +329,13 @@ export class TellerService {
         debit: {
           code: tellerCoa.code,
           name: tellerCoa.name,
-          amount: query.amount,
+          amount: new Decimal(query.amount).toFixed(2),
           currency,
         },
         credit: {
           code: clientCoa.code,
           name: clientCoa.name,
-          amount: query.amount,
+          amount: new Decimal(query.amount).toFixed(2),
           currency,
         },
       },
@@ -377,15 +380,15 @@ export class TellerService {
     );
 
     const balance = account.balance;
-    const newBalance = balance + dto.amount;
-    const reference = this.generateReference();
+    const newBalance = new Decimal(balance).plus(dto.amount).toFixed(2);
+    const reference = await this.sequenceService.nextReference(session.branchId, 'TLR');
 
     const tx = AccountTxModel.create({
       id: randomUUID(),
       accountId: dto.accountId,
       branchId: session.branchId,
       type: AccountTxType.DEPOSIT,
-      amount: dto.amount,
+      amount: new Decimal(dto.amount).toFixed(4),
       currency: dto.currency,
       balanceAfter: newBalance,
       reference,
@@ -406,6 +409,7 @@ export class TellerService {
         teller.id,
         dto.description,
         em,
+        tx.id,
       );
       session.recordCashMovement(TellerTxType.DEPOSIT, dto.amount, currency);
       await this.repo.saveSession(session, em);
@@ -439,7 +443,7 @@ export class TellerService {
       );
     }
 
-    if (account.balance < query.amount) {
+    if (new Decimal(account.balance).lessThan(query.amount)) {
       throw new BadRequestException(
         `Insufficient account balance. Available: ${account.balance}, requested: ${query.amount}`,
       );
@@ -468,7 +472,7 @@ export class TellerService {
         currency: account.currency,
         status: account.status,
         currentBalance: account.balance,
-        balanceAfter: account.balance - query.amount,
+        balanceAfter: new Decimal(account.balance).minus(query.amount).toFixed(2),
         clientId: account.clientId,
         clientName: account.clientName,
         clientNumber: account.clientNumber,
@@ -477,13 +481,13 @@ export class TellerService {
         debit: {
           code: clientCoa.code,
           name: clientCoa.name,
-          amount: query.amount,
+          amount: new Decimal(query.amount).toFixed(2),
           currency,
         },
         credit: {
           code: tellerCoa.code,
           name: tellerCoa.name,
-          amount: query.amount,
+          amount: new Decimal(query.amount).toFixed(2),
           currency,
         },
       },
@@ -516,7 +520,7 @@ export class TellerService {
     }
 
     const balance = account.balance;
-    if (balance < dto.amount) {
+    if (new Decimal(balance).lessThan(dto.amount)) {
       throw new BadRequestException(
         `Insufficient account balance. Available: ${balance}, requested: ${dto.amount}`,
       );
@@ -532,15 +536,15 @@ export class TellerService {
       account.currency,
     );
 
-    const newBalance = balance - dto.amount;
-    const reference = this.generateReference();
+    const newBalance = new Decimal(balance).minus(dto.amount).toFixed(2);
+    const reference = await this.sequenceService.nextReference(session.branchId, 'TLR');
 
     const tx = AccountTxModel.create({
       id: randomUUID(),
       accountId: dto.accountId,
       branchId: session.branchId,
       type: AccountTxType.WITHDRAWAL,
-      amount: dto.amount,
+      amount: new Decimal(dto.amount).toFixed(4),
       currency: dto.currency,
       balanceAfter: newBalance,
       reference,
@@ -561,6 +565,7 @@ export class TellerService {
         teller.id,
         dto.description,
         em,
+        tx.id,
       );
       session.recordCashMovement(TellerTxType.WITHDRAWAL, dto.amount, currency);
       await this.repo.saveSession(session, em);
@@ -600,7 +605,7 @@ export class TellerService {
       );
     }
 
-    if (source.balance < query.amount) {
+    if (new Decimal(source.balance).lessThan(query.amount)) {
       throw new BadRequestException(
         `Insufficient source account balance. Available: ${source.balance}, requested: ${query.amount}`,
       );
@@ -629,7 +634,7 @@ export class TellerService {
         currency: source.currency,
         status: source.status,
         currentBalance: source.balance,
-        balanceAfter: source.balance - query.amount,
+        balanceAfter: new Decimal(source.balance).minus(query.amount).toFixed(2),
         clientId: source.clientId,
         clientName: source.clientName,
         clientNumber: source.clientNumber,
@@ -641,7 +646,7 @@ export class TellerService {
         currency: dest.currency,
         status: dest.status,
         currentBalance: dest.balance,
-        balanceAfter: dest.balance + query.amount,
+        balanceAfter: new Decimal(dest.balance).plus(query.amount).toFixed(2),
         clientId: dest.clientId,
         clientName: dest.clientName,
         clientNumber: dest.clientNumber,
@@ -650,13 +655,13 @@ export class TellerService {
         debit: {
           code: sourceCoa.code,
           name: sourceCoa.name,
-          amount: query.amount,
+          amount: new Decimal(query.amount).toFixed(2),
           currency,
         },
         credit: {
           code: destCoa.code,
           name: destCoa.name,
-          amount: query.amount,
+          amount: new Decimal(query.amount).toFixed(2),
           currency,
         },
       },
@@ -691,7 +696,7 @@ export class TellerService {
     }
 
     const sourceBalance = source.balance;
-    if (sourceBalance < dto.amount) {
+    if (new Decimal(sourceBalance).lessThan(dto.amount)) {
       throw new BadRequestException(
         `Insufficient source account balance. Available: ${sourceBalance}, requested: ${dto.amount}`,
       );
@@ -708,16 +713,16 @@ export class TellerService {
     );
 
     const destBalance = dest.balance;
-    const sourceNewBalance = sourceBalance - dto.amount;
-    const destNewBalance = destBalance + dto.amount;
-    const reference = this.generateReference();
+    const sourceNewBalance = new Decimal(sourceBalance).minus(dto.amount).toFixed(2);
+    const destNewBalance = new Decimal(destBalance).plus(dto.amount).toFixed(2);
+    const reference = await this.sequenceService.nextReference(session.branchId, 'TLR');
 
     const debit = AccountTxModel.create({
       id: randomUUID(),
       accountId: dto.sourceAccountId,
       branchId: session.branchId,
       type: AccountTxType.TRANSFER_OUT,
-      amount: dto.amount,
+      amount: new Decimal(dto.amount).toFixed(4),
       currency,
       balanceAfter: sourceNewBalance,
       reference,
@@ -731,10 +736,10 @@ export class TellerService {
       accountId: dto.destinationAccountId,
       branchId: session.branchId,
       type: AccountTxType.TRANSFER_IN,
-      amount: dto.amount,
+      amount: new Decimal(dto.amount).toFixed(4),
       currency,
       balanceAfter: destNewBalance,
-      reference: this.generateReference(),
+      reference: await this.sequenceService.nextReference(session.branchId, 'TLR'),
       description: dto.description,
       performedBy: teller.id,
       createdAt: new Date(),
@@ -763,6 +768,7 @@ export class TellerService {
         teller.id,
         dto.description,
         em,
+        debit.id,
       );
       // Record a single teller tx entry for the transfer (session cash unchanged)
       const tellerTxEntity = new TellerTransactionEntity();
@@ -839,12 +845,14 @@ export class TellerService {
       await this.repo.saveSession(session, em);
       await this.accountingService.postTellerReconciliation(
         {
-          expectedFC: session.expectedClosingCashFC,
-          declaredFC:
+          expectedFC: new Decimal(session.expectedClosingCashFC).toNumber(),
+          declaredFC: new Decimal(
             session.declaredClosingCashFC ?? session.expectedClosingCashFC,
-          expectedUSD: session.expectedClosingCashUSD,
-          declaredUSD:
+          ).toNumber(),
+          expectedUSD: new Decimal(session.expectedClosingCashUSD).toNumber(),
+          declaredUSD: new Decimal(
             session.declaredClosingCashUSD ?? session.expectedClosingCashUSD,
+          ).toNumber(),
           tellerFcCode: coaAccounts.fc_account_code,
           tellerUsdCode: coaAccounts.usd_account_code,
           vaultFcCode: branchCoa.vault_fc_code,
@@ -1031,7 +1039,7 @@ export class TellerService {
       e.currency = Currency.FC;
       e.denomination = d.denomination;
       e.quantity = d.quantity;
-      e.subtotal = d.denomination * d.quantity;
+      e.subtotal = new Decimal(d.denomination).times(d.quantity).toDecimalPlaces(4).toNumber();
       entities.push(e);
     }
     for (const d of usd ?? []) {
@@ -1042,16 +1050,10 @@ export class TellerService {
       e.currency = Currency.USD;
       e.denomination = d.denomination;
       e.quantity = d.quantity;
-      e.subtotal = d.denomination * d.quantity;
+      e.subtotal = new Decimal(d.denomination).times(d.quantity).toDecimalPlaces(4).toNumber();
       entities.push(e);
     }
     return entities;
-  }
-
-  private generateReference(): string {
-    const yyyymmdd = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const hex = randomBytes(3).toString('hex').toUpperCase();
-    return `TLR-${yyyymmdd}-${hex}`;
   }
 
   private todayDate(): string {

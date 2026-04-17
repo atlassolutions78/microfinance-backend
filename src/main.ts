@@ -2,7 +2,11 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import Decimal from 'decimal.js';
 import { AppModule } from './app.module';
+
+// Use half-up rounding globally for all Decimal calculations (banking standard)
+Decimal.set({ rounding: Decimal.ROUND_HALF_UP });
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);

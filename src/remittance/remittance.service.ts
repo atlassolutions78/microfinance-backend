@@ -5,7 +5,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { randomBytes, randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
+import Decimal from 'decimal.js';
+import { SequenceService } from '../sequences/sequence.service';
 import { RemittanceRepository } from './remittance.repository';
 import { RemittanceModel } from './remittance.model';
 import { RemittanceStatus } from './remittance.enums';
@@ -24,10 +26,10 @@ export interface SendRemittancePreview {
     credit: { code: string; name: string; amount: number; currency: string };
   };
   tellerCashPosition: {
-    currentFC: number;
-    currentUSD: number;
-    afterFC: number;
-    afterUSD: number;
+    currentFC: string;
+    currentUSD: string;
+    afterFC: string;
+    afterUSD: string;
   };
   receivingBranch: { id: string; name: string; code: string };
 }
@@ -36,7 +38,7 @@ export interface PayoutRemittancePreview {
   remittance: {
     id: string;
     reference: string;
-    amount: number;
+    amount: string;
     currency: string;
     recipientName: string;
     recipientIdNumber: string;
@@ -48,10 +50,10 @@ export interface PayoutRemittancePreview {
     credit: { code: string; name: string; amount: number; currency: string };
   };
   tellerCashPosition: {
-    currentFC: number;
-    currentUSD: number;
-    afterFC: number;
-    afterUSD: number;
+    currentFC: string;
+    currentUSD: string;
+    afterFC: string;
+    afterUSD: string;
   };
 }
 import { TellerRepository } from '../teller/teller.repository';
@@ -70,6 +72,7 @@ export class RemittanceService {
     private readonly tellerRepo: TellerRepository,
     private readonly accountingService: AccountingService,
     private readonly settingsService: SettingsService,
+    private readonly sequenceService: SequenceService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -129,11 +132,11 @@ export class RemittanceService {
         currentFC: session.expectedClosingCashFC,
         currentUSD: session.expectedClosingCashUSD,
         afterFC: isFC
-          ? session.expectedClosingCashFC + query.amount
+          ? new Decimal(session.expectedClosingCashFC).plus(query.amount).toFixed(4)
           : session.expectedClosingCashFC,
         afterUSD: isFC
           ? session.expectedClosingCashUSD
-          : session.expectedClosingCashUSD + query.amount,
+          : new Decimal(session.expectedClosingCashUSD).plus(query.amount).toFixed(4),
       },
       receivingBranch: {
         id: receivingBranch.id,
@@ -168,7 +171,7 @@ export class RemittanceService {
       );
     }
 
-    session.assertHasCashFor(remittance.amount, remittance.currency);
+    session.assertHasCashFor(new Decimal(remittance.amount).toNumber(), remittance.currency);
 
     const coaAccounts = await this.getCoaAccountsOrFail(session.tellerId);
     const tellerCode =
@@ -202,13 +205,13 @@ export class RemittanceService {
         debit: {
           code: transitCoa.code,
           name: transitCoa.name,
-          amount: remittance.amount,
+          amount: new Decimal(remittance.amount).toNumber(),
           currency: remittance.currency,
         },
         credit: {
           code: tellerCoa.code,
           name: tellerCoa.name,
-          amount: remittance.amount,
+          amount: new Decimal(remittance.amount).toNumber(),
           currency: remittance.currency,
         },
       },
@@ -216,11 +219,11 @@ export class RemittanceService {
         currentFC: session.expectedClosingCashFC,
         currentUSD: session.expectedClosingCashUSD,
         afterFC: isFC
-          ? session.expectedClosingCashFC - remittance.amount
+          ? new Decimal(session.expectedClosingCashFC).minus(remittance.amount).toFixed(4)
           : session.expectedClosingCashFC,
         afterUSD: isFC
           ? session.expectedClosingCashUSD
-          : session.expectedClosingCashUSD - remittance.amount,
+          : new Decimal(session.expectedClosingCashUSD).minus(remittance.amount).toFixed(4),
       },
     };
   }
@@ -258,12 +261,12 @@ export class RemittanceService {
 
     const remittance = new RemittanceModel({
       id: randomUUID(),
-      reference: this.generateReference(),
+      reference: await this.sequenceService.nextReference(session.branchId, 'RMT'),
       sendingSessionId: dto.sessionId,
       sendingTellerId: teller.id,
       sendingBranchId: session.branchId,
       receivingBranchId: dto.receivingBranchId,
-      amount: dto.amount,
+      amount: new Decimal(dto.amount).toFixed(4),
       currency: dto.currency,
       recipientName: dto.recipientName,
       recipientIdNumber: dto.recipientIdNumber,
@@ -331,7 +334,7 @@ export class RemittanceService {
       );
     }
 
-    session.assertHasCashFor(remittance.amount, remittance.currency);
+    session.assertHasCashFor(new Decimal(remittance.amount).toNumber(), remittance.currency);
 
     const coaAccounts = await this.getCoaAccountsOrFail(session.tellerId);
     const tellerCode =
@@ -349,7 +352,7 @@ export class RemittanceService {
       await this.repo.save(remittance, em);
       // DR Remittance Transit / CR Teller Cash
       await this.accountingService.postRemittancePayout(
-        remittance.amount,
+        new Decimal(remittance.amount).toNumber(),
         remittance.currency,
         transitCode,
         tellerCode,
@@ -361,7 +364,7 @@ export class RemittanceService {
       // Cash left the teller's drawer, paid to recipient
       session.recordCashMovement(
         TellerTxType.WITHDRAWAL,
-        remittance.amount,
+        new Decimal(remittance.amount).toNumber(),
         remittance.currency,
       );
       await this.tellerRepo.saveSession(session, em);
@@ -418,7 +421,7 @@ export class RemittanceService {
       await this.repo.save(remittance, em);
       // DR Remittance Transit / CR Teller Cash (cash returns to the drawer)
       await this.accountingService.postRemittancePayout(
-        remittance.amount,
+        new Decimal(remittance.amount).toNumber(),
         remittance.currency,
         transitCode,
         tellerCode,
@@ -430,7 +433,7 @@ export class RemittanceService {
       // Cash leaves the teller's drawer, returned to the original sender
       session.recordCashMovement(
         TellerTxType.WITHDRAWAL,
-        remittance.amount,
+        new Decimal(remittance.amount).toNumber(),
         remittance.currency,
       );
       await this.tellerRepo.saveSession(session, em);
@@ -520,9 +523,4 @@ export class RemittanceService {
     return accounts;
   }
 
-  private generateReference(): string {
-    const yyyymmdd = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const hex = randomBytes(3).toString('hex').toUpperCase();
-    return `RMT-${yyyymmdd}-${hex}`;
-  }
 }

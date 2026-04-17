@@ -7,6 +7,8 @@ import { RemittanceController } from './remittance.controller';
 import { TellerModule } from '../teller/teller.module';
 import { AccountingModule } from '../accounting/accounting.module';
 import { SettingsModule } from '../settings/settings.module';
+import { SequenceModule } from '../sequences/sequence.module';
+import { ReceiptModule } from '../receipt/receipt.module';
 
 @Module({
   imports: [
@@ -14,6 +16,8 @@ import { SettingsModule } from '../settings/settings.module';
     TellerModule,
     AccountingModule,
     SettingsModule,
+    SequenceModule,
+    ReceiptModule,
   ],
   providers: [RemittanceService, RemittanceRepository],
   controllers: [RemittanceController],

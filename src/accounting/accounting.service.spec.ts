@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { AccountingService } from './accounting.service';
 import { AccountingRepository } from './accounting.repository';
+import { SequenceService } from '../sequences/sequence.service';
 import {
   ChartOfAccountsEntity,
   JournalEntryEntity,
@@ -10,6 +11,21 @@ import { COA_CODES, ChartAccountType } from './accounting.enums';
 
 const BRANCH_ID = '550e8400-e29b-41d4-a716-446655440001';
 const USER_ID   = '550e8400-e29b-41d4-a716-446655440002';
+
+// ── Stub sequence service ─────────────────────────────────────────────────────
+
+let seqCounter = 0;
+const stubSeqSvc = {
+  nextReference: async (_branchId: string, type: string) => {
+    seqCounter += 1;
+    return `${type}-TST-20260416-${String(seqCounter).padStart(5, '0')}`;
+  },
+} as unknown as SequenceService;
+
+function makeService(repo: AccountingRepository): AccountingService {
+  seqCounter = 0;
+  return new AccountingService(repo, stubSeqSvc);
+}
 
 // ── In-memory stub repository ─────────────────────────────────────────────────
 
@@ -73,7 +89,7 @@ describe('AccountingService', () => {
   describe('postDeposit()', () => {
     it('creates one journal entry', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await svc.postDeposit(
         500, 'USD',
         COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
@@ -84,18 +100,18 @@ describe('AccountingService', () => {
 
     it('reference matches JE-YYYYMMDD-XXXXXX format', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await svc.postDeposit(
         500, 'USD',
         COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
         BRANCH_ID, USER_ID,
       );
-      expect(saved[0].entry.reference).toMatch(/^JE-\d{8}-[0-9A-F]{6}$/);
+      expect(saved[0].entry.reference).toMatch(/^JE-[A-Z]+-\d{8}-\d{5}$/);
     });
 
     it('creates exactly 2 lines', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await svc.postDeposit(
         500, 'USD',
         COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
@@ -106,7 +122,7 @@ describe('AccountingService', () => {
 
     it('debit line uses the teller account', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await svc.postDeposit(
         500, 'USD',
         COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
@@ -119,7 +135,7 @@ describe('AccountingService', () => {
 
     it('credit line uses the customer savings account', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await svc.postDeposit(
         500, 'USD',
         COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
@@ -132,7 +148,7 @@ describe('AccountingService', () => {
 
     it('both lines carry the correct amount and currency', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await svc.postDeposit(
         500, 'USD',
         COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
@@ -145,7 +161,7 @@ describe('AccountingService', () => {
 
     it('entry is balanced', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await svc.postDeposit(
         1000, 'USD',
         COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
@@ -158,7 +174,7 @@ describe('AccountingService', () => {
 
     it('throws when teller account code is not found', async () => {
       const { repo } = makeStubRepo([COA_CODES.CUSTOMER_SAVINGS_USD]);
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await expect(
         svc.postDeposit(
           500, 'USD',
@@ -173,7 +189,7 @@ describe('AccountingService', () => {
   describe('postWithdrawal()', () => {
     it('debit line uses customer savings account', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await svc.postWithdrawal(
         200, 'USD',
         COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
@@ -186,7 +202,7 @@ describe('AccountingService', () => {
 
     it('credit line uses teller account', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await svc.postWithdrawal(
         200, 'USD',
         COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
@@ -199,7 +215,7 @@ describe('AccountingService', () => {
 
     it('entry is balanced', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await svc.postWithdrawal(
         300, 'USD',
         COA_CODES.VAULT_MAIN_USD, COA_CODES.CUSTOMER_SAVINGS_USD,
@@ -215,7 +231,7 @@ describe('AccountingService', () => {
   describe('postLoanRepaymentFromSavings()', () => {
     it('creates 3 lines for principal + interest (no penalty)', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await svc.postLoanRepaymentFromSavings(
         100, 10, 0, 'USD',
         COA_CODES.CUSTOMER_SAVINGS_USD, COA_CODES.LOANS_ORDINARY_USD,
@@ -227,7 +243,7 @@ describe('AccountingService', () => {
 
     it('creates 4 lines when penalty > 0', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await svc.postLoanRepaymentFromSavings(
         75, 5, 20, 'USD',
         COA_CODES.CUSTOMER_SAVINGS_USD, COA_CODES.LOANS_ORDINARY_USD,
@@ -239,7 +255,7 @@ describe('AccountingService', () => {
 
     it('entry is balanced with penalty', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await svc.postLoanRepaymentFromSavings(
         75, 5, 20, 'USD',
         COA_CODES.CUSTOMER_SAVINGS_USD, COA_CODES.LOANS_ORDINARY_USD,
@@ -256,7 +272,7 @@ describe('AccountingService', () => {
   describe('postVaultToTeller()', () => {
     it('creates one balanced entry', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       await svc.postVaultToTeller(
         2000, 'USD',
         COA_CODES.VAULT_MAIN_USD, COA_CODES.VAULT_MAIN_USD,
@@ -273,7 +289,7 @@ describe('AccountingService', () => {
   describe('postReversal()', () => {
     it('flips debit and credit of original lines', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       const originalLines = [
         { accountCode: COA_CODES.VAULT_MAIN_USD,          debit: 300, credit: 0,   currency: 'USD' },
         { accountCode: COA_CODES.CUSTOMER_SAVINGS_USD, debit: 0,   credit: 300, currency: 'USD' },
@@ -291,7 +307,7 @@ describe('AccountingService', () => {
 
     it('sets reversal_of on the saved entry', async () => {
       const { repo, saved } = makeStubRepo();
-      const svc = new AccountingService(repo);
+      const svc = makeService(repo);
       const originalLines = [
         { accountCode: COA_CODES.VAULT_MAIN_USD,          debit: 300, credit: 0,   currency: 'USD' },
         { accountCode: COA_CODES.CUSTOMER_SAVINGS_USD, debit: 0,   credit: 300, currency: 'USD' },

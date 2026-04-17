@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js';
 import {
   ChartOfAccountsEntity,
   JournalEntryEntity,
@@ -40,8 +41,8 @@ export interface JournalLineRecord {
   accountId: string;
   accountCode?: string;
   accountName?: string;
-  debit: number;
-  credit: number;
+  debit: string;
+  credit: string;
   currency: string;
   description: string | null;
 }
@@ -162,8 +163,8 @@ export class AccountingMapper {
       accountId: entity.account_id,
       accountCode: entity.chartAccount?.code,
       accountName: entity.chartAccount?.name,
-      debit: Number(entity.debit),
-      credit: Number(entity.credit),
+      debit: new Decimal(entity.debit).toFixed(2),
+      credit: new Decimal(entity.credit).toFixed(2),
       currency: entity.currency,
       description: entity.description,
     };

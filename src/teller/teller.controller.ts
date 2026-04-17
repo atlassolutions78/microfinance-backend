@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   ParseUUIDPipe,
   Post,
@@ -12,6 +13,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UserModel } from '../users/user.model';
 import { TellerService } from './teller.service';
+import { ReceiptService } from '../receipt/receipt.service';
 import {
   ApproveSessionDto,
   DepositPreviewQuery,
@@ -28,7 +30,10 @@ import {
 @UseGuards(JwtAuthGuard)
 @Controller('teller/sessions')
 export class TellerController {
-  constructor(private readonly tellerService: TellerService) {}
+  constructor(
+    private readonly tellerService: TellerService,
+    private readonly receiptService: ReceiptService,
+  ) {}
 
   /**
    * Teller requests a float for the day.
@@ -203,5 +208,18 @@ export class TellerController {
     @CurrentUser() user: UserModel,
   ) {
     return this.tellerService.getSession(id, user);
+  }
+
+  /**
+   * Returns a printable HTML receipt for a single account transaction
+   * (deposit, withdrawal, or transfer).
+   * GET /teller/sessions/transactions/:txId/receipt
+   */
+  @Get('transactions/:txId/receipt')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  getTransactionReceipt(
+    @Param('txId', ParseUUIDPipe) txId: string,
+  ): Promise<string> {
+    return this.receiptService.forAccountTx(txId);
   }
 }

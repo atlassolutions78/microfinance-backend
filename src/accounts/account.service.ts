@@ -55,7 +55,7 @@ export class AccountService {
       accountType: dto.accountType,
       currency: dto.currency,
       status: AccountStatus.PENDING,
-      balance: 0,
+      balance: '0.00',
       openedBy: user.id,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -107,7 +107,7 @@ export class AccountService {
    */
   async recordBalance(
     accountId: string,
-    newBalance: number,
+    newBalance: string,
     em?: EntityManager,
   ): Promise<void> {
     await this.accountRepository.updateBalance(accountId, newBalance, em);
