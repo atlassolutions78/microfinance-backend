@@ -112,6 +112,10 @@ export class TellerSessionEntity {
   @Column({ name: 'branch_id', type: 'uuid' })
   branch_id: string;
 
+  /** Human-readable session reference. Format: SES-{BRANCH_CODE}-{YYYYMMDD}-{NNNNN} */
+  @Column({ name: 'session_number', type: 'text', unique: true })
+  session_number: string;
+
   /** Business date: YYYY-MM-DD. One session per teller per day. */
   @Column({ type: 'date' })
   date: string;

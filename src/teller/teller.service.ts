@@ -171,10 +171,13 @@ export class TellerService {
       user.id,
     );
 
+    const sessionNumber = await this.sequenceService.nextReference(user.branchId, 'SES');
+
     const session = new TellerSessionModel({
       id: randomUUID(),
       tellerId: user.id,
       branchId: user.branchId,
+      sessionNumber,
       date: today,
       status: TellerSessionStatus.REQUESTED,
       requestedAmountFC: new Decimal(dto.requestedAmountFC).toFixed(2),
@@ -861,7 +864,7 @@ export class TellerService {
           varianceUsdCode: COA_CODES.TELLER_VARIANCE_USD,
           branchId: session.branchId,
           createdBy: manager.id,
-          description: `EOD reconciliation for session ${sessionId}`,
+          description: `EOD reconciliation for session ${session.sessionNumber}`,
         },
         em,
       );
