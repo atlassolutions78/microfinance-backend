@@ -5,6 +5,7 @@ export interface TellerSessionModelProps {
   id: string;
   tellerId: string;
   branchId: string;
+  sessionNumber: string;
   date: string; // YYYY-MM-DD — business date, one session per teller per day
   status: TellerSessionStatus;
 
@@ -52,6 +53,7 @@ export class TellerSessionModel {
   readonly id: string;
   readonly tellerId: string;
   readonly branchId: string;
+  readonly sessionNumber: string;
   readonly date: string;
   readonly createdAt: Date;
 
@@ -79,6 +81,7 @@ export class TellerSessionModel {
     this.id = props.id;
     this.tellerId = props.tellerId;
     this.branchId = props.branchId;
+    this.sessionNumber = props.sessionNumber;
     this.date = props.date;
     this.status = props.status;
     this.requestedAmountFC = props.requestedAmountFC;

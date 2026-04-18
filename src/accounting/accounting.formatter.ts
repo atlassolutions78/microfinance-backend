@@ -368,12 +368,9 @@ tfoot tr.totals td.num{text-align:right}
 .status{margin-top:12px;font-size:13px}
 .ok{color:#2e7d32;font-weight:600}
 .err{color:#c62828;font-weight:600}
-.print-btn{position:fixed;bottom:24px;right:24px;background:#1a3c5e;color:#fff;border:none;padding:11px 22px;border-radius:6px;font-size:13px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25)}
-.print-btn:hover{background:#245a8a}
 @page{margin:0}
 @media print{
   body{padding:12mm 15mm;font-size:11px}
-  .print-btn{display:none}
   thead th,tr.section-header td,tfoot tr.totals td,tbody tr:nth-child(even),tr.subtotal td{
     -webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
@@ -386,7 +383,6 @@ tfoot tr.totals td.num{text-align:right}
 </div>
 <p class="filters">${filters}</p>
 ${content}
-<button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
 </body>
 </html>`;
   }

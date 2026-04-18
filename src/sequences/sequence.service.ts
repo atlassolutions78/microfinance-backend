@@ -6,7 +6,7 @@ import {
   ReferenceSequenceEntity,
 } from './sequence.entity';
 
-export type ReferenceType = 'JE' | 'TLR' | 'RMT';
+export type ReferenceType = 'JE' | 'TLR' | 'RMT' | 'SES';
 
 @Injectable()
 export class SequenceService {

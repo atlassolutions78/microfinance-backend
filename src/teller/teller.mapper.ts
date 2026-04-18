@@ -42,6 +42,7 @@ export class TellerMapper {
       id: e.id,
       tellerId: e.teller_id,
       branchId: e.branch_id,
+      sessionNumber: e.session_number,
       date: e.date,
       status: e.status,
       requestedAmountFC: new Decimal(e.requested_amount_fc).toFixed(2),
@@ -77,6 +78,7 @@ export class TellerMapper {
     e.id = m.id;
     e.teller_id = m.tellerId;
     e.branch_id = m.branchId;
+    e.session_number = m.sessionNumber;
     e.date = m.date;
     e.status = m.status;
     e.requested_amount_fc = Number(m.requestedAmountFC);

@@ -44,10 +44,15 @@ export class AccountRepository {
       order: { created_at: 'DESC' },
     });
     const userIds = new Set(entities.map((e) => e.opened_by));
-    const nameMap = await this.resolveUserNames([...userIds]);
+    const [nameMap, clientMap] = await Promise.all([
+      this.resolveUserNames([...userIds]),
+      this.resolveClientNames([clientId]),
+    ]);
     return entities.map((e) => {
       const model = AccountMapper.toDomain(e);
       model.openedByName = nameMap.get(e.opened_by);
+      model.clientName   = clientMap.get(e.client_id)?.name;
+      model.clientNumber = clientMap.get(e.client_id)?.clientNumber;
       return model;
     });
   }
@@ -91,11 +96,17 @@ export class AccountRepository {
       .take(limit)
       .getMany();
 
-    const userIds = new Set(entities.map((e) => e.opened_by));
-    const nameMap = await this.resolveUserNames([...userIds]);
+    const userIds   = new Set(entities.map((e) => e.opened_by));
+    const clientIds = new Set(entities.map((e) => e.client_id));
+    const [nameMap, clientMap] = await Promise.all([
+      this.resolveUserNames([...userIds]),
+      this.resolveClientNames([...clientIds]),
+    ]);
     const data = entities.map((e) => {
       const model = AccountMapper.toDomain(e);
       model.openedByName = nameMap.get(e.opened_by);
+      model.clientName   = clientMap.get(e.client_id)?.name;
+      model.clientNumber = clientMap.get(e.client_id)?.clientNumber;
       return model;
     });
 
@@ -335,5 +346,24 @@ export class AccountRepository {
       select: { id: true, first_name: true, last_name: true },
     });
     return new Map(users.map((u) => [u.id, `${u.first_name} ${u.last_name}`]));
+  }
+
+  private async resolveClientNames(
+    ids: string[],
+  ): Promise<Map<string, { name: string; clientNumber: string }>> {
+    if (ids.length === 0) return new Map();
+    const rows: Array<{ id: string; client_number: string; name: string }> =
+      await this.dataSource.query(
+        `SELECT c.id, c.client_number,
+                COALESCE(ip.first_name || ' ' || ip.last_name, op.organization_name) AS name
+         FROM clients c
+         LEFT JOIN individual_profiles  ip ON ip.client_id = c.id
+         LEFT JOIN organization_profiles op ON op.client_id = c.id
+         WHERE c.id = ANY($1)`,
+        [ids],
+      );
+    return new Map(
+      rows.map((r) => [r.id, { name: r.name ?? '', clientNumber: r.client_number }]),
+    );
   }
 }
