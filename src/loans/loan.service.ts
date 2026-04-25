@@ -17,6 +17,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { LoanRepository } from './loan.repository';
 import { LoanPolicy, LOAN_PRODUCTS } from './loan.policy';
 import {
+  CollectionItem,
   LoanDocument,
   LoanModel,
   LoanPayment,
@@ -33,8 +34,11 @@ import {
   RepaymentStatus,
 } from './loan.enums';
 import {
+  ActiveLoansQueryDto,
   ApplyLoanDto,
+  CollectionsQueryDto,
   DisburseDto,
+  LoanApplicationsQueryDto,
   QueryLoansDto,
   RecordPaymentDto,
   RejectLoanDto,
@@ -574,6 +578,24 @@ export class LoanService {
     query: QueryLoansDto,
   ): Promise<{ data: LoanModel[]; total: number }> {
     return this.loanRepository.findAll(query);
+  }
+
+  async findApplications(
+    query: LoanApplicationsQueryDto,
+  ): Promise<{ data: LoanModel[]; total: number }> {
+    return this.loanRepository.findApplications(query);
+  }
+
+  async findActiveLoans(
+    query: ActiveLoansQueryDto,
+  ): Promise<{ data: LoanModel[]; total: number }> {
+    return this.loanRepository.findActiveLoans(query);
+  }
+
+  async findCollections(
+    query: CollectionsQueryDto,
+  ): Promise<{ data: CollectionItem[]; total: number }> {
+    return this.loanRepository.findCollections(query);
   }
 
   async findById(id: string): Promise<LoanModel> {

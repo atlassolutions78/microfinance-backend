@@ -11,6 +11,27 @@ import {
 } from './loan.enums';
 
 // ---------------------------------------------------------------------------
+// Collection item (read model for overdue installments view)
+// ---------------------------------------------------------------------------
+
+export interface CollectionItem {
+  scheduleId: string;
+  loanId: string;
+  loanNumber: string;
+  clientId: string;
+  clientName: string;
+  clientNumber: string;
+  installmentNumber: number;
+  dueDate: string;
+  totalAmount: string;
+  paidAmount: string;
+  outstandingAmount: string;
+  repaymentStatus: RepaymentStatus;
+  daysOverdue: number;
+  currency: LoanCurrency;
+}
+
+// ---------------------------------------------------------------------------
 // Repayment schedule item
 // ---------------------------------------------------------------------------
 
@@ -167,6 +188,11 @@ export class LoanModel {
   closedAt?: Date;
   updatedAt: Date;
 
+  /** Client's display name — populated at read time, not persisted. */
+  clientName?: string;
+  /** Client's number (e.g. CL-000001) — populated at read time, not persisted. */
+  clientNumber?: string;
+
   constructor(props: LoanModelProps) {
     this.id = props.id;
     this.loanNumber = props.loanNumber;
@@ -231,7 +257,9 @@ export class LoanModel {
    * Reduces outstanding balance. When fully paid, transitions to CLOSED.
    */
   applyPayment(principalCollected: string): void {
-    const reduced = new Decimal(this.outstandingBalance).minus(principalCollected);
+    const reduced = new Decimal(this.outstandingBalance).minus(
+      principalCollected,
+    );
     this.outstandingBalance = (reduced.isNegative() ? new Decimal(0) : reduced)
       .toDecimalPlaces(2)
       .toString();
@@ -254,7 +282,9 @@ export class LoanModel {
 
   // --- Business calculations ---
 
-  /** Monthly instalment using standard amortisation formula. */
+  /** Monthly instalment for display. Salary Advance: single payment P(1+r).
+   *  Overdraft: regular principal-only instalment P/n (last adds flat interest).
+   *  Personal Loan: amortised instalment. */
   monthlyInstalment(): string {
     const r = new Decimal(this.interestRate);
     const n = this.termMonths;
@@ -262,9 +292,14 @@ export class LoanModel {
 
     if (r.isZero()) return P.div(n).toFixed(2);
 
-    if (n === 1) {
-      // Salary Advance: flat single payment
-      return P.times(r.plus(1)).toFixed(2);
+    if (this.type === LoanType.SALARY_ADVANCE) {
+      // Single bullet payment: principal + one month's interest
+      return P.times(r.plus(1)).toDecimalPlaces(2).toString();
+    }
+
+    if (this.type === LoanType.OVERDRAFT) {
+      // Equal principal split; last instalment also carries P×r interest
+      return P.div(n).toDecimalPlaces(2).toString();
     }
 
     // Amortisation: P × r(1+r)^n / [(1+r)^n - 1]
@@ -280,10 +315,65 @@ export class LoanModel {
    * Each row contains principal, interest, and total per installment.
    */
   computeSchedule(disbursedAt: Date): RepaymentScheduleItem[] {
+    const rate = new Decimal(this.interestRate);
     const items: RepaymentScheduleItem[] = [];
+
+    if (this.type === LoanType.SALARY_ADVANCE) {
+      // Single bullet: principal + one month's flat interest
+      const dueDate = new Date(disbursedAt);
+      dueDate.setMonth(dueDate.getMonth() + 1);
+      const principal = new Decimal(this.principalAmount).toDecimalPlaces(2);
+      const interest = principal.times(rate).toDecimalPlaces(2);
+      const item = new RepaymentScheduleItem();
+      item.id = randomUUID();
+      item.loanId = this.id;
+      item.installmentNumber = 1;
+      item.dueDate = dueDate;
+      item.principalAmount = principal.toString();
+      item.interestAmount = interest.toString();
+      item.totalAmount = principal.plus(interest).toString();
+      item.paidAmount = '0.00';
+      item.status = RepaymentStatus.PENDING;
+      return [item];
+    }
+
+    if (this.type === LoanType.OVERDRAFT) {
+      // Equal principal each month; interest (P×r, once) added only on last instalment
+      const principal = new Decimal(this.principalAmount);
+      const flatInterest = principal.times(rate).toDecimalPlaces(2);
+      const regularPrincipal = principal
+        .div(this.termMonths)
+        .toDecimalPlaces(2);
+      let balance = principal;
+
+      for (let i = 1; i <= this.termMonths; i++) {
+        const dueDate = new Date(disbursedAt);
+        dueDate.setMonth(dueDate.getMonth() + i);
+        const isLast = i === this.termMonths;
+        // Mop up rounding on the last instalment's principal
+        const principalPortion = isLast
+          ? balance.toDecimalPlaces(2)
+          : regularPrincipal;
+        const interestPortion = isLast ? flatInterest : new Decimal(0);
+        balance = balance.minus(principalPortion);
+
+        const item = new RepaymentScheduleItem();
+        item.id = randomUUID();
+        item.loanId = this.id;
+        item.installmentNumber = i;
+        item.dueDate = dueDate;
+        item.principalAmount = principalPortion.toString();
+        item.interestAmount = interestPortion.toFixed(2);
+        item.totalAmount = principalPortion.plus(interestPortion).toString();
+        item.paidAmount = '0.00';
+        item.status = RepaymentStatus.PENDING;
+        items.push(item);
+      }
+      return items;
+    }
+
     const monthlyPayment = new Decimal(this.monthlyInstalment());
     let balance = new Decimal(this.principalAmount);
-    const rate = new Decimal(this.interestRate);
 
     for (let i = 1; i <= this.termMonths; i++) {
       const dueDate = new Date(disbursedAt);

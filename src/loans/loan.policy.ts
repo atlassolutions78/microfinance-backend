@@ -49,7 +49,6 @@ export const LOAN_PRODUCTS: Record<LoanType, LoanProduct> = {
 // ---------------------------------------------------------------------------
 
 const MAX_ACTIVE_LOANS = 1;
-const MIN_ACCOUNT_AGE_MONTHS = 6;
 export const PENALTY_RATE = 0.11; // 11 % applied to overdue installment amount
 
 // ---------------------------------------------------------------------------
@@ -66,24 +65,11 @@ export class LoanPolicy {
     }
   }
 
-  /**
-   * The account selected for disbursement must be ACTIVE and opened at
-   * least MIN_ACCOUNT_AGE_MONTHS ago.
-   */
+  /** The account selected for disbursement must be ACTIVE. */
   static assertAccountEligible(account: AccountModel): void {
     if (account.status !== AccountStatus.ACTIVE) {
       throw new BadRequestException(
         `The selected account must be ACTIVE to receive a loan disbursement. Current status: ${account.status}.`,
-      );
-    }
-
-    const minOpenDate = new Date();
-    minOpenDate.setMonth(minOpenDate.getMonth() - MIN_ACCOUNT_AGE_MONTHS);
-
-    if (account.createdAt > minOpenDate) {
-      throw new BadRequestException(
-        `Loan eligibility requires an account that is at least ${MIN_ACCOUNT_AGE_MONTHS} months old. ` +
-          `This account was opened on ${account.createdAt.toDateString()}.`,
       );
     }
   }

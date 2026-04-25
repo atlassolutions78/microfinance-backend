@@ -115,7 +115,7 @@ export class AccountService {
     const account = await this.accountRepository.findById(accountId);
     if (
       account?.status === AccountStatus.PENDING &&
-      AccountPolicy.meetsActivationThreshold(newBalance)
+      AccountPolicy.meetsActivationThreshold(newBalance, account.currency)
     ) {
       await this.accountRepository.updateStatus(
         accountId,
