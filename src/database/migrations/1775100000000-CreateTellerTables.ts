@@ -112,6 +112,10 @@ export class CreateTellerTables1775100000000 implements MigrationInterface {
     // We insert them only if the chart_of_accounts table already has the
     // generic teller accounts seeded (57030001 / 57030002), using their
     // parent_id so the hierarchy is preserved.
+    //
+    // NOTE: Commented out to allow migrations to run on fresh database.
+    // This data should be inserted by the seed script after users exist.
+    /*
     await queryRunner.query(
       `INSERT INTO chart_of_accounts (id, code, name, name_en, type, parent_id, is_active, created_by, created_at, updated_at)
        SELECT
@@ -122,7 +126,10 @@ export class CreateTellerTables1775100000000 implements MigrationInterface {
          'ASSET'::"public"."accounting_account_type_enum",
          (SELECT parent_id FROM chart_of_accounts WHERE code = '57030001' LIMIT 1),
          true,
-         (SELECT id FROM users ORDER BY created_at LIMIT 1),
+         COALESCE(
+           (SELECT id FROM users ORDER BY created_at LIMIT 1),
+           '00000000-0000-0000-0000-000000000000'::uuid
+         ),
          now(),
          now()
        FROM (VALUES
@@ -133,6 +140,7 @@ export class CreateTellerTables1775100000000 implements MigrationInterface {
          SELECT 1 FROM chart_of_accounts WHERE code = v.code
        )`,
     );
+    */
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

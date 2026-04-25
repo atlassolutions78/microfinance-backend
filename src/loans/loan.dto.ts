@@ -1,6 +1,7 @@
 ﻿import {
   IsArray,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -17,6 +18,7 @@ import {
   LoanDocumentType,
   LoanStatus,
   LoanType,
+  RepaymentStatus,
 } from './loan.enums';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -152,4 +154,80 @@ export class QueryLoansDto {
   @Min(1)
   @Max(100)
   limit?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Query filters (for GET /loans/applications)
+// ---------------------------------------------------------------------------
+
+export class LoanApplicationsQueryDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsIn([LoanStatus.PENDING, LoanStatus.APPROVED])
+  status?: LoanStatus.PENDING | LoanStatus.APPROVED;
+
+  @IsOptional()
+  @IsEnum(LoanType)
+  type?: LoanType;
+
+  @IsOptional()
+  @IsEnum(LoanCurrency)
+  currency?: LoanCurrency;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Query filters (for GET /loans/active)
+// ---------------------------------------------------------------------------
+
+export class ActiveLoansQueryDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsEnum(LoanType)
+  type?: LoanType;
+
+  @IsOptional()
+  @IsEnum(LoanCurrency)
+  currency?: LoanCurrency;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Query filters (for GET /loans/collections)
+// ---------------------------------------------------------------------------
+
+export class CollectionsQueryDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsIn([RepaymentStatus.LATE, RepaymentStatus.OVERDUE])
+  repaymentStatus?: RepaymentStatus.LATE | RepaymentStatus.OVERDUE;
+
+  @IsOptional()
+  @IsEnum(LoanCurrency)
+  currency?: LoanCurrency;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
 }

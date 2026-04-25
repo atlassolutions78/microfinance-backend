@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import Decimal from 'decimal.js';
 import { ClientType } from '../clients/client.enums';
-import { AccountType } from './account.enums';
+import { AccountCurrency, AccountType } from './account.enums';
 
 const ALLOWED_ACCOUNT_TYPES: Record<ClientType, AccountType[]> = {
   [ClientType.INDIVIDUAL]: [AccountType.SAVINGS, AccountType.CHECKING],
@@ -9,18 +9,15 @@ const ALLOWED_ACCOUNT_TYPES: Record<ClientType, AccountType[]> = {
 };
 
 export class AccountPolicy {
-  /**
-   * Minimum deposit amount (in USD) required to activate a PENDING account.
-   * Story 2.2: first deposit ≥ MIN_ACTIVATION_BALANCE flips status to ACTIVE.
-   */
-  static readonly MIN_ACTIVATION_BALANCE = 20;
+  static readonly MIN_ACTIVATION_BALANCE_USD = 20;
+  static readonly MIN_ACTIVATION_BALANCE_FC = 1500;
 
-  /**
-   * Asserts that a deposit amount is sufficient to activate a PENDING account.
-   * Called by the transaction service before applying the activation rule.
-   */
-  static meetsActivationThreshold(newBalance: string): boolean {
-    return new Decimal(newBalance).greaterThanOrEqualTo(AccountPolicy.MIN_ACTIVATION_BALANCE);
+  static meetsActivationThreshold(newBalance: string, currency: AccountCurrency): boolean {
+    const threshold =
+      currency === AccountCurrency.FC
+        ? AccountPolicy.MIN_ACTIVATION_BALANCE_FC
+        : AccountPolicy.MIN_ACTIVATION_BALANCE_USD;
+    return new Decimal(newBalance).greaterThanOrEqualTo(threshold);
   }
 
   /**

@@ -74,6 +74,9 @@ export class CreateRemittancesTable1775600000000 implements MigrationInterface {
     );
 
     // ── COA accounts ──────────────────────────────────────────────────────────
+    // NOTE: Commented out to allow migrations to run on fresh database.
+    // This data should be inserted by the seed script after users exist.
+    /*
     // Find the LIABILITIES root id first
     const liabilitiesRoot = await queryRunner.query(
       `SELECT id FROM chart_of_accounts WHERE code = 'LIABILITIES' LIMIT 1`,
@@ -91,6 +94,7 @@ export class CreateRemittancesTable1775600000000 implements MigrationInterface {
       `,
       [liabilitiesId],
     );
+    */
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

@@ -14,8 +14,11 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { UserModel } from '../users/user.model';
 import { LoanService } from './loan.service';
 import {
+  ActiveLoansQueryDto,
   ApplyLoanDto,
+  CollectionsQueryDto,
   DisburseDto,
+  LoanApplicationsQueryDto,
   QueryLoansDto,
   RecordPaymentDto,
   RejectLoanDto,
@@ -40,6 +43,21 @@ export class LoanController {
   @Get()
   findAll(@Query() query: QueryLoansDto) {
     return this.loanService.findAll(query);
+  }
+
+  @Get('applications')
+  findApplications(@Query() query: LoanApplicationsQueryDto) {
+    return this.loanService.findApplications(query);
+  }
+
+  @Get('active')
+  findActiveLoans(@Query() query: ActiveLoansQueryDto) {
+    return this.loanService.findActiveLoans(query);
+  }
+
+  @Get('collections')
+  findCollections(@Query() query: CollectionsQueryDto) {
+    return this.loanService.findCollections(query);
   }
 
   @Get(':id')
