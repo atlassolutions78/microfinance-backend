@@ -18,7 +18,6 @@ import {
   LoanDocumentType,
   LoanStatus,
   LoanType,
-  RepaymentStatus,
 } from './loan.enums';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -107,14 +106,11 @@ export class RejectLoanDto {
 // ---------------------------------------------------------------------------
 
 export class RecordPaymentDto {
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0.01)
-  amount?: number;
-
-  /** Target a specific installment. If omitted, the next unpaid installment is used. */
-  @IsUUID()
+  /** Target a specific installment number. If omitted, the next unpaid installment is used. */
+  @IsInt()
+  @Min(1)
   @IsOptional()
-  scheduleId?: string;
+  installmentNumber?: number;
 
   @IsString()
   @IsOptional()
@@ -218,8 +214,8 @@ export class CollectionsQueryDto {
   search?: string;
 
   @IsOptional()
-  @IsIn([RepaymentStatus.LATE, RepaymentStatus.OVERDUE])
-  repaymentStatus?: RepaymentStatus.LATE | RepaymentStatus.OVERDUE;
+  @IsIn([LoanStatus.WATCH, LoanStatus.SUBSTANDARD, LoanStatus.DOUBTFUL, LoanStatus.LOSS, LoanStatus.WRITE_OFF])
+  loanStatus?: LoanStatus;
 
   @IsOptional()
   @IsEnum(LoanCurrency)

@@ -9,6 +9,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Currency } from '../teller/teller.enums';
+import { IdType } from '../clients/client.enums';
 
 export class SendRemittanceDto {
   /** The sending teller's current open session. */
@@ -30,6 +31,9 @@ export class SendRemittanceDto {
   @IsString()
   @MinLength(2)
   recipientName: string;
+
+  @IsEnum(IdType)
+  recipientIdType: IdType;
 
   /** National ID, passport, or other government-issued ID number. */
   @IsString()

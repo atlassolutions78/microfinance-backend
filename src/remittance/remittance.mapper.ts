@@ -11,9 +11,10 @@ export class RemittanceMapper {
       sendingTellerId: e.sending_teller_id,
       sendingBranchId: e.sending_branch_id,
       receivingBranchId: e.receiving_branch_id,
-      amount: new Decimal(e.amount).toFixed(4),
+      amount: new Decimal(e.amount).toFixed(2),
       currency: e.currency,
       recipientName: e.recipient_name,
+      recipientIdType: e.recipient_id_type,
       recipientIdNumber: e.recipient_id_number,
       recipientPhone: e.recipient_phone ?? undefined,
       status: e.status,
@@ -36,9 +37,10 @@ export class RemittanceMapper {
     e.sending_teller_id = m.sendingTellerId;
     e.sending_branch_id = m.sendingBranchId;
     e.receiving_branch_id = m.receivingBranchId;
-    e.amount = new Decimal(m.amount).toDecimalPlaces(4).toNumber();
+    e.amount = new Decimal(m.amount).toDecimalPlaces(2).toNumber();
     e.currency = m.currency;
     e.recipient_name = m.recipientName;
+    e.recipient_id_type = m.recipientIdType;
     e.recipient_id_number = m.recipientIdNumber;
     e.recipient_phone = m.recipientPhone ?? null;
     e.status = m.status;
