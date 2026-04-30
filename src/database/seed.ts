@@ -84,6 +84,23 @@ import {
   AccountTxType,
   Currency,
 } from 'src/teller/teller.enums';
+import Decimal from 'decimal.js';
+import {
+  LoanEntity,
+  LoanSequenceEntity,
+  RepaymentScheduleEntity,
+  LoanPaymentEntity,
+  LoanPenaltyEntity,
+  LoanDocumentEntity,
+} from 'src/loans/loan.entity';
+import {
+  LoanType,
+  LoanStatus,
+  LoanCurrency,
+  RepaymentStatus,
+  LoanDocumentType,
+} from 'src/loans/loan.enums';
+import { LoanModel } from 'src/loans/loan.model';
 
 // ---------------------------------------------------------------------------
 
@@ -120,6 +137,12 @@ const ds = new DataSource({
     TellerSessionEntity,
     TellerTransactionEntity,
     ClientTransactionEntity,
+    LoanEntity,
+    LoanSequenceEntity,
+    RepaymentScheduleEntity,
+    LoanPaymentEntity,
+    LoanPenaltyEntity,
+    LoanDocumentEntity,
   ],
   synchronize: false,
 });
@@ -3182,6 +3205,426 @@ async function seed() {
   // Update SAVINGS sequence to account for new entries
   await seqRepo.update({ type: AccountType.SAVINGS }, { last_seq: 8 });
   console.log('  updated SAVINGS sequence: last_seq=8');
+
+  // -------------------------------------------------------------------------
+  // Loans
+  // -------------------------------------------------------------------------
+  console.log('\n--- Loans ---');
+
+  const loanRepo       = ds.getRepository(LoanEntity);
+  const loanSeqRepo    = ds.getRepository(LoanSequenceEntity);
+  const loanSchedRepo  = ds.getRepository(RepaymentScheduleEntity);
+  const loanPmtRepo    = ds.getRepository(LoanPaymentEntity);
+  const loanPenRepo    = ds.getRepository(LoanPenaltyEntity);
+  const loanDocRepo2   = ds.getRepository(LoanDocumentEntity);
+
+  async function loanExists(num: string): Promise<boolean> {
+    return !!(await loanRepo.findOne({ where: { loan_number: num } }));
+  }
+
+  // Fresh client lookups for loan section
+  const [lc1, lc2, lc5, lc6, lc7, lc8, lc9, lc10] = await Promise.all([
+    clientRepo.findOne({ where: { client_number: 'CL-000001' } }),
+    clientRepo.findOne({ where: { client_number: 'CL-000002' } }),
+    clientRepo.findOne({ where: { client_number: 'CL-000005' } }),
+    clientRepo.findOne({ where: { client_number: 'CL-000006' } }),
+    clientRepo.findOne({ where: { client_number: 'CL-000007' } }),
+    clientRepo.findOne({ where: { client_number: 'CL-000008' } }),
+    clientRepo.findOne({ where: { client_number: 'CL-000009' } }),
+    clientRepo.findOne({ where: { client_number: 'CL-000010' } }),
+  ]);
+
+  // Savings account lookups (seq 1-8 → CL-000001, CL-000002, CL-000005..CL-000010)
+  const [lAcc1, lAcc2, lAcc5, lAcc6, lAcc7, lAcc8, lAcc9, lAcc10] = await Promise.all([
+    accountRepo.findOne({ where: { account_number: AccountRepository.formatSavingsNumber(1) } }),
+    accountRepo.findOne({ where: { account_number: AccountRepository.formatSavingsNumber(2) } }),
+    accountRepo.findOne({ where: { account_number: AccountRepository.formatSavingsNumber(3) } }),
+    accountRepo.findOne({ where: { account_number: AccountRepository.formatSavingsNumber(4) } }),
+    accountRepo.findOne({ where: { account_number: AccountRepository.formatSavingsNumber(5) } }),
+    accountRepo.findOne({ where: { account_number: AccountRepository.formatSavingsNumber(6) } }),
+    accountRepo.findOne({ where: { account_number: AccountRepository.formatSavingsNumber(7) } }),
+    accountRepo.findOne({ where: { account_number: AccountRepository.formatSavingsNumber(8) } }),
+  ]);
+
+  const RATE_SALARY = new Decimal(0.025).toFixed(6);
+  const RATE_PERS   = new Decimal(0.05 / 12).toFixed(6);
+  const RATE_OVR    = new Decimal(0.025).toFixed(6);
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // LN-2024-0000001 — DOUBTFUL | CL-000010 | PERSONAL_LOAN USD 500 10m
+  // Disbursed 2024-12-10, last due 2025-10-10, late_since 2025-10-10 (≈200d ago)
+  // ──────────────────────────────────────────────────────────────────────────
+  if (lc10 && lAcc10 && !(await loanExists('LN-2024-0000001'))) {
+    const loanId = randomUUID();
+    const disbAt = new Date('2024-12-10');
+    const lateSince = new Date('2025-10-10');
+    const model = new LoanModel({
+      id: loanId, loanNumber: 'LN-2024-0000001', clientId: lc10.id, accountId: lAcc10.id,
+      branchId: gomaBranchId, type: LoanType.PERSONAL_LOAN, currency: LoanCurrency.USD,
+      principalAmount: '500.00', outstandingBalance: '500.00', interestRate: RATE_PERS,
+      termMonths: 10, status: LoanStatus.DOUBTFUL, appliedBy: adminId,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    const sched = model.computeSchedule(disbAt);
+
+    await loanRepo.save(loanRepo.create({
+      id: loanId, loan_number: 'LN-2024-0000001', client_id: lc10.id, account_id: lAcc10.id,
+      branch_id: gomaBranchId, type: LoanType.PERSONAL_LOAN, currency: LoanCurrency.USD,
+      principal_amount: '500.00', outstanding_balance: '500.00', interest_rate: RATE_PERS,
+      term_months: 10, purpose: 'Business equipment', status: LoanStatus.DOUBTFUL,
+      rejection_reason: null, applied_by: adminId, reviewed_by: officerId,
+      reviewed_at: new Date('2024-11-28'), disbursed_at: disbAt, disbursed_by: officerId,
+      closed_at: null, late_since: lateSince,
+    }));
+    await ds.query(`UPDATE loans SET created_at = '2024-11-25' WHERE loan_number = 'LN-2024-0000001'`);
+
+    for (const item of sched) {
+      await loanSchedRepo.save(loanSchedRepo.create({
+        id: item.id, loan_id: loanId, installment_number: item.installmentNumber,
+        due_date: item.dueDate.toISOString().split('T')[0],
+        principal_amount: item.principalAmount, interest_amount: item.interestAmount,
+        total_amount: item.totalAmount, paid_amount: '0.00',
+        status: RepaymentStatus.PENDING, paid_at: null,
+      }));
+    }
+    await loanDocRepo2.save(loanDocRepo2.create({
+      id: randomUUID(), loan_id: loanId, document_type: LoanDocumentType.REQUEST_LETTER,
+      file_name: 'request-letter.pdf',
+      file_url: 'uploads/loans/LN-2024-0000001/request-letter.pdf', uploaded_by: adminId,
+    }));
+    console.log('  created loan: LN-2024-0000001 (DOUBTFUL, CL-000010, USD 500 PERSONAL_LOAN 10m)');
+  } else {
+    console.log('  skip loan: LN-2024-0000001');
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // LN-2025-0000001 — WATCH | CL-000008 | PERSONAL_LOAN USD 150 10m
+  // Disbursed 2025-06-08, last due 2026-04-08, late_since 2026-04-08 (20d ago)
+  // ──────────────────────────────────────────────────────────────────────────
+  if (lc8 && lAcc8 && !(await loanExists('LN-2025-0000001'))) {
+    const loanId = randomUUID();
+    const disbAt = new Date('2025-06-08');
+    const lateSince = new Date('2026-04-08');
+    const model = new LoanModel({
+      id: loanId, loanNumber: 'LN-2025-0000001', clientId: lc8.id, accountId: lAcc8.id,
+      branchId: gomaBranchId, type: LoanType.PERSONAL_LOAN, currency: LoanCurrency.USD,
+      principalAmount: '150.00', outstandingBalance: '150.00', interestRate: RATE_PERS,
+      termMonths: 10, status: LoanStatus.WATCH, appliedBy: adminId,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    const sched = model.computeSchedule(disbAt);
+
+    await loanRepo.save(loanRepo.create({
+      id: loanId, loan_number: 'LN-2025-0000001', client_id: lc8.id, account_id: lAcc8.id,
+      branch_id: gomaBranchId, type: LoanType.PERSONAL_LOAN, currency: LoanCurrency.USD,
+      principal_amount: '150.00', outstanding_balance: '150.00', interest_rate: RATE_PERS,
+      term_months: 10, purpose: 'School fees', status: LoanStatus.WATCH,
+      rejection_reason: null, applied_by: adminId, reviewed_by: officerId,
+      reviewed_at: new Date('2025-05-28'), disbursed_at: disbAt, disbursed_by: officerId,
+      closed_at: null, late_since: lateSince,
+    }));
+    await ds.query(`UPDATE loans SET created_at = '2025-05-25' WHERE loan_number = 'LN-2025-0000001'`);
+
+    for (const item of sched) {
+      await loanSchedRepo.save(loanSchedRepo.create({
+        id: item.id, loan_id: loanId, installment_number: item.installmentNumber,
+        due_date: item.dueDate.toISOString().split('T')[0],
+        principal_amount: item.principalAmount, interest_amount: item.interestAmount,
+        total_amount: item.totalAmount, paid_amount: '0.00',
+        status: RepaymentStatus.PENDING, paid_at: null,
+      }));
+    }
+    await loanDocRepo2.save(loanDocRepo2.create({
+      id: randomUUID(), loan_id: loanId, document_type: LoanDocumentType.REQUEST_LETTER,
+      file_name: 'request-letter.pdf',
+      file_url: 'uploads/loans/LN-2025-0000001/request-letter.pdf', uploaded_by: adminId,
+    }));
+    console.log('  created loan: LN-2025-0000001 (WATCH 20d, CL-000008, USD 150 PERSONAL_LOAN 10m)');
+  } else {
+    console.log('  skip loan: LN-2025-0000001');
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // LN-2026-0000001 — CLOSED | CL-000005 | SALARY_ADVANCE USD 200 1m
+  // Disbursed 2026-01-25, due 2026-02-25, paid 2026-02-25
+  // ──────────────────────────────────────────────────────────────────────────
+  if (lc5 && lAcc5 && !(await loanExists('LN-2026-0000001'))) {
+    const loanId = randomUUID();
+    const disbAt = new Date('2026-01-25');
+    const paidAt = new Date('2026-02-25');
+    const model = new LoanModel({
+      id: loanId, loanNumber: 'LN-2026-0000001', clientId: lc5.id, accountId: lAcc5.id,
+      branchId: gomaBranchId, type: LoanType.SALARY_ADVANCE, currency: LoanCurrency.USD,
+      principalAmount: '200.00', outstandingBalance: '0.00', interestRate: RATE_SALARY,
+      termMonths: 1, status: LoanStatus.CLOSED, appliedBy: adminId,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    const sched = model.computeSchedule(disbAt); // [{ principal:200, interest:5, total:205 }]
+
+    await loanRepo.save(loanRepo.create({
+      id: loanId, loan_number: 'LN-2026-0000001', client_id: lc5.id, account_id: lAcc5.id,
+      branch_id: gomaBranchId, type: LoanType.SALARY_ADVANCE, currency: LoanCurrency.USD,
+      principal_amount: '200.00', outstanding_balance: '0.00', interest_rate: RATE_SALARY,
+      term_months: 1, purpose: 'Salary advance', status: LoanStatus.CLOSED,
+      rejection_reason: null, applied_by: adminId, reviewed_by: officerId,
+      reviewed_at: new Date('2026-01-22'), disbursed_at: disbAt, disbursed_by: officerId,
+      closed_at: paidAt, late_since: null,
+    }));
+    await ds.query(`UPDATE loans SET created_at = '2026-01-20' WHERE loan_number = 'LN-2026-0000001'`);
+
+    const item0 = sched[0];
+    const schedId = item0.id;
+    await loanSchedRepo.save(loanSchedRepo.create({
+      id: schedId, loan_id: loanId, installment_number: 1,
+      due_date: item0.dueDate.toISOString().split('T')[0],
+      principal_amount: item0.principalAmount, interest_amount: item0.interestAmount,
+      total_amount: item0.totalAmount, paid_amount: item0.totalAmount,
+      status: RepaymentStatus.PAID, paid_at: paidAt,
+    }));
+    await loanPmtRepo.save(loanPmtRepo.create({
+      id: randomUUID(), loan_id: loanId, schedule_id: schedId, transaction_id: null,
+      amount: item0.totalAmount, currency: LoanCurrency.USD,
+      payment_date: paidAt, recorded_by: officerId, notes: 'Full repayment',
+    }));
+    await loanDocRepo2.save(loanDocRepo2.create({
+      id: randomUUID(), loan_id: loanId, document_type: LoanDocumentType.REQUEST_LETTER,
+      file_name: 'request-letter.pdf',
+      file_url: 'uploads/loans/LN-2026-0000001/request-letter.pdf', uploaded_by: adminId,
+    }));
+    console.log('  created loan: LN-2026-0000001 (CLOSED, CL-000005, USD 200 SALARY_ADVANCE)');
+  } else {
+    console.log('  skip loan: LN-2026-0000001');
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // LN-2026-0000002 — ACTIVE | CL-000006 | PERSONAL_LOAN USD 400 12m
+  // Disbursed 2026-01-10, installments 1-3 paid (Feb, Mar, Apr 10)
+  // ──────────────────────────────────────────────────────────────────────────
+  if (lc6 && lAcc6 && !(await loanExists('LN-2026-0000002'))) {
+    const loanId = randomUUID();
+    const disbAt = new Date('2026-01-10');
+    const PAID_COUNT = 3;
+    const model = new LoanModel({
+      id: loanId, loanNumber: 'LN-2026-0000002', clientId: lc6.id, accountId: lAcc6.id,
+      branchId: gomaBranchId, type: LoanType.PERSONAL_LOAN, currency: LoanCurrency.USD,
+      principalAmount: '400.00', outstandingBalance: '400.00', interestRate: RATE_PERS,
+      termMonths: 12, status: LoanStatus.ACTIVE, appliedBy: adminId,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    const sched = model.computeSchedule(disbAt);
+
+    let outstanding = new Decimal('400.00');
+    for (let i = 0; i < PAID_COUNT; i++) {
+      outstanding = outstanding.minus(sched[i].principalAmount);
+    }
+
+    await loanRepo.save(loanRepo.create({
+      id: loanId, loan_number: 'LN-2026-0000002', client_id: lc6.id, account_id: lAcc6.id,
+      branch_id: gomaBranchId, type: LoanType.PERSONAL_LOAN, currency: LoanCurrency.USD,
+      principal_amount: '400.00', outstanding_balance: outstanding.toFixed(2), interest_rate: RATE_PERS,
+      term_months: 12, purpose: 'Home renovation', status: LoanStatus.ACTIVE,
+      rejection_reason: null, applied_by: adminId, reviewed_by: officerId,
+      reviewed_at: new Date('2026-01-10'), disbursed_at: disbAt, disbursed_by: officerId,
+      closed_at: null, late_since: null,
+    }));
+    await ds.query(`UPDATE loans SET created_at = '2026-01-08' WHERE loan_number = 'LN-2026-0000002'`);
+
+    const paymentDates = [
+      new Date('2026-02-10'), new Date('2026-03-10'), new Date('2026-04-10'),
+    ];
+    for (let i = 0; i < sched.length; i++) {
+      const item = sched[i];
+      const isPaid = i < PAID_COUNT;
+      await loanSchedRepo.save(loanSchedRepo.create({
+        id: item.id, loan_id: loanId, installment_number: item.installmentNumber,
+        due_date: item.dueDate.toISOString().split('T')[0],
+        principal_amount: item.principalAmount, interest_amount: item.interestAmount,
+        total_amount: item.totalAmount,
+        paid_amount: isPaid ? item.totalAmount : '0.00',
+        status: isPaid ? RepaymentStatus.PAID : RepaymentStatus.PENDING,
+        paid_at: isPaid ? paymentDates[i] : null,
+      }));
+      if (isPaid) {
+        await loanPmtRepo.save(loanPmtRepo.create({
+          id: randomUUID(), loan_id: loanId, schedule_id: item.id, transaction_id: null,
+          amount: item.totalAmount, currency: LoanCurrency.USD,
+          payment_date: paymentDates[i], recorded_by: officerId, notes: null,
+        }));
+      }
+    }
+    await loanDocRepo2.save(loanDocRepo2.create({
+      id: randomUUID(), loan_id: loanId, document_type: LoanDocumentType.REQUEST_LETTER,
+      file_name: 'request-letter.pdf',
+      file_url: 'uploads/loans/LN-2026-0000002/request-letter.pdf', uploaded_by: adminId,
+    }));
+    console.log('  created loan: LN-2026-0000002 (ACTIVE 3/12 paid, CL-000006, USD 400 PERSONAL_LOAN)');
+  } else {
+    console.log('  skip loan: LN-2026-0000002');
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // LN-2026-0000003 — ACTIVE | CL-000007 | OVERDRAFT USD 500 3m
+  // Disbursed 2026-04-20, no payments yet
+  // ──────────────────────────────────────────────────────────────────────────
+  if (lc7 && lAcc7 && !(await loanExists('LN-2026-0000003'))) {
+    const loanId = randomUUID();
+    const disbAt = new Date('2026-04-20');
+    const model = new LoanModel({
+      id: loanId, loanNumber: 'LN-2026-0000003', clientId: lc7.id, accountId: lAcc7.id,
+      branchId: gomaBranchId, type: LoanType.OVERDRAFT, currency: LoanCurrency.USD,
+      principalAmount: '500.00', outstandingBalance: '500.00', interestRate: RATE_OVR,
+      termMonths: 3, status: LoanStatus.ACTIVE, appliedBy: adminId,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    const sched = model.computeSchedule(disbAt);
+
+    await loanRepo.save(loanRepo.create({
+      id: loanId, loan_number: 'LN-2026-0000003', client_id: lc7.id, account_id: lAcc7.id,
+      branch_id: gomaBranchId, type: LoanType.OVERDRAFT, currency: LoanCurrency.USD,
+      principal_amount: '500.00', outstanding_balance: '500.00', interest_rate: RATE_OVR,
+      term_months: 3, purpose: 'Working capital', status: LoanStatus.ACTIVE,
+      rejection_reason: null, applied_by: adminId, reviewed_by: officerId,
+      reviewed_at: new Date('2026-04-18'), disbursed_at: disbAt, disbursed_by: officerId,
+      closed_at: null, late_since: null,
+    }));
+    await ds.query(`UPDATE loans SET created_at = '2026-04-15' WHERE loan_number = 'LN-2026-0000003'`);
+
+    for (const item of sched) {
+      await loanSchedRepo.save(loanSchedRepo.create({
+        id: item.id, loan_id: loanId, installment_number: item.installmentNumber,
+        due_date: item.dueDate.toISOString().split('T')[0],
+        principal_amount: item.principalAmount, interest_amount: item.interestAmount,
+        total_amount: item.totalAmount, paid_amount: '0.00',
+        status: RepaymentStatus.PENDING, paid_at: null,
+      }));
+    }
+    await loanDocRepo2.save(loanDocRepo2.create({
+      id: randomUUID(), loan_id: loanId, document_type: LoanDocumentType.REQUEST_LETTER,
+      file_name: 'request-letter.pdf',
+      file_url: 'uploads/loans/LN-2026-0000003/request-letter.pdf', uploaded_by: adminId,
+    }));
+    console.log('  created loan: LN-2026-0000003 (ACTIVE just-disbursed, CL-000007, USD 500 OVERDRAFT 3m)');
+  } else {
+    console.log('  skip loan: LN-2026-0000003');
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // LN-2026-0000004 — WATCH+penalty | CL-000009 | SALARY_ADVANCE USD 300 1m
+  // Disbursed 2026-02-23, due 2026-03-23, late_since 2026-03-24 (35d ago)
+  // Penalty applied 2026-04-23 (day 30): 300 × 11% = 33.00
+  // ──────────────────────────────────────────────────────────────────────────
+  if (lc9 && lAcc9 && !(await loanExists('LN-2026-0000004'))) {
+    const loanId = randomUUID();
+    const disbAt = new Date('2026-02-23');
+    const lateSince = new Date('2026-03-24');
+    const model = new LoanModel({
+      id: loanId, loanNumber: 'LN-2026-0000004', clientId: lc9.id, accountId: lAcc9.id,
+      branchId: gomaBranchId, type: LoanType.SALARY_ADVANCE, currency: LoanCurrency.USD,
+      principalAmount: '300.00', outstandingBalance: '300.00', interestRate: RATE_SALARY,
+      termMonths: 1, status: LoanStatus.WATCH, appliedBy: adminId,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    const sched = model.computeSchedule(disbAt);
+
+    await loanRepo.save(loanRepo.create({
+      id: loanId, loan_number: 'LN-2026-0000004', client_id: lc9.id, account_id: lAcc9.id,
+      branch_id: gomaBranchId, type: LoanType.SALARY_ADVANCE, currency: LoanCurrency.USD,
+      principal_amount: '300.00', outstanding_balance: '300.00', interest_rate: RATE_SALARY,
+      term_months: 1, purpose: 'Salary advance', status: LoanStatus.WATCH,
+      rejection_reason: null, applied_by: adminId, reviewed_by: officerId,
+      reviewed_at: new Date('2026-02-20'), disbursed_at: disbAt, disbursed_by: officerId,
+      closed_at: null, late_since: lateSince,
+    }));
+    await ds.query(`UPDATE loans SET created_at = '2026-02-18' WHERE loan_number = 'LN-2026-0000004'`);
+
+    const item0 = sched[0];
+    await loanSchedRepo.save(loanSchedRepo.create({
+      id: item0.id, loan_id: loanId, installment_number: 1,
+      due_date: item0.dueDate.toISOString().split('T')[0],
+      principal_amount: item0.principalAmount, interest_amount: item0.interestAmount,
+      total_amount: item0.totalAmount, paid_amount: '0.00',
+      status: RepaymentStatus.PENDING, paid_at: null,
+    }));
+    // 11% penalty on outstanding balance at day 30
+    const penaltyAmount = Math.round(300 * 0.11 * 100) / 100; // 33.00
+    await loanPenRepo.save(loanPenRepo.create({
+      id: randomUUID(), loan_id: loanId, schedule_id: null,
+      penalty_rate: new Decimal(0.11).toFixed(4),
+      penalty_amount: new Decimal(penaltyAmount).toFixed(2),
+      applied_at: new Date('2026-04-23'),
+    }));
+    await loanDocRepo2.save(loanDocRepo2.create({
+      id: randomUUID(), loan_id: loanId, document_type: LoanDocumentType.REQUEST_LETTER,
+      file_name: 'request-letter.pdf',
+      file_url: 'uploads/loans/LN-2026-0000004/request-letter.pdf', uploaded_by: adminId,
+    }));
+    console.log('  created loan: LN-2026-0000004 (WATCH 35d+penalty, CL-000009, USD 300 SALARY_ADVANCE)');
+  } else {
+    console.log('  skip loan: LN-2026-0000004');
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // LN-2026-0000005 — PENDING | CL-000001 | SALARY_ADVANCE USD 100 1m
+  // Applied 2026-04-25, awaiting officer approval
+  // ──────────────────────────────────────────────────────────────────────────
+  if (lc1 && lAcc1 && !(await loanExists('LN-2026-0000005'))) {
+    const loanId = randomUUID();
+    await loanRepo.save(loanRepo.create({
+      id: loanId, loan_number: 'LN-2026-0000005', client_id: lc1.id, account_id: lAcc1.id,
+      branch_id: gomaBranchId, type: LoanType.SALARY_ADVANCE, currency: LoanCurrency.USD,
+      principal_amount: '100.00', outstanding_balance: '0.00', interest_rate: RATE_SALARY,
+      term_months: 1, purpose: 'Emergency salary advance', status: LoanStatus.PENDING,
+      rejection_reason: null, applied_by: adminId, reviewed_by: null,
+      reviewed_at: null, disbursed_at: null, disbursed_by: null,
+      closed_at: null, late_since: null,
+    }));
+    await ds.query(`UPDATE loans SET created_at = '2026-04-25' WHERE loan_number = 'LN-2026-0000005'`);
+    await loanDocRepo2.save(loanDocRepo2.create({
+      id: randomUUID(), loan_id: loanId, document_type: LoanDocumentType.REQUEST_LETTER,
+      file_name: 'request-letter.pdf',
+      file_url: 'uploads/loans/LN-2026-0000005/request-letter.pdf', uploaded_by: adminId,
+    }));
+    console.log('  created loan: LN-2026-0000005 (PENDING, CL-000001, USD 100 SALARY_ADVANCE)');
+  } else {
+    console.log('  skip loan: LN-2026-0000005');
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // LN-2026-0000006 — APPROVED | CL-000002 | PERSONAL_LOAN FC 100000 12m
+  // Applied 2026-04-20, approved 2026-04-23, awaiting disbursement
+  // ──────────────────────────────────────────────────────────────────────────
+  if (lc2 && lAcc2 && !(await loanExists('LN-2026-0000006'))) {
+    const loanId = randomUUID();
+    await loanRepo.save(loanRepo.create({
+      id: loanId, loan_number: 'LN-2026-0000006', client_id: lc2.id, account_id: lAcc2.id,
+      branch_id: gomaBranchId, type: LoanType.PERSONAL_LOAN, currency: LoanCurrency.FC,
+      principal_amount: '100000.00', outstanding_balance: '0.00', interest_rate: RATE_PERS,
+      term_months: 12, purpose: 'Business capital', status: LoanStatus.APPROVED,
+      rejection_reason: null, applied_by: adminId, reviewed_by: officerId,
+      reviewed_at: new Date('2026-04-23'), disbursed_at: null, disbursed_by: null,
+      closed_at: null, late_since: null,
+    }));
+    await ds.query(`UPDATE loans SET created_at = '2026-04-20' WHERE loan_number = 'LN-2026-0000006'`);
+    await loanDocRepo2.save(loanDocRepo2.create({
+      id: randomUUID(), loan_id: loanId, document_type: LoanDocumentType.REQUEST_LETTER,
+      file_name: 'request-letter.pdf',
+      file_url: 'uploads/loans/LN-2026-0000006/request-letter.pdf', uploaded_by: adminId,
+    }));
+    await loanDocRepo2.save(loanDocRepo2.create({
+      id: randomUUID(), loan_id: loanId, document_type: LoanDocumentType.COMMITMENT_LETTER,
+      file_name: 'commitment-letter.pdf',
+      file_url: 'uploads/loans/LN-2026-0000006/commitment-letter.pdf', uploaded_by: officerId,
+    }));
+    console.log('  created loan: LN-2026-0000006 (APPROVED, CL-000002, FC 100000 PERSONAL_LOAN 12m)');
+  } else {
+    console.log('  skip loan: LN-2026-0000006');
+  }
+
+  // Upsert loan sequences
+  await loanSeqRepo.upsert({ year: 2024, last_seq: 1 }, ['year']);
+  await loanSeqRepo.upsert({ year: 2025, last_seq: 1 }, ['year']);
+  await loanSeqRepo.upsert({ year: 2026, last_seq: 6 }, ['year']);
+  console.log('  upserted loan sequences: 2024=1, 2025=1, 2026=6');
 
   // -------------------------------------------------------------------------
 

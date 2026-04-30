@@ -24,7 +24,10 @@ async function main() {
     `SELECT id, account_number, account_type, currency, status, created_at FROM accounts WHERE client_id = $1`,
     [clientId],
   );
-  console.log('EXISTING ACCOUNTS FOR CLIENT:', JSON.stringify(existing, null, 2));
+  console.log(
+    'EXISTING ACCOUNTS FOR CLIENT:',
+    JSON.stringify(existing, null, 2),
+  );
 
   await ds.destroy();
 }
