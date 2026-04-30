@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import { RemittanceStatus } from './remittance.enums';
 import { Currency } from '../teller/teller.enums';
+import { IdType } from '../clients/client.enums';
 
 @Entity('remittances')
 export class RemittanceEntity {
@@ -47,6 +48,14 @@ export class RemittanceEntity {
 
   @Column({ name: 'recipient_name', type: 'text' })
   recipient_name: string;
+
+  @Column({
+    name: 'recipient_id_type',
+    type: 'enum',
+    enum: IdType,
+    enumName: 'individual_profiles_id_type_enum',
+  })
+  recipient_id_type: IdType;
 
   @Column({ name: 'recipient_id_number', type: 'text' })
   recipient_id_number: string;

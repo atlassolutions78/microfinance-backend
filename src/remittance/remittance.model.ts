@@ -1,5 +1,6 @@
 import { RemittanceStatus } from './remittance.enums';
 import { Currency } from '../teller/teller.enums';
+import { IdType } from '../clients/client.enums';
 
 export interface RemittanceModelProps {
   id: string;
@@ -11,6 +12,7 @@ export interface RemittanceModelProps {
   amount: string;
   currency: Currency;
   recipientName: string;
+  recipientIdType: IdType;
   recipientIdNumber: string;
   recipientPhone: string | undefined;
   status: RemittanceStatus;
@@ -44,6 +46,7 @@ export class RemittanceModel {
   readonly amount: string;
   readonly currency: Currency;
   readonly recipientName: string;
+  readonly recipientIdType: IdType;
   readonly recipientIdNumber: string;
   readonly recipientPhone: string | undefined;
   readonly createdAt: Date;
@@ -67,6 +70,7 @@ export class RemittanceModel {
     this.amount = props.amount;
     this.currency = props.currency;
     this.recipientName = props.recipientName;
+    this.recipientIdType = props.recipientIdType;
     this.recipientIdNumber = props.recipientIdNumber;
     this.recipientPhone = props.recipientPhone;
     this.status = props.status;

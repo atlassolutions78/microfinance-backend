@@ -49,7 +49,9 @@ import { NotificationsModule } from './notifications/notifications.module';
               }),
           autoLoadEntities: true, // Each module registers its entities via forFeature()
           synchronize: false, // Never sync in production — use migrations
-          migrationsRun: false, // Run migrations manually via CLI
+          migrations: [__dirname + '/database/migrations/*.js'],
+          migrationsTableName: 'migrations',
+          migrationsRun: true, // Auto-run pending migrations on startup
           logging: config.get<string>('NODE_ENV') !== 'production',
         };
       },

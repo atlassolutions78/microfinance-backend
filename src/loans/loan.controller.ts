@@ -134,10 +134,10 @@ export class LoanController {
     return this.loanService.getDocuments(id);
   }
 
-  /** Trigger the penalty processing cycle (admin / cron endpoint). */
-  @Post('admin/process-penalties')
-  processLatePenalties() {
-    return this.loanService.processLatePenalties();
+  /** Trigger the late loan classification + penalty cycle (admin / cron endpoint). */
+  @Post('admin/process-late-loans')
+  processLateLoans() {
+    return this.loanService.processLateLoans();
   }
 
   /** Trigger the auto-repayment cycle (admin / cron endpoint). */

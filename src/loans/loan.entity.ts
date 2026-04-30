@@ -87,6 +87,9 @@ export class LoanEntity {
   @Column({ name: 'closed_at', type: 'timestamptz', nullable: true })
   closed_at: Date | null;
 
+  @Column({ name: 'late_since', type: 'timestamptz', nullable: true })
+  late_since: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   created_at: Date;
 
@@ -142,9 +145,6 @@ export class RepaymentScheduleEntity {
 
   @Column({ name: 'paid_at', type: 'timestamptz', nullable: true })
   paid_at: Date | null;
-
-  @Column({ name: 'reminder_sent_at', type: 'timestamptz', nullable: true })
-  reminder_sent_at: Date | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,8 +196,8 @@ export class LoanPenaltyEntity {
   @Column({ name: 'loan_id', type: 'uuid' })
   loan_id: string;
 
-  @Column({ name: 'schedule_id', type: 'uuid' })
-  schedule_id: string;
+  @Column({ name: 'schedule_id', type: 'uuid', nullable: true })
+  schedule_id: string | null;
 
   @Column({ name: 'penalty_rate', type: 'numeric', precision: 5, scale: 4 })
   penalty_rate: string;
@@ -224,8 +224,8 @@ export class LoanReminderEntity {
   @Column({ name: 'loan_id', type: 'uuid' })
   loan_id: string;
 
-  @Column({ name: 'schedule_id', type: 'uuid' })
-  schedule_id: string;
+  @Column({ name: 'schedule_id', type: 'uuid', nullable: true })
+  schedule_id: string | null;
 
   @Column({ name: 'channel', type: 'enum', enum: ReminderChannel })
   channel: ReminderChannel;

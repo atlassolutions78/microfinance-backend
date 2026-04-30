@@ -236,24 +236,29 @@ export class LoanService {
   ): Promise<LoanModel> {
     const loan = await this.findOrFail(id);
 
-    if (
-      loan.status !== LoanStatus.ACTIVE &&
-      loan.status !== LoanStatus.DEFAULTED
-    ) {
+    const payableStatuses: LoanStatus[] = [
+      LoanStatus.ACTIVE,
+      LoanStatus.WATCH,
+      LoanStatus.SUBSTANDARD,
+      LoanStatus.DOUBTFUL,
+      LoanStatus.LOSS,
+      LoanStatus.WRITE_OFF,
+    ];
+    if (!payableStatuses.includes(loan.status)) {
       throw new BadRequestException(
-        `Payments can only be recorded on ACTIVE loans. Current status: ${loan.status}.`,
+        `Payments can only be recorded on active or late loans. Current status: ${loan.status}.`,
       );
     }
 
     const allItems = await this.loanRepository.findScheduleByLoanId(id);
 
     let target: RepaymentScheduleItem | undefined;
-    if (dto.scheduleId) {
+    if (dto.installmentNumber) {
       target = allItems.find(
-        (i) => i.id === dto.scheduleId && i.status !== RepaymentStatus.PAID,
+        (i) => i.installmentNumber === dto.installmentNumber && i.status !== RepaymentStatus.PAID,
       );
       if (!target) {
-        throw new NotFoundException('Schedule item not found or already paid.');
+        throw new NotFoundException('Installment not found or already paid.');
       }
     } else {
       target = allItems
@@ -264,42 +269,43 @@ export class LoanService {
       }
     }
 
-    // Fetch assessed penalties for this installment
-    const penalties = await this.loanRepository.findPenaltiesForScheduleItem(
-      target.id,
+    // For late loans, include the penalty in the receivable credit
+    const hasPenalty = await this.loanRepository.existsPenaltyForLoan(loan.id);
+    const penalties = hasPenalty
+      ? await this.loanRepository.findPenaltiesByLoanId(loan.id)
+      : [];
+    const totalPenalty = penalties.reduce(
+      (sum, p) => new Decimal(sum).plus(p.penaltyAmount).toFixed(2),
+      '0.00',
     );
-    const totalPenalty = penalties.reduce((sum, p) => new Decimal(sum).plus(p.penaltyAmount).toFixed(2), '0.00');
 
-    // Repayment split:
-    //   loanReceivableCredit = principal + assessed penalty (clears the receivable)
-    //   interestCredit       = interest (goes to Interest Income)
-    // Penalty income was already recognised at assessment time — not credited again here.
-    const loanReceivableCredit = new Decimal(target.principalAmount).plus(totalPenalty).toFixed(2);
+    // Only apply penalty on the first unpaid installment settlement
+    const isFirstUnpaid = allItems
+      .filter((i) => i.status !== RepaymentStatus.PAID)
+      .sort((a, b) => a.installmentNumber - b.installmentNumber)[0]?.id === target.id;
+
+    const penaltyToApply = isFirstUnpaid ? totalPenalty : '0.00';
+    const loanReceivableCredit = new Decimal(target.principalAmount).plus(penaltyToApply).toFixed(2);
     const interestCredit = target.interestAmount;
 
     const { loanReceivableCode, interestIncomeCode, savingsCode } =
       this.getCoaCodes(loan.type, loan.currency);
-
     const penaltyIncomeCode =
       loan.currency === LoanCurrency.FC
         ? COA_CODES.PENALTY_INCOME_FC
         : COA_CODES.PENALTY_INCOME_USD;
 
-    // Atomic: debit account + post journal
     const totalDebit = new Decimal(loanReceivableCredit).plus(interestCredit).toFixed(2);
     const repayAccount = await this.accountService.findById(loan.accountId);
     if (new Decimal(repayAccount.balance).lessThan(totalDebit)) {
       throw new BadRequestException(
-        `Insufficient account balance for repayment. Required: ${totalDebit}, available: ${repayAccount.balance}.`,
+        `Insufficient account balance. Required: ${totalDebit}, available: ${repayAccount.balance}.`,
       );
     }
-    const repayNewBalance = new Decimal(repayAccount.balance).minus(totalDebit).toFixed(2);
+    const newBalance = new Decimal(repayAccount.balance).minus(totalDebit).toFixed(2);
+
     await this.dataSource.transaction(async (em) => {
-      await this.accountService.recordBalance(
-        loan.accountId,
-        repayNewBalance,
-        em,
-      );
+      await this.accountService.recordBalance(loan.accountId, newBalance, em);
       await this.accountingService.postLoanRepaymentFromSavings(
         new Decimal(loanReceivableCredit).toNumber(),
         new Decimal(interestCredit).toNumber(),
@@ -316,20 +322,18 @@ export class LoanService {
       );
     });
 
-    // Update domain objects
     target.markPaid();
     loan.applyPayment(target.principalAmount);
 
     await this.loanRepository.saveScheduleItem(target);
     await this.loanRepository.save(loan);
 
-    // Record the payment receipt
     const payment = new LoanPayment();
     payment.id = randomUUID();
     payment.loanId = id;
     payment.scheduleId = target.id;
     payment.transactionId = null as any;
-    payment.amount = new Decimal(loanReceivableCredit).plus(interestCredit).toFixed(2);
+    payment.amount = totalDebit;
     payment.currency = loan.currency as unknown as LoanCurrency;
     payment.paymentDate = new Date();
     payment.recordedBy = user.id;
@@ -345,121 +349,104 @@ export class LoanService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Scans all overdue schedule items and applies the 11 % penalty to those
-   * that are â‰¥ 30 days past their due date (only once per installment).
-   * Items 1â€“29 days overdue are marked LATE with no penalty.
-   * Call this on a scheduler (e.g. daily cron) or trigger manually via the admin endpoint.
+   * Daily job — two passes:
+   * Pass 1: find ACTIVE loans whose last installment due date has passed → mark WATCH + set lateSince.
+   * Pass 2: find all late loans → re-classify bucket, apply 11% penalty once at day 30, send reminders.
    */
-  async processLatePenalties(): Promise<{
-    processed: number;
-    reminders: number;
-  }> {
-    const overdueItems = await this.loanRepository.findOverdueScheduleItems();
-    let processed = 0;
+  async processLateLoans(): Promise<{ classified: number; penalised: number; reminders: number }> {
+    let classified = 0;
+    let penalised = 0;
     let reminders = 0;
 
-    for (const item of overdueItems) {
-      const loan = await this.loanRepository.findById(item.loanId);
-      if (!loan) continue;
+    // Pass 1 — newly late loans
+    const newlyLate = await this.loanRepository.findLoansPassedLastDueDate();
+    for (const loan of newlyLate) {
+      const schedule = await this.loanRepository.findScheduleByLoanId(loan.id);
+      const lastItem = schedule.sort((a, b) => b.installmentNumber - a.installmentNumber)[0];
+      loan.markLate(lastItem.dueDate);
+      await this.loanRepository.save(loan);
+      classified++;
+    }
 
-      if (!item.reminderSentAt) {
-        // First overdue detection: send reminder and start penalty clock
-        const contact = await this.clientService
-          .getContactInfo(loan.clientId)
-          .catch(() => ({
-            name: null,
-            phone: null,
-            email: null,
-          }));
+    // Pass 2 — already-late loans: re-classify and apply penalty / send reminders
+    const lateLoans = await this.loanRepository.findLateLoans();
+    for (const loan of newlyLate.concat(lateLoans)) {
+      loan.classifyLate();
+      await this.loanRepository.save(loan);
 
-        const results = await this.notificationsService.sendLoanReminder({
-          loanNumber: loan.loanNumber,
-          installmentNumber: item.installmentNumber,
-          dueDate: item.dueDate,
-          amount: new Decimal(item.totalAmount).toNumber(),
-          currency: loan.currency,
-          clientName: contact.name ?? undefined,
-          clientPhone: contact.phone ?? undefined,
-          clientEmail: contact.email ?? undefined,
-        });
+      // Apply 11% penalty once at day 30
+      if (loan.daysLate() >= 30) {
+        const alreadyPenalised = await this.loanRepository.existsPenaltyForLoan(loan.id);
+        if (!alreadyPenalised) {
+          const penaltyAmount = LoanPolicy.computePenalty(
+            new Decimal(loan.outstandingBalance).toNumber(),
+          );
+          const penalty = new LoanPenalty();
+          penalty.id = randomUUID();
+          penalty.loanId = loan.id;
+          penalty.scheduleId = undefined;
+          penalty.penaltyRate = new Decimal(0.11).toFixed(4);
+          penalty.penaltyAmount = new Decimal(penaltyAmount).toFixed(2);
+          penalty.appliedAt = new Date();
+          penalty.createdAt = new Date();
+          await this.loanRepository.savePenalty(penalty);
 
-        const now = new Date();
-        for (const result of results) {
-          const reminder = new LoanReminder();
-          reminder.id = randomUUID();
-          reminder.loanId = loan.id;
-          reminder.scheduleId = item.id;
-          reminder.channel = result.channel as unknown as ReminderChannel;
-          reminder.status = result.status as unknown as ReminderStatus;
-          reminder.errorMessage = result.errorMessage;
-          reminder.sentAt = now;
-          await this.loanRepository.saveReminder(reminder);
-        }
-
-        // Start the penalty clock regardless of delivery outcome
-        item.reminderSentAt = now;
-        reminders++;
-        item.markLate();
-      } else {
-        const daysSinceReminder = Math.floor(
-          (Date.now() - item.reminderSentAt.getTime()) / 86_400_000,
-        );
-
-        if (daysSinceReminder >= 30) {
-          // Penalty threshold reached: apply once
-          const alreadyPenalised =
-            await this.loanRepository.existsPenaltyForScheduleItem(item.id);
-          if (!alreadyPenalised) {
-            const overdueAmount = new Decimal(item.totalAmount).minus(item.paidAmount).toDecimalPlaces(2).toNumber();
-            const penaltyAmount = LoanPolicy.computePenalty(overdueAmount);
-
-            const penalty = new LoanPenalty();
-            penalty.id = randomUUID();
-            penalty.loanId = loan.id;
-            penalty.scheduleId = item.id;
-            penalty.penaltyRate = new Decimal(0.11).toFixed(4);
-            penalty.penaltyAmount = new Decimal(penaltyAmount).toFixed(2);
-            penalty.appliedAt = new Date();
-            penalty.createdAt = new Date();
-            await this.loanRepository.savePenalty(penalty);
-
-            // Post accounting entry at assessment time (accrual basis)
-            const { loanReceivableCode } = this.getCoaCodes(
-              loan.type,
+          const { loanReceivableCode } = this.getCoaCodes(loan.type, loan.currency);
+          const penaltyIncomeCode =
+            loan.currency === LoanCurrency.FC
+              ? COA_CODES.PENALTY_INCOME_FC
+              : COA_CODES.PENALTY_INCOME_USD;
+          try {
+            await this.accountingService.postPenaltyAssessment(
+              penaltyAmount,
               loan.currency,
+              loanReceivableCode,
+              penaltyIncomeCode,
+              loan.branchId,
+              loan.appliedBy,
+              `Late penalty — loan ${loan.loanNumber} (day ${loan.daysLate()})`,
             );
-            const penaltyIncomeCode =
-              loan.currency === LoanCurrency.FC
-                ? COA_CODES.PENALTY_INCOME_FC
-                : COA_CODES.PENALTY_INCOME_USD;
-            try {
-              await this.accountingService.postPenaltyAssessment(
-                penaltyAmount,
-                loan.currency,
-                loanReceivableCode,
-                penaltyIncomeCode,
-                loan.branchId,
-                loan.appliedBy,
-                `Penalty on loan ${loan.loanNumber} installment #${item.installmentNumber}`,
-              );
-            } catch (err) {
-              this.logger.error(
-                `Penalty accounting failed for loan ${loan.loanNumber} installment #${item.installmentNumber}: ${(err as Error).message}`,
-              );
-            }
-
-            processed++;
+          } catch (err) {
+            this.logger.error(
+              `Penalty accounting failed for loan ${loan.loanNumber}: ${(err as Error).message}`,
+            );
           }
-          item.markOverdue();
-        } else {
-          item.markLate();
+          penalised++;
         }
       }
 
-      await this.loanRepository.saveScheduleItem(item);
+      // Send reminder on every run
+      const contact = await this.clientService
+        .getContactInfo(loan.clientId)
+        .catch(() => ({ name: null, phone: null, email: null }));
+
+      const results = await this.notificationsService.sendLoanReminder({
+        loanNumber: loan.loanNumber,
+        installmentNumber: 0,
+        dueDate: loan.lateSince!,
+        amount: new Decimal(loan.outstandingBalance).toNumber(),
+        currency: loan.currency,
+        clientName: contact.name ?? undefined,
+        clientPhone: contact.phone ?? undefined,
+        clientEmail: contact.email ?? undefined,
+      });
+
+      const now = new Date();
+      for (const result of results) {
+        const reminder = new LoanReminder();
+        reminder.id = randomUUID();
+        reminder.loanId = loan.id;
+        reminder.scheduleId = undefined;
+        reminder.channel = result.channel as unknown as ReminderChannel;
+        reminder.status = result.status as unknown as ReminderStatus;
+        reminder.errorMessage = result.errorMessage;
+        reminder.sentAt = now;
+        await this.loanRepository.saveReminder(reminder);
+      }
+      reminders++;
     }
 
-    return { processed, reminders };
+    return { classified, penalised, reminders };
   }
 
   /**
@@ -480,17 +467,8 @@ export class LoanService {
       const loan = await this.loanRepository.findById(item.loanId);
       if (!loan) continue;
 
-      // Compute total due for this installment (principal + interest + any assessed penalties)
-      const penalties = await this.loanRepository.findPenaltiesForScheduleItem(
-        item.id,
-      );
-      const totalPenalty = penalties.reduce(
-        (sum, p) => new Decimal(sum).plus(p.penaltyAmount).toNumber(),
-        0,
-      );
       const totalDue = new Decimal(item.principalAmount)
         .plus(item.interestAmount)
-        .plus(totalPenalty)
         .toDecimalPlaces(2)
         .toNumber();
 
@@ -519,13 +497,9 @@ export class LoanService {
         }
         const autoNewBalance = new Decimal(autoAccount.balance).minus(totalDue).toFixed(2);
         await this.dataSource.transaction(async (em) => {
-          await this.accountService.recordBalance(
-            loan.accountId,
-            autoNewBalance,
-            em,
-          );
+          await this.accountService.recordBalance(loan.accountId, autoNewBalance, em);
           await this.accountingService.postLoanRepaymentFromSavings(
-            new Decimal(item.principalAmount).plus(totalPenalty).toDecimalPlaces(2).toNumber(),
+            new Decimal(item.principalAmount).toDecimalPlaces(2).toNumber(),
             new Decimal(item.interestAmount).toNumber(),
             0,
             loan.currency,

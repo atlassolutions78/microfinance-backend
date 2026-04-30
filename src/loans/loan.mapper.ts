@@ -57,6 +57,7 @@ export class LoanMapper {
       disbursedAt: e.disbursed_at ?? undefined,
       disbursedBy: e.disbursed_by ?? undefined,
       closedAt: e.closed_at ?? undefined,
+      lateSince: e.late_since ?? undefined,
       createdAt: e.created_at,
       updatedAt: e.updated_at,
     };
@@ -85,6 +86,7 @@ export class LoanMapper {
     e.disbursed_at = m.disbursedAt ?? null;
     e.disbursed_by = m.disbursedBy ?? null;
     e.closed_at = m.closedAt ?? null;
+    e.late_since = m.lateSince ?? null;
     e.created_at = m.createdAt;
     e.updated_at = m.updatedAt;
     return e;
@@ -104,7 +106,6 @@ export class LoanMapper {
     item.paidAmount = new Decimal(e.paid_amount).toFixed(2);
     item.status = e.status as RepaymentStatus;
     item.paidAt = e.paid_at ?? undefined;
-    item.reminderSentAt = e.reminder_sent_at ?? undefined;
     return item;
   }
 
@@ -120,7 +121,6 @@ export class LoanMapper {
     e.paid_amount = new Decimal(item.paidAmount).toFixed(2);
     e.status = item.status;
     e.paid_at = item.paidAt ?? null;
-    e.reminder_sent_at = item.reminderSentAt ?? null;
     return e;
   }
 
@@ -162,7 +162,7 @@ export class LoanMapper {
     const p = new LoanPenalty();
     p.id = e.id;
     p.loanId = e.loan_id;
-    p.scheduleId = e.schedule_id;
+    p.scheduleId = e.schedule_id ?? undefined;
     p.penaltyRate = new Decimal(e.penalty_rate).toFixed(4);
     p.penaltyAmount = new Decimal(e.penalty_amount).toFixed(2);
     p.appliedAt = e.applied_at;
@@ -174,7 +174,7 @@ export class LoanMapper {
     const e = new LoanPenaltyEntity();
     e.id = p.id;
     e.loan_id = p.loanId;
-    e.schedule_id = p.scheduleId;
+    e.schedule_id = p.scheduleId ?? null;
     e.penalty_rate = new Decimal(p.penaltyRate).toFixed(4);
     e.penalty_amount = new Decimal(p.penaltyAmount).toFixed(2);
     e.applied_at = p.appliedAt;
@@ -214,7 +214,7 @@ export class LoanMapper {
     const r = new LoanReminder();
     r.id = e.id;
     r.loanId = e.loan_id;
-    r.scheduleId = e.schedule_id;
+    r.scheduleId = e.schedule_id ?? undefined;
     r.channel = e.channel as ReminderChannel;
     r.status = e.status as ReminderStatus;
     r.errorMessage = e.error_message;
@@ -226,7 +226,7 @@ export class LoanMapper {
     const e = new LoanReminderEntity();
     e.id = r.id;
     e.loan_id = r.loanId;
-    e.schedule_id = r.scheduleId;
+    e.schedule_id = r.scheduleId ?? null;
     e.channel = r.channel;
     e.status = r.status;
     e.error_message = r.errorMessage;

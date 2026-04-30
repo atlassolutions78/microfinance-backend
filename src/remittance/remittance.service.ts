@@ -41,6 +41,7 @@ export interface PayoutRemittancePreview {
     amount: string;
     currency: string;
     recipientName: string;
+    recipientIdType: string;
     recipientIdNumber: string;
     recipientPhone: string | undefined;
     sendingBranchId: string;
@@ -197,6 +198,7 @@ export class RemittanceService {
         amount: remittance.amount,
         currency: remittance.currency,
         recipientName: remittance.recipientName,
+        recipientIdType: remittance.recipientIdType,
         recipientIdNumber: remittance.recipientIdNumber,
         recipientPhone: remittance.recipientPhone,
         sendingBranchId: remittance.sendingBranchId,
@@ -269,6 +271,7 @@ export class RemittanceService {
       amount: new Decimal(dto.amount).toFixed(4),
       currency: dto.currency,
       recipientName: dto.recipientName,
+      recipientIdType: dto.recipientIdType,
       recipientIdNumber: dto.recipientIdNumber,
       recipientPhone: dto.recipientPhone,
       status: RemittanceStatus.PENDING,

@@ -15,20 +15,16 @@ import {
 // ---------------------------------------------------------------------------
 
 export interface CollectionItem {
-  scheduleId: string;
   loanId: string;
   loanNumber: string;
   clientId: string;
   clientName: string;
   clientNumber: string;
-  installmentNumber: number;
-  dueDate: string;
-  totalAmount: string;
-  paidAmount: string;
-  outstandingAmount: string;
-  repaymentStatus: RepaymentStatus;
-  daysOverdue: number;
+  outstandingBalance: string;
   currency: LoanCurrency;
+  loanStatus: LoanStatus;
+  lateSince: string;
+  daysLate: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -46,32 +42,11 @@ export class RepaymentScheduleItem {
   paidAmount: string;
   status: RepaymentStatus;
   paidAt?: Date;
-  reminderSentAt?: Date;
 
   markPaid(): void {
     this.status = RepaymentStatus.PAID;
-    this.paidAmount = this.totalAmount; // string = string ✓
+    this.paidAmount = this.totalAmount;
     this.paidAt = new Date();
-  }
-
-  markLate(): void {
-    if (this.status === RepaymentStatus.PAID) return;
-    if (this.status === RepaymentStatus.OVERDUE) return;
-    this.status = RepaymentStatus.LATE;
-  }
-
-  markOverdue(): void {
-    if (this.status === RepaymentStatus.PAID) return;
-    this.status = RepaymentStatus.OVERDUE;
-  }
-
-  isPastDue(): boolean {
-    return new Date() > this.dueDate && this.status !== RepaymentStatus.PAID;
-  }
-
-  daysOverdue(): number {
-    if (!this.isPastDue()) return 0;
-    return Math.floor((Date.now() - this.dueDate.getTime()) / 86_400_000);
   }
 }
 
@@ -82,7 +57,7 @@ export class RepaymentScheduleItem {
 export class LoanReminder {
   id: string;
   loanId: string;
-  scheduleId: string;
+  scheduleId: string | undefined;
   channel: ReminderChannel;
   status: ReminderStatus;
   errorMessage: string | null;
@@ -113,7 +88,7 @@ export class LoanPayment {
 export class LoanPenalty {
   id: string;
   loanId: string;
-  scheduleId: string;
+  scheduleId: string | undefined;
   penaltyRate: string;
   penaltyAmount: string;
   appliedAt: Date;
@@ -159,6 +134,7 @@ export interface LoanModelProps {
   disbursedAt?: Date;
   disbursedBy?: string;
   closedAt?: Date;
+  lateSince?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -186,6 +162,7 @@ export class LoanModel {
   disbursedAt?: Date;
   disbursedBy?: string;
   closedAt?: Date;
+  lateSince?: Date;
   updatedAt: Date;
 
   /** Client's display name — populated at read time, not persisted. */
@@ -214,6 +191,7 @@ export class LoanModel {
     this.disbursedAt = props.disbursedAt;
     this.disbursedBy = props.disbursedBy;
     this.closedAt = props.closedAt;
+    this.lateSince = props.lateSince;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
   }
@@ -257,9 +235,7 @@ export class LoanModel {
    * Reduces outstanding balance. When fully paid, transitions to CLOSED.
    */
   applyPayment(principalCollected: string): void {
-    const reduced = new Decimal(this.outstandingBalance).minus(
-      principalCollected,
-    );
+    const reduced = new Decimal(this.outstandingBalance).minus(principalCollected);
     this.outstandingBalance = (reduced.isNegative() ? new Decimal(0) : reduced)
       .toDecimalPlaces(2)
       .toString();
@@ -267,17 +243,32 @@ export class LoanModel {
     if (new Decimal(this.outstandingBalance).isZero()) {
       this.status = LoanStatus.CLOSED;
       this.closedAt = new Date();
+      this.lateSince = undefined;
     }
   }
 
-  markDefaulted(): void {
-    if (this.status !== LoanStatus.ACTIVE) {
-      throw new Error(
-        `Cannot mark as defaulted a loan in status: ${this.status}`,
-      );
-    }
-    this.status = LoanStatus.DEFAULTED;
+  /** Called when the last installment due date passes without full repayment. */
+  markLate(lateSince: Date): void {
+    this.lateSince = lateSince;
+    this.status = LoanStatus.WATCH;
     this.updatedAt = new Date();
+  }
+
+  /** Re-classifies the loan into the correct aging bucket based on days since lateSince. */
+  classifyLate(): void {
+    if (!this.lateSince) return;
+    const days = Math.floor((Date.now() - this.lateSince.getTime()) / 86_400_000);
+    if (days <= 90) this.status = LoanStatus.WATCH;
+    else if (days <= 180) this.status = LoanStatus.SUBSTANDARD;
+    else if (days <= 360) this.status = LoanStatus.DOUBTFUL;
+    else if (days <= 720) this.status = LoanStatus.LOSS;
+    else this.status = LoanStatus.WRITE_OFF;
+    this.updatedAt = new Date();
+  }
+
+  daysLate(): number {
+    if (!this.lateSince) return 0;
+    return Math.floor((Date.now() - this.lateSince.getTime()) / 86_400_000);
   }
 
   // --- Business calculations ---

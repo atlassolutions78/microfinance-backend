@@ -131,7 +131,14 @@ export class LoanRepository {
     return this.loanRepo.count({
       where: {
         client_id: clientId,
-        status: In([LoanStatus.ACTIVE, LoanStatus.APPROVED]),
+        status: In([
+          LoanStatus.ACTIVE,
+          LoanStatus.APPROVED,
+          LoanStatus.WATCH,
+          LoanStatus.SUBSTANDARD,
+          LoanStatus.DOUBTFUL,
+          LoanStatus.LOSS,
+        ]),
       },
     });
   }
@@ -176,27 +183,47 @@ export class LoanRepository {
     return entities.map(LoanMapper.scheduleItemToDomain);
   }
 
-  /** Returns all unpaid schedule items across ACTIVE loans whose due_date has passed. */
-  async findOverdueScheduleItems(): Promise<RepaymentScheduleItem[]> {
-    const entities = await this.scheduleRepo
-      .createQueryBuilder('s')
-      .innerJoin(LoanEntity, 'l', 'l.id = s.loan_id')
-      .where('l.status = :active', { active: LoanStatus.ACTIVE })
-      .andWhere('s.status != :paid', { paid: RepaymentStatus.PAID })
-      .andWhere('s.due_date < CURRENT_DATE')
-      .getMany();
-    return entities.map(LoanMapper.scheduleItemToDomain);
+  /** ACTIVE loans whose last installment due_date has passed and are not fully paid. */
+  async findLoansPassedLastDueDate(): Promise<LoanModel[]> {
+    const entities: LoanEntity[] = await this.dataSource.query(
+      `SELECT l.* FROM loans l
+       JOIN loan_repayment_schedules s ON s.loan_id = l.id
+       WHERE l.status = $1
+         AND l.outstanding_balance > 0
+         AND s.installment_number = (
+           SELECT MAX(s2.installment_number)
+           FROM loan_repayment_schedules s2
+           WHERE s2.loan_id = l.id
+         )
+         AND s.due_date < CURRENT_DATE`,
+      [LoanStatus.ACTIVE],
+    );
+    return entities.map(LoanMapper.toDomain);
   }
 
-  /** Returns all PENDING or LATE schedule items across ACTIVE loans due today or earlier. */
+  /** Loans already in a late classification bucket. */
+  async findLateLoans(): Promise<LoanModel[]> {
+    const entities = await this.loanRepo.find({
+      where: {
+        status: In([
+          LoanStatus.WATCH,
+          LoanStatus.SUBSTANDARD,
+          LoanStatus.DOUBTFUL,
+          LoanStatus.LOSS,
+          LoanStatus.WRITE_OFF,
+        ]),
+      },
+    });
+    return entities.map(LoanMapper.toDomain);
+  }
+
+  /** Returns all PENDING schedule items across ACTIVE loans due today or earlier. */
   async findDueScheduleItems(): Promise<RepaymentScheduleItem[]> {
     const entities = await this.scheduleRepo
       .createQueryBuilder('s')
       .innerJoin(LoanEntity, 'l', 'l.id = s.loan_id')
       .where('l.status = :active', { active: LoanStatus.ACTIVE })
-      .andWhere('s.status IN (:...statuses)', {
-        statuses: [RepaymentStatus.PENDING, RepaymentStatus.LATE],
-      })
+      .andWhere('s.status = :pending', { pending: RepaymentStatus.PENDING })
       .andWhere('s.due_date <= CURRENT_DATE')
       .orderBy('s.due_date', 'ASC')
       .getMany();
@@ -231,19 +258,8 @@ export class LoanRepository {
     return entities.map(LoanMapper.penaltyToDomain);
   }
 
-  async existsPenaltyForScheduleItem(scheduleId: string): Promise<boolean> {
-    return (
-      (await this.penaltyRepo.count({ where: { schedule_id: scheduleId } })) > 0
-    );
-  }
-
-  async findPenaltiesForScheduleItem(
-    scheduleId: string,
-  ): Promise<LoanPenalty[]> {
-    const entities = await this.penaltyRepo.find({
-      where: { schedule_id: scheduleId },
-    });
-    return entities.map(LoanMapper.penaltyToDomain);
+  async existsPenaltyForLoan(loanId: string): Promise<boolean> {
+    return (await this.penaltyRepo.count({ where: { loan_id: loanId } })) > 0;
   }
 
   // --- Documents ---
@@ -342,15 +358,15 @@ export class LoanRepository {
     const offset = (page - 1) * 8;
     const search = query.search?.trim();
 
-    const statuses = query.repaymentStatus
-      ? [query.repaymentStatus]
-      : [RepaymentStatus.LATE, RepaymentStatus.OVERDUE];
+    const lateStatuses = query.loanStatus
+      ? [query.loanStatus]
+      : [LoanStatus.WATCH, LoanStatus.SUBSTANDARD, LoanStatus.DOUBTFUL, LoanStatus.LOSS, LoanStatus.WRITE_OFF];
 
     const conditions: string[] = [];
     const params: unknown[] = [];
 
-    conditions.push(`s.status::text = ANY($1::text[])`);
-    params.push(statuses);
+    conditions.push(`l.status::text = ANY($1::text[])`);
+    params.push(lateStatuses);
 
     if (query.currency) {
       const idx = params.length + 1;
@@ -371,8 +387,7 @@ export class LoanRepository {
     const offsetIdx = params.length + 2;
 
     const baseSql = `
-      FROM loan_repayment_schedules s
-      JOIN loans l ON l.id = s.loan_id
+      FROM loans l
       JOIN clients c ON c.id = l.client_id
       LEFT JOIN individual_profiles ip ON ip.client_id = l.client_id
       LEFT JOIN organization_profiles op ON op.client_id = l.client_id
@@ -382,21 +397,18 @@ export class LoanRepository {
       this.dataSource.query(`SELECT COUNT(*) AS total ${baseSql}`, params),
       this.dataSource.query(
         `SELECT
-           s.id               AS schedule_id,
            l.id               AS loan_id,
            l.loan_number,
            l.client_id,
            l.currency,
-           s.installment_number,
-           s.due_date,
-           s.total_amount,
-           s.paid_amount,
-           s.status           AS repayment_status,
-           GREATEST(0, (CURRENT_DATE - s.due_date::date)) AS days_overdue,
+           l.outstanding_balance,
+           l.status           AS loan_status,
+           l.late_since,
+           GREATEST(0, (CURRENT_DATE - l.late_since::date)) AS days_late,
            COALESCE(ip.first_name || ' ' || ip.last_name, op.organization_name) AS client_name,
            c.client_number
          ${baseSql}
-         ORDER BY s.due_date ASC
+         ORDER BY l.late_since ASC
          LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
         [...params, 8, offset],
       ),
@@ -404,20 +416,16 @@ export class LoanRepository {
 
     const total = parseInt(countRows[0]?.total ?? '0', 10);
     const data: CollectionItem[] = rows.map((r: Record<string, string>) => ({
-      scheduleId: r.schedule_id,
       loanId: r.loan_id,
       loanNumber: r.loan_number,
       clientId: r.client_id,
       clientName: r.client_name ?? '',
       clientNumber: r.client_number,
-      installmentNumber: parseInt(r.installment_number, 10),
-      dueDate: r.due_date,
-      totalAmount: new Decimal(r.total_amount).toFixed(2),
-      paidAmount: new Decimal(r.paid_amount).toFixed(2),
-      outstandingAmount: new Decimal(r.total_amount).minus(r.paid_amount).toFixed(2),
-      repaymentStatus: r.repayment_status as RepaymentStatus,
-      daysOverdue: parseInt(r.days_overdue, 10),
+      outstandingBalance: new Decimal(r.outstanding_balance).toFixed(2),
       currency: r.currency as LoanCurrency,
+      loanStatus: r.loan_status as LoanStatus,
+      lateSince: r.late_since,
+      daysLate: parseInt(r.days_late, 10),
     }));
 
     return { data, total };
