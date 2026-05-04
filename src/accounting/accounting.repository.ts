@@ -154,8 +154,9 @@ export class AccountingRepository {
 
   async findChartAccounts(
     page = 1,
-    limit = 20,
+    limit = 7,
     search?: string,
+    type?: ChartAccountType,
   ): Promise<{ data: ChartOfAccountsRecord[]; total: number }> {
     const qb = this.coaRepo
       .createQueryBuilder('coa')
@@ -163,6 +164,10 @@ export class AccountingRepository {
 
     if (search) {
       qb.where('coa.code ILIKE :s OR coa.name ILIKE :s', { s: `%${search}%` });
+    }
+
+    if (type) {
+      qb.andWhere('coa.type = :type', { type });
     }
 
     const total = await qb.getCount();

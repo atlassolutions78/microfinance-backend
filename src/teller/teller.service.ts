@@ -171,7 +171,10 @@ export class TellerService {
       user.id,
     );
 
-    const sessionNumber = await this.sequenceService.nextReference(user.branchId, 'SES');
+    const sessionNumber = await this.sequenceService.nextReference(
+      user.branchId,
+      'SES',
+    );
 
     const session = new TellerSessionModel({
       id: randomUUID(),
@@ -323,7 +326,9 @@ export class TellerService {
         currency: account.currency,
         status: account.status,
         currentBalance: account.balance,
-        balanceAfter: new Decimal(account.balance).plus(query.amount).toFixed(2),
+        balanceAfter: new Decimal(account.balance)
+          .plus(query.amount)
+          .toFixed(2),
         clientId: account.clientId,
         clientName: account.clientName,
         clientNumber: account.clientNumber,
@@ -384,7 +389,10 @@ export class TellerService {
 
     const balance = account.balance;
     const newBalance = new Decimal(balance).plus(dto.amount).toFixed(2);
-    const reference = await this.sequenceService.nextReference(session.branchId, 'TLR');
+    const reference = await this.sequenceService.nextReference(
+      session.branchId,
+      'TLR',
+    );
 
     const tx = AccountTxModel.create({
       id: randomUUID(),
@@ -475,7 +483,9 @@ export class TellerService {
         currency: account.currency,
         status: account.status,
         currentBalance: account.balance,
-        balanceAfter: new Decimal(account.balance).minus(query.amount).toFixed(2),
+        balanceAfter: new Decimal(account.balance)
+          .minus(query.amount)
+          .toFixed(2),
         clientId: account.clientId,
         clientName: account.clientName,
         clientNumber: account.clientNumber,
@@ -540,7 +550,10 @@ export class TellerService {
     );
 
     const newBalance = new Decimal(balance).minus(dto.amount).toFixed(2);
-    const reference = await this.sequenceService.nextReference(session.branchId, 'TLR');
+    const reference = await this.sequenceService.nextReference(
+      session.branchId,
+      'TLR',
+    );
 
     const tx = AccountTxModel.create({
       id: randomUUID(),
@@ -637,7 +650,9 @@ export class TellerService {
         currency: source.currency,
         status: source.status,
         currentBalance: source.balance,
-        balanceAfter: new Decimal(source.balance).minus(query.amount).toFixed(2),
+        balanceAfter: new Decimal(source.balance)
+          .minus(query.amount)
+          .toFixed(2),
         clientId: source.clientId,
         clientName: source.clientName,
         clientNumber: source.clientNumber,
@@ -716,9 +731,14 @@ export class TellerService {
     );
 
     const destBalance = dest.balance;
-    const sourceNewBalance = new Decimal(sourceBalance).minus(dto.amount).toFixed(2);
+    const sourceNewBalance = new Decimal(sourceBalance)
+      .minus(dto.amount)
+      .toFixed(2);
     const destNewBalance = new Decimal(destBalance).plus(dto.amount).toFixed(2);
-    const reference = await this.sequenceService.nextReference(session.branchId, 'TLR');
+    const reference = await this.sequenceService.nextReference(
+      session.branchId,
+      'TLR',
+    );
 
     const debit = AccountTxModel.create({
       id: randomUUID(),
@@ -742,7 +762,10 @@ export class TellerService {
       amount: new Decimal(dto.amount).toFixed(4),
       currency,
       balanceAfter: destNewBalance,
-      reference: await this.sequenceService.nextReference(session.branchId, 'TLR'),
+      reference: await this.sequenceService.nextReference(
+        session.branchId,
+        'TLR',
+      ),
       description: dto.description,
       performedBy: teller.id,
       createdAt: new Date(),
@@ -1042,7 +1065,10 @@ export class TellerService {
       e.currency = Currency.FC;
       e.denomination = d.denomination;
       e.quantity = d.quantity;
-      e.subtotal = new Decimal(d.denomination).times(d.quantity).toDecimalPlaces(4).toNumber();
+      e.subtotal = new Decimal(d.denomination)
+        .times(d.quantity)
+        .toDecimalPlaces(4)
+        .toNumber();
       entities.push(e);
     }
     for (const d of usd ?? []) {
@@ -1053,7 +1079,10 @@ export class TellerService {
       e.currency = Currency.USD;
       e.denomination = d.denomination;
       e.quantity = d.quantity;
-      e.subtotal = new Decimal(d.denomination).times(d.quantity).toDecimalPlaces(4).toNumber();
+      e.subtotal = new Decimal(d.denomination)
+        .times(d.quantity)
+        .toDecimalPlaces(4)
+        .toNumber();
       entities.push(e);
     }
     return entities;

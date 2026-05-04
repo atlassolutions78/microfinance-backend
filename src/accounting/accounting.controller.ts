@@ -19,6 +19,7 @@ import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AccountingService } from './accounting.service';
 import { AccountingFormatter } from './accounting.formatter';
+import { ChartAccountType } from './accounting.enums';
 
 @ApiTags('Accounting')
 @ApiBearerAuth()
@@ -32,14 +33,16 @@ export class AccountingController {
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'type', required: false, enum: ChartAccountType, description: 'Filter by account type: ASSET | LIABILITY | EQUITY | INCOME | EXPENSE' })
   findChartAccounts(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
+    @Query('type') type?: ChartAccountType,
   ) {
     const pageNum = page ? parseInt(page, 10) : undefined;
     const limitNum = limit ? parseInt(limit, 10) : undefined;
-    return this.accountingService.findChartAccounts(pageNum, limitNum, search);
+    return this.accountingService.findChartAccounts(pageNum, limitNum, search, type);
   }
 
   @Get('entries')
