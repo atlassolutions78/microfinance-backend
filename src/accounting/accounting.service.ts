@@ -643,8 +643,9 @@ export class AccountingService {
     page?: number,
     limit?: number,
     search?: string,
+    type?: ChartAccountType,
   ): Promise<{ data: ChartOfAccountsRecord[]; total: number }> {
-    return this.repo.findChartAccounts(page, limit, search);
+    return this.repo.findChartAccounts(page, limit, search, type);
   }
 
   async findChartAccountByCode(
