@@ -56,8 +56,9 @@ export const PENALTY_RATE = 0.11; // 11 % applied to overdue installment amount
 // ---------------------------------------------------------------------------
 
 export class LoanPolicy {
-  /** Client must not hold more than MAX_ACTIVE_LOANS active (or approved) loans. */
-  static assertCanApply(activeLoansCount: number): void {
+  /** Client must not hold more than MAX_ACTIVE_LOANS active (or approved) non-overdraft loans. */
+  static assertCanApply(activeLoansCount: number, loanType: LoanType): void {
+    if (loanType === LoanType.OVERDRAFT) return;
     if (activeLoansCount >= MAX_ACTIVE_LOANS) {
       throw new BadRequestException(
         `Client already has ${activeLoansCount} active loan(s). Maximum is ${MAX_ACTIVE_LOANS}.`,

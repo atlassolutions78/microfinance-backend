@@ -166,6 +166,10 @@ export class LoanMapper {
     p.penaltyRate = new Decimal(e.penalty_rate).toFixed(4);
     p.penaltyAmount = new Decimal(e.penalty_amount).toFixed(2);
     p.appliedAt = e.applied_at;
+    p.waivedAmount = e.waived_amount ?? undefined;
+    p.waivedBy = e.waived_by ?? undefined;
+    p.waivedAt = e.waived_at ?? undefined;
+    p.waivedReason = e.waived_reason ?? undefined;
     p.createdAt = e.created_at;
     return p;
   }
@@ -178,6 +182,10 @@ export class LoanMapper {
     e.penalty_rate = new Decimal(p.penaltyRate).toFixed(4);
     e.penalty_amount = new Decimal(p.penaltyAmount).toFixed(2);
     e.applied_at = p.appliedAt;
+    e.waived_amount = p.waivedAmount ?? null;
+    e.waived_by = p.waivedBy ?? null;
+    e.waived_at = p.waivedAt ?? null;
+    e.waived_reason = p.waivedReason ?? null;
     e.created_at = p.createdAt;
     return e;
   }

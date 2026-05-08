@@ -180,6 +180,24 @@ export class AccountService {
     return account;
   }
 
+  async recordAccountTransaction(
+    props: {
+      id: string;
+      accountId: string;
+      branchId: string;
+      type: string;
+      amount: string;
+      currency: string;
+      balanceAfter: string;
+      reference: string;
+      description: string;
+      performedBy: string;
+    },
+    em?: EntityManager,
+  ): Promise<void> {
+    return this.accountRepository.saveAccountTransaction(props, em);
+  }
+
   async getStatement(
     accountId: string,
     from: Date,

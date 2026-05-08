@@ -135,6 +135,7 @@ export class LoanRepository {
     return this.loanRepo.count({
       where: {
         client_id: clientId,
+        type: Not(LoanType.OVERDRAFT),
         status: In([
           LoanStatus.ACTIVE,
           LoanStatus.APPROVED,
@@ -264,6 +265,14 @@ export class LoanRepository {
 
   async existsPenaltyForLoan(loanId: string): Promise<boolean> {
     return (await this.penaltyRepo.count({ where: { loan_id: loanId } })) > 0;
+  }
+
+  async findLatestPenaltyForLoan(loanId: string): Promise<LoanPenalty | null> {
+    const entity = await this.penaltyRepo.findOne({
+      where: { loan_id: loanId },
+      order: { applied_at: 'DESC' },
+    });
+    return entity ? LoanMapper.penaltyToDomain(entity) : null;
   }
 
   // --- Documents ---

@@ -233,3 +233,96 @@ The fee is a pure book entry — no physical cash moves.
   - Post a fee journal entry: Dr. Source Savings COA → Cr. Fee Income COA
     (add `postTransferFee()` to `AccountingService`)
 - When saving `TransferEntity` (see TODO 3), set `fee_amount = dto.feeAmount ?? 0`
+
+---
+
+## 5. Branch vault running balance
+
+The branch vault balance must be stored as a running balance and kept in sync at every event
+that physically moves cash in or out of the vault. It must never be derived by summing journal
+lines at query time — it must always be instantly readable.
+
+**The three events that update the vault balance:**
+
+| Event | Effect on vault |
+|---|---|
+| HEAD_CASHIER approves a teller float | Vault decreases by `approvedAmountFC` / `approvedAmountUSD` |
+| HEAD_CASHIER closes a teller session (EOD approval) | Vault increases by the teller's declared closing cash |
+| Direct vault withdrawal by a large client (future — blocked) | Vault decreases by withdrawal amount |
+
+### What changes in code
+
+**`teller.entity.ts` — `BranchCoaAccountEntity`**
+- Add `vault_balance_fc numeric(18,4) DEFAULT 0`
+- Add `vault_balance_usd numeric(18,4) DEFAULT 0`
+
+**New migration**
+- `ALTER TABLE branch_coa_accounts ADD COLUMN vault_balance_fc numeric(18,4) DEFAULT 0`
+- `ALTER TABLE branch_coa_accounts ADD COLUMN vault_balance_usd numeric(18,4) DEFAULT 0`
+
+**`teller.repository.ts`**
+- Add `updateVaultBalance(branchId, deltaFC, deltaUSD, em)` — atomically increments or
+  decrements both columns using a SQL expression (`vault_balance_fc + deltaFC`) to avoid
+  race conditions
+
+**`teller.service.ts` — `approveSession()`**
+- Inside the transaction block, call `repo.updateVaultBalance(branchId, -approvedFC, -approvedUSD, em)`
+
+**`teller.service.ts` — `closeSession()`**
+- Inside the transaction block, call `repo.updateVaultBalance(branchId, +declaredFC, +declaredUSD, em)`
+- Use `declaredClosingCashFC`/`USD` (what the teller physically returned), not the expected amount
+
+---
+
+## 6. EOD cash report — Clôture Journalière de Caisse (MOD 604)
+
+A daily cash closing report generated per branch at the end of the day. It is the official
+document signed by the Caissier(e) and the Comptable du Siège. It has two parts:
+
+**Part 1 — Summary (MOD 604)**
+- Deposits aggregated by account type (Savings, Checking, etc.)
+- Withdrawals aggregated by account type
+- Encaisse précédente: branch vault COA balance at the start of the day (before today's entries)
+- Encaisse comptable: Encaisse précédente + total deposits − total withdrawals
+- Denomination breakdown aggregated across all teller EOD declarations for the day
+- Encaisse physique: sum of all denominations × quantities
+
+**Part 2 — Detail (Chiffrier de caisse)**
+- One row per transaction: account type, account number, slip/voucher number (the `reference`
+  field), withdrawal amount, deposit amount
+- Rows cover only `DEPOSIT` and `WITHDRAWAL` type transactions for the day
+- Totals by account type and a grand total row
+- Printed date/time at the bottom, signed by Caissier(e)
+
+### Data sources
+
+| Data | Source |
+|---|---|
+| Deposits/withdrawals by account type | `client_transactions` JOIN `accounts` — filter `branch_id` + `date` + `currency`, group by `account_type` |
+| Transaction detail rows | Same join + `teller_transactions.reference` for the slip number |
+| Encaisse précédente | `vault_balance_fc` / `vault_balance_usd` on `branch_coa_accounts` at the start of the day — read directly, no computation needed (see TODO 5) |
+| Denomination breakdown | `session_denominations` where `type = EOD_DECLARATION`, joined to `teller_sessions` filtered by `branch_id` + `date`, aggregated by `denomination` |
+
+### What changes in code
+
+**New endpoint**
+- `GET /accounting/reports/eod-cash?branchId=&date=&currency=&format=`
+- `date` defaults to today, `currency` defaults to FC, `format` = `json | html`
+- Lives in `accounting.controller.ts` alongside the existing report endpoints
+
+**`accounting.repository.ts`**
+- Add `getEodCashSummary(branchId, date, currency)` — returns deposits + withdrawals
+  grouped by account type, plus encaisse précédente from vault COA balance
+- Add `getEodTransactionDetail(branchId, date, currency)` — returns the per-transaction
+  rows joined to `teller_transactions` for the reference/slip number and `accounts`
+  for the account number
+- Add `getEodDenominations(branchId, date, currency)` — aggregates EOD_DECLARATION
+  denomination rows across all teller sessions for the day
+
+**`accounting.service.ts`**
+- Add `getEodCashReport(branchId, date, currency)` — calls the three repository
+  methods above and assembles the full report shape
+
+**`accounting.formatter.ts`**
+- Add `eodCashHtml(data)` — renders the two-part HTML report matching the MOD 604
+  layout: summary section (MOD 604) followed by the Chiffrier de caisse detail table

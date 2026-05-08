@@ -266,6 +266,30 @@ export class AccountRepository {
     return `${base} ${series}/${currencySymbol}`;
   }
 
+  async saveAccountTransaction(
+    props: {
+      id: string;
+      accountId: string;
+      branchId: string;
+      type: string;
+      amount: string;
+      currency: string;
+      balanceAfter: string;
+      reference: string;
+      description: string;
+      performedBy: string;
+    },
+    em?: EntityManager,
+  ): Promise<void> {
+    const q = em ?? this.dataSource;
+    await q.query(
+      `INSERT INTO client_transactions
+         (id, account_id, branch_id, type, amount, currency, balance_after, reference, description, performed_by, created_at)
+       VALUES ($1, $2, $3, $4::transactions_type_enum, $5, $6::transactions_currency_enum, $7, $8, $9, $10, NOW())`,
+      [props.id, props.accountId, props.branchId, props.type, props.amount, props.currency, props.balanceAfter, props.reference, props.description, props.performedBy],
+    );
+  }
+
   async getStatement(
     accountId: string,
     from: Date,

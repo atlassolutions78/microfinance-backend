@@ -2,7 +2,7 @@
 
 ## 1. Penalty policy — rework
 
-### 1a. Compounding penalty cycle
+### 1a. Compounding penalty cycle — **DONE 2026-05-08**
 **Formula (agreed):**
 - First trigger: day 30 after loan goes late
 - Base (day 30): `(sum of unpaid installments' principal + interest) × 11%`
@@ -17,7 +17,33 @@
   a 30-day interval check (`daysLate % 30 === 0` or last penalty was 30+ days ago).
 - Update `LoanPolicy.computePenalty()` to accept the full base (unpaid + accumulated penalties).
 
-### 1b. Penalty waiver endpoint
+**How to test:**
+
+1. Force a loan into a late state (31+ days):
+```sql
+UPDATE loans SET late_since = NOW() - INTERVAL '31 days', status = 'WATCH'
+WHERE id = '<loan id>';
+```
+
+2. Trigger the job manually:
+```
+POST /loans/admin/process-late-loans
+```
+Response should show `penalised: 1`. Check the penalty was created:
+```sql
+SELECT * FROM loan_penalties WHERE loan_id = '<loan id>';
+```
+Verify the `penalty_amount` matches `(sum of PENDING installments principal + interest) × 11%`.
+
+3. Test compounding — backdate the penalty to simulate 31 days passing:
+```sql
+UPDATE loan_penalties SET applied_at = NOW() - INTERVAL '31 days'
+WHERE loan_id = '<loan id>';
+```
+Trigger the job again. A second penalty should be created whose base includes the first
+penalty amount — so `penalty_amount` should be larger than the first one.
+
+### 1b. Penalty waiver endpoint — **DONE 2026-05-08**
 **Flow (agreed):**
 1. Client and loan officer negotiate outside the system
 2. Loan officer calls `POST /loans/:id/penalties/waive` — **both `amount` and `reason` are required**
@@ -32,7 +58,42 @@
 - Accounting reversal on waiver: debit penalty income → credit loan receivable for waived amount
 - `WaivePenaltyDto`: `{ amount: number (required), reason: string (required) }`
 
-## 2. Multiple overdrafts per client
+**How to test:**
+
+1. Force a loan into a late state and trigger a penalty:
+```sql
+UPDATE loans SET late_since = NOW() - INTERVAL '31 days', status = 'WATCH'
+WHERE id = '<loan-id>';
+```
+```
+POST /loans/admin/process-late-loans
+```
+Verify penalty was created:
+```sql
+SELECT * FROM loan_penalties WHERE loan_id = '<loan-id>';
+```
+
+2. Waive part of the penalty (as LOAN_OFFICER):
+```
+POST /loans/<loan-id>/penalties/waive
+{ "amount": 40, "reason": "Client financial hardship" }
+```
+
+3. Verify the waiver was recorded:
+```sql
+SELECT penalty_amount, waived_amount, waived_reason, waived_at
+FROM loan_penalties WHERE loan_id = '<loan-id>';
+```
+`waived_amount` should be 40.
+
+4. Record a payment and verify the client only pays the net penalty:
+```
+POST /loans/<loan-id>/payments
+{ "amount": <principal + interest + outstanding_penalty> }
+```
+The installment should be marked PAID and the client should not be charged the waived 40.
+
+## 2. Multiple overdrafts per client — **DONE 2026-05-08**
 
 **Rules (agreed):**
 - OVERDRAFT: no cap — a client can have unlimited active overdrafts
@@ -44,12 +105,12 @@
 - `countActiveByClient()` in `loan.repository.ts`: exclude OVERDRAFT loans from the count
 - `apply()` in `loan.service.ts`: pass `dto.type` into `assertCanApply()`
 
-## 3. New role: Loan Approver
+## 3. New role: Loan Approver — **DONE 2026-05-08**
 - Add `LOAN_APPROVER` to the `UserRole` enum
 - Add `@Roles(UserRole.LOAN_APPROVER)` + `@UseGuards(RolesGuard)` on `POST /loans/:id/approve` and `POST /loans/:id/reject`
 - Add a seed user with the `LOAN_APPROVER` role
 
-## 4. Account statement missing loan transactions
+## 4. Account statement missing loan transactions — **DONE 2026-05-08**
 Loan disbursements and repayments update the COA (accounting entries) but never create a
 transaction record on the client's savings account statement. The client's account history
 is therefore incomplete.

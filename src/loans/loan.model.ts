@@ -92,7 +92,17 @@ export class LoanPenalty {
   penaltyRate: string;
   penaltyAmount: string;
   appliedAt: Date;
+  waivedAmount: string | undefined;
+  waivedBy: string | undefined;
+  waivedAt: Date | undefined;
+  waivedReason: string | undefined;
   createdAt: Date;
+
+  get outstandingAmount(): string {
+    return new Decimal(this.penaltyAmount)
+      .minus(this.waivedAmount ?? '0')
+      .toFixed(2);
+  }
 }
 
 // ---------------------------------------------------------------------------

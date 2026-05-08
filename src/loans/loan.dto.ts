@@ -4,6 +4,7 @@
   IsInt,
   IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
   Max,
@@ -225,4 +226,14 @@ export class CollectionsQueryDto {
   @IsInt()
   @Min(1)
   page?: number;
+}
+
+export class WaivePenaltyDto {
+  @IsNumber()
+  @IsPositive()
+  amount: number;
+
+  @IsString()
+  @MinLength(1)
+  reason: string;
 }
