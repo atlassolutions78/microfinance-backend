@@ -27,6 +27,7 @@ import {
 } from './loan.model';
 import {
   LoanCurrency,
+  LoanDocumentTemplate,
   LoanStatus,
   LoanType,
   ReminderChannel,
@@ -38,11 +39,15 @@ import {
   ApplyLoanDto,
   CollectionsQueryDto,
   DisburseDto,
+  GenerateDocumentQueryDto,
   LoanApplicationsQueryDto,
   QueryLoansDto,
   RecordPaymentDto,
   RejectLoanDto,
+  UploadLoanDocumentDto,
+  WaivePenaltyDto,
 } from './loan.dto';
+import { LoanFormatter } from './loan.formatter';
 
 @Injectable()
 export class LoanService {
@@ -74,7 +79,7 @@ export class LoanService {
     const activeCount = await this.loanRepository.countActiveByClient(
       dto.clientId,
     );
-    LoanPolicy.assertCanApply(activeCount);
+    LoanPolicy.assertCanApply(activeCount, dto.type);
 
     // 3. Validate the selected account
     const clientAccounts = await this.accountService.findByClientId(
@@ -117,19 +122,6 @@ export class LoanService {
     });
 
     await this.loanRepository.save(loan);
-
-    // 7. Persist loan documents
-    for (const d of dto.documents) {
-      const doc = new LoanDocument();
-      doc.id = randomUUID();
-      doc.loanId = loan.id;
-      doc.documentType = d.documentType;
-      doc.fileName = d.fileName;
-      doc.fileUrl = d.fileUrl;
-      doc.uploadedBy = user.id;
-      doc.uploadedAt = new Date();
-      await this.loanRepository.saveDocument(doc);
-    }
 
     return loan;
   }
@@ -219,6 +211,18 @@ export class LoanService {
         `Loan disbursement — ${loan.loanNumber}`,
         em,
       );
+      await this.accountService.recordAccountTransaction({
+        id: randomUUID(),
+        accountId: loan.accountId,
+        branchId: loan.branchId,
+        type: 'LOAN_DISBURSEMENT',
+        amount: new Decimal(loan.principalAmount).toFixed(4),
+        currency: loan.currency,
+        balanceAfter: newBalance,
+        reference: `DISB-${loan.loanNumber}`,
+        description: `Loan disbursement — ${loan.loanNumber}`,
+        performedBy: user.id,
+      }, em);
     });
 
     await this.loanRepository.save(loan);
@@ -275,7 +279,7 @@ export class LoanService {
       ? await this.loanRepository.findPenaltiesByLoanId(loan.id)
       : [];
     const totalPenalty = penalties.reduce(
-      (sum, p) => new Decimal(sum).plus(p.penaltyAmount).toFixed(2),
+      (sum, p) => new Decimal(sum).plus(p.outstandingAmount).toFixed(2),
       '0.00',
     );
 
@@ -303,6 +307,7 @@ export class LoanService {
       );
     }
     const newBalance = new Decimal(repayAccount.balance).minus(totalDebit).toFixed(2);
+    const paymentId = randomUUID();
 
     await this.dataSource.transaction(async (em) => {
       await this.accountService.recordBalance(loan.accountId, newBalance, em);
@@ -320,6 +325,18 @@ export class LoanService {
         `Loan repayment — ${loan.loanNumber} installment #${target.installmentNumber}`,
         em,
       );
+      await this.accountService.recordAccountTransaction({
+        id: randomUUID(),
+        accountId: loan.accountId,
+        branchId: loan.branchId,
+        type: 'LOAN_REPAYMENT',
+        amount: new Decimal(totalDebit).toFixed(4),
+        currency: loan.currency,
+        balanceAfter: newBalance,
+        reference: `PMT-${paymentId}`,
+        description: `Loan repayment — ${loan.loanNumber} installment #${target.installmentNumber}`,
+        performedBy: user.id,
+      }, em);
     });
 
     target.markPaid();
@@ -329,7 +346,7 @@ export class LoanService {
     await this.loanRepository.save(loan);
 
     const payment = new LoanPayment();
-    payment.id = randomUUID();
+    payment.id = paymentId;
     payment.loanId = id;
     payment.scheduleId = target.id;
     payment.transactionId = null as any;
@@ -342,6 +359,76 @@ export class LoanService {
     await this.loanRepository.savePayment(payment);
 
     return loan;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Penalty waiver
+  // ---------------------------------------------------------------------------
+
+  async waivePenalties(
+    loanId: string,
+    dto: WaivePenaltyDto,
+    user: UserModel,
+  ): Promise<LoanPenalty[]> {
+    const loan = await this.findOrFail(loanId);
+
+    const penalties = await this.loanRepository.findPenaltiesByLoanId(loanId);
+    if (penalties.length === 0) {
+      throw new BadRequestException('This loan has no penalties to waive.');
+    }
+
+    const totalOutstanding = penalties
+      .reduce((sum, p) => new Decimal(sum).plus(p.outstandingAmount).toFixed(2), '0.00');
+
+    if (new Decimal(dto.amount).greaterThan(totalOutstanding)) {
+      throw new BadRequestException(
+        `Waiver amount ${dto.amount} exceeds total outstanding penalty ${totalOutstanding}.`,
+      );
+    }
+
+    // Apply waiver FIFO — oldest penalties first
+    let remaining = new Decimal(dto.amount);
+    const updated: LoanPenalty[] = [];
+
+    for (const penalty of [...penalties].sort(
+      (a, b) => a.appliedAt.getTime() - b.appliedAt.getTime(),
+    )) {
+      if (remaining.isZero()) break;
+      const outstanding = new Decimal(penalty.outstandingAmount);
+      if (outstanding.isZero()) continue;
+
+      const toWaive = Decimal.min(remaining, outstanding);
+      penalty.waivedAmount = new Decimal(penalty.waivedAmount ?? '0')
+        .plus(toWaive)
+        .toFixed(2);
+      penalty.waivedBy = user.id;
+      penalty.waivedAt = new Date();
+      penalty.waivedReason = dto.reason;
+      remaining = remaining.minus(toWaive);
+      updated.push(penalty);
+    }
+
+    const { loanReceivableCode } = this.getCoaCodes(loan.type, loan.currency);
+    const penaltyIncomeCode =
+      loan.currency === LoanCurrency.FC
+        ? COA_CODES.PENALTY_INCOME_FC
+        : COA_CODES.PENALTY_INCOME_USD;
+
+    for (const penalty of updated) {
+      await this.loanRepository.savePenalty(penalty);
+    }
+
+    await this.accountingService.postPenaltyWaiver(
+      dto.amount,
+      loan.currency,
+      loanReceivableCode,
+      penaltyIncomeCode,
+      loan.branchId,
+      user.id,
+      `Penalty waiver — loan ${loan.loanNumber} (reason: ${dto.reason})`,
+    );
+
+    return updated;
   }
 
   // ---------------------------------------------------------------------------
@@ -374,13 +461,34 @@ export class LoanService {
       loan.classifyLate();
       await this.loanRepository.save(loan);
 
-      // Apply 11% penalty once at day 30
+      // Apply 11% penalty every 30 days from the first trigger
       if (loan.daysLate() >= 30) {
-        const alreadyPenalised = await this.loanRepository.existsPenaltyForLoan(loan.id);
-        if (!alreadyPenalised) {
-          const penaltyAmount = LoanPolicy.computePenalty(
-            new Decimal(loan.outstandingBalance).toNumber(),
+        const latestPenalty = await this.loanRepository.findLatestPenaltyForLoan(loan.id);
+        const daysSinceLastPenalty = latestPenalty
+          ? Math.floor((Date.now() - latestPenalty.appliedAt.getTime()) / 86_400_000)
+          : null;
+        const shouldPenalise = !latestPenalty || daysSinceLastPenalty! >= 30;
+
+        if (shouldPenalise) {
+          const schedule = await this.loanRepository.findScheduleByLoanId(loan.id);
+          const pendingItems = schedule.filter(
+            (i) => i.status === RepaymentStatus.PENDING,
           );
+          const unpaidPrincipalInterest = pendingItems
+            .reduce(
+              (sum, i) =>
+                new Decimal(sum).plus(i.principalAmount).plus(i.interestAmount).toFixed(2),
+              '0.00',
+            );
+          const allPenalties = await this.loanRepository.findPenaltiesByLoanId(loan.id);
+          const accumulatedPenalties = allPenalties.reduce(
+            (sum, p) => new Decimal(sum).plus(p.penaltyAmount).toFixed(2),
+            '0.00',
+          );
+          const base = new Decimal(unpaidPrincipalInterest)
+            .plus(accumulatedPenalties)
+            .toNumber();
+          const penaltyAmount = LoanPolicy.computePenalty(base);
           const penalty = new LoanPenalty();
           penalty.id = randomUUID();
           penalty.loanId = loan.id;
@@ -512,6 +620,8 @@ export class LoanService {
             `Auto-repayment — ${loan.loanNumber} installment #${item.installmentNumber}`,
             em,
           );
+          // NOTE: auto-repayments omit the statement entry because there is no
+          // real user ID to use as performed_by — needs a system user record.
         });
 
         item.markPaid();
@@ -594,6 +704,56 @@ export class LoanService {
   async getDocuments(id: string): Promise<LoanDocument[]> {
     await this.findOrFail(id);
     return this.loanRepository.findDocumentsByLoanId(id);
+  }
+
+  async uploadDocument(
+    id: string,
+    dto: UploadLoanDocumentDto,
+    user: UserModel,
+  ): Promise<LoanDocument[]> {
+    await this.findOrFail(id);
+    const doc = new LoanDocument();
+    doc.id = randomUUID();
+    doc.loanId = id;
+    doc.documentType = dto.documentType;
+    doc.fileName = dto.fileName;
+    doc.fileUrl = dto.fileUrl;
+    doc.uploadedBy = user.id;
+    doc.uploadedAt = new Date();
+    await this.loanRepository.upsertDocument(doc);
+    return this.loanRepository.findDocumentsByLoanId(id);
+  }
+
+  async generateDocument(id: string, query: GenerateDocumentQueryDto): Promise<string> {
+    const loan = await this.findOrFail(id);
+    const { template } = query;
+
+    if (loan.type === LoanType.SALARY_ADVANCE) {
+      return LoanFormatter.salaryAdvanceHtml();
+    }
+
+    if (loan.type === LoanType.PERSONAL_LOAN) {
+      if (template === LoanDocumentTemplate.PERSONAL_LOAN_PROTOCOLE) {
+        return LoanFormatter.personalLoanProtocoleHtml();
+      }
+      return LoanFormatter.personalLoanActeHtml();
+    }
+
+    if (loan.type === LoanType.OVERDRAFT) {
+      const [client, account] = await Promise.all([
+        this.clientService.findById(loan.clientId),
+        this.accountService.findById(loan.accountId),
+      ]);
+      const clientName =
+        client.firstName && client.lastName
+          ? `${client.firstName} ${client.lastName}`
+          : (client.companyName ?? '');
+      return LoanFormatter.overdraftHtml(clientName, account.accountNumber);
+    }
+
+    throw new BadRequestException(
+      `No document template available for loan type: ${loan.type}`,
+    );
   }
 
   // ---------------------------------------------------------------------------

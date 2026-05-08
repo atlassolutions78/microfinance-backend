@@ -6,10 +6,20 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '../users/user.enums';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { UserModel } from '../users/user.model';
 import { LoanService } from './loan.service';
@@ -18,10 +28,13 @@ import {
   ApplyLoanDto,
   CollectionsQueryDto,
   DisburseDto,
+  GenerateDocumentQueryDto,
   LoanApplicationsQueryDto,
   QueryLoansDto,
   RecordPaymentDto,
   RejectLoanDto,
+  UploadLoanDocumentDto,
+  WaivePenaltyDto,
 } from './loan.dto';
 
 @ApiTags('Loans')
@@ -72,6 +85,8 @@ export class LoanController {
   // ---------------------------------------------------------------------------
 
   @Post(':id/approve')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.LOAN_APPROVER)
   approve(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserModel,
@@ -80,6 +95,8 @@ export class LoanController {
   }
 
   @Post(':id/reject')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.LOAN_APPROVER)
   reject(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: RejectLoanDto,
@@ -120,18 +137,61 @@ export class LoanController {
     return this.loanService.getPayments(id);
   }
 
-  // ---------------------------------------------------------------------------
-  // Penalties & documents
-  // ---------------------------------------------------------------------------
-
   @Get(':id/penalties')
   getPenalties(@Param('id', ParseUUIDPipe) id: string) {
     return this.loanService.getPenalties(id);
   }
 
+  @Post(':id/penalties/waive')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.LOAN_OFFICER)
+  @ApiOperation({
+    summary: 'Waive part or all of the outstanding penalty for a loan',
+  })
+  waivePenalties(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: WaivePenaltyDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.loanService.waivePenalties(id, dto, user);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Documents
+  // ---------------------------------------------------------------------------
+
   @Get(':id/documents')
   getDocuments(@Param('id', ParseUUIDPipe) id: string) {
     return this.loanService.getDocuments(id);
+  }
+
+  @Post(':id/documents')
+  @ApiOperation({
+    summary:
+      'Upload a signed document for a loan (replaces existing of same type)',
+  })
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.LOAN_OFFICER, UserRole.TELLER)
+  uploadDocument(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UploadLoanDocumentDto,
+    @CurrentUser() user: UserModel,
+  ) {
+    return this.loanService.uploadDocument(id, dto, user);
+  }
+
+  @Get(':id/documents/generate')
+  @ApiOperation({
+    summary: 'Generate a blank printable document template for this loan',
+  })
+  async generateDocument(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: GenerateDocumentQueryDto,
+    @Res() res: Response,
+  ) {
+    const html = await this.loanService.generateDocument(id, query);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
   }
 
   /** Trigger the late loan classification + penalty cycle (admin / cron endpoint). */
@@ -146,4 +206,3 @@ export class LoanController {
     return this.loanService.processScheduledRepayments();
   }
 }
-

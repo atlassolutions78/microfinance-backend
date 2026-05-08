@@ -208,6 +208,18 @@ export class LoanPenaltyEntity {
   @Column({ name: 'applied_at', type: 'timestamptz' })
   applied_at: Date;
 
+  @Column({ name: 'waived_amount', type: 'numeric', precision: 18, scale: 2, nullable: true })
+  waived_amount: string | null;
+
+  @Column({ name: 'waived_by', type: 'uuid', nullable: true })
+  waived_by: string | null;
+
+  @Column({ name: 'waived_at', type: 'timestamptz', nullable: true })
+  waived_at: Date | null;
+
+  @Column({ name: 'waived_reason', type: 'text', nullable: true })
+  waived_reason: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   created_at: Date;
 }

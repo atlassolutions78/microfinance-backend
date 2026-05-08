@@ -547,6 +547,28 @@ export class AccountingService {
   }
 
   /**
+   * Penalty waiver entry:
+   *   DR Penalty Income   (income decreases — waived amount no longer earned)
+   *   CR Loan Receivable  (asset decreases — client owes less)
+   */
+  async postPenaltyWaiver(
+    amount: number,
+    currency: string,
+    loanReceivableCode: string,
+    penaltyIncomeCode: string,
+    branchId: string,
+    createdBy: string,
+    description?: string,
+    em?: EntityManager,
+  ): Promise<string> {
+    const draft = new JournalEntryDraft(branchId, createdBy, description, [
+      { accountCode: penaltyIncomeCode, debit: amount, credit: 0, currency },
+      { accountCode: loanReceivableCode, debit: 0, credit: amount, currency },
+    ]);
+    return this.post(draft, em);
+  }
+
+  /**
    * Posts a reversal of an existing entry.
    * The reversal flips every debit/credit on the original lines.
    * The original entry is NOT automatically marked as REVERSED here —

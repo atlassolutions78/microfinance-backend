@@ -33,6 +33,12 @@ export enum LoanDocumentType {
   REQUEST_LETTER    = 'REQUEST_LETTER',    // Request Letter
 }
 
+export enum LoanDocumentTemplate {
+  SALARY_ADVANCE_REQUEST   = 'SALARY_ADVANCE_REQUEST',   // Salary advance / overdraft request form
+  PERSONAL_LOAN_ACTE       = 'PERSONAL_LOAN_ACTE',       // Acte d'Engagement (page 1)
+  PERSONAL_LOAN_PROTOCOLE  = 'PERSONAL_LOAN_PROTOCOLE',  // Protocole d'Accord (page 2)
+}
+
 export enum ReminderChannel {
   EMAIL = 'EMAIL',
   SMS   = 'SMS',

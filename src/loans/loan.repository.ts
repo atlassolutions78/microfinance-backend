@@ -10,6 +10,7 @@ import {
 } from './loan.dto';
 import { LoanMapper } from './loan.mapper';
 import {
+  ClientEntity,
   IndividualProfileEntity,
   OrganizationProfileEntity,
 } from '../clients/client.entity';
@@ -85,6 +86,7 @@ export class LoanRepository {
 
     const qb = this.loanRepo
       .createQueryBuilder('l')
+      .leftJoin(ClientEntity, 'c', 'c.id = l.client_id')
       .leftJoin(IndividualProfileEntity, 'ip', 'ip.client_id = l.client_id')
       .leftJoin(OrganizationProfileEntity, 'op', 'op.client_id = l.client_id')
       .orderBy('l.created_at', 'DESC');
@@ -103,6 +105,8 @@ export class LoanRepository {
       qb.andWhere(
         `(
           l.loan_number ILIKE :search
+          OR c.client_number ILIKE :search
+          OR CONCAT(ip.first_name, ' ', ip.last_name) ILIKE :search
           OR ip.first_name ILIKE :search
           OR ip.last_name ILIKE :search
           OR op.organization_name ILIKE :search
@@ -131,6 +135,7 @@ export class LoanRepository {
     return this.loanRepo.count({
       where: {
         client_id: clientId,
+        type: Not(LoanType.OVERDRAFT),
         status: In([
           LoanStatus.ACTIVE,
           LoanStatus.APPROVED,
@@ -262,10 +267,34 @@ export class LoanRepository {
     return (await this.penaltyRepo.count({ where: { loan_id: loanId } })) > 0;
   }
 
+  async findLatestPenaltyForLoan(loanId: string): Promise<LoanPenalty | null> {
+    const entity = await this.penaltyRepo.findOne({
+      where: { loan_id: loanId },
+      order: { applied_at: 'DESC' },
+    });
+    return entity ? LoanMapper.penaltyToDomain(entity) : null;
+  }
+
   // --- Documents ---
 
   async saveDocument(doc: LoanDocument): Promise<void> {
     await this.documentRepo.save(LoanMapper.documentToEntity(doc));
+  }
+
+  async upsertDocument(doc: LoanDocument): Promise<void> {
+    const existing = await this.documentRepo.findOne({
+      where: { loan_id: doc.loanId, document_type: doc.documentType as any },
+    });
+    if (existing) {
+      await this.documentRepo.update(existing.id, {
+        file_name: doc.fileName,
+        file_url: doc.fileUrl,
+        uploaded_by: doc.uploadedBy,
+        uploaded_at: doc.uploadedAt,
+      });
+    } else {
+      await this.documentRepo.save(LoanMapper.documentToEntity(doc));
+    }
   }
 
   async findDocumentsByLoanId(loanId: string): Promise<LoanDocument[]> {
@@ -299,6 +328,7 @@ export class LoanRepository {
 
     const qb = this.loanRepo
       .createQueryBuilder('l')
+      .leftJoin(ClientEntity, 'c', 'c.id = l.client_id')
       .leftJoin(IndividualProfileEntity, 'ip', 'ip.client_id = l.client_id')
       .leftJoin(OrganizationProfileEntity, 'op', 'op.client_id = l.client_id')
       .orderBy('l.created_at', 'DESC');
@@ -314,7 +344,14 @@ export class LoanRepository {
     if (query.currency) qb.andWhere('l.currency = :currency', { currency: query.currency });
     if (search) {
       qb.andWhere(
-        `(l.loan_number ILIKE :search OR ip.first_name ILIKE :search OR ip.last_name ILIKE :search OR op.organization_name ILIKE :search)`,
+        `(
+          l.loan_number ILIKE :search
+          OR c.client_number ILIKE :search
+          OR CONCAT(ip.first_name, ' ', ip.last_name) ILIKE :search
+          OR ip.first_name ILIKE :search
+          OR ip.last_name ILIKE :search
+          OR op.organization_name ILIKE :search
+        )`,
         { search: `%${search}%` },
       );
     }
@@ -332,6 +369,7 @@ export class LoanRepository {
 
     const qb = this.loanRepo
       .createQueryBuilder('l')
+      .leftJoin(ClientEntity, 'c', 'c.id = l.client_id')
       .leftJoin(IndividualProfileEntity, 'ip', 'ip.client_id = l.client_id')
       .leftJoin(OrganizationProfileEntity, 'op', 'op.client_id = l.client_id')
       .andWhere('l.status = :status', { status: LoanStatus.ACTIVE })
@@ -341,7 +379,14 @@ export class LoanRepository {
     if (query.currency) qb.andWhere('l.currency = :currency', { currency: query.currency });
     if (search) {
       qb.andWhere(
-        `(l.loan_number ILIKE :search OR ip.first_name ILIKE :search OR ip.last_name ILIKE :search OR op.organization_name ILIKE :search)`,
+        `(
+          l.loan_number ILIKE :search
+          OR c.client_number ILIKE :search
+          OR CONCAT(ip.first_name, ' ', ip.last_name) ILIKE :search
+          OR ip.first_name ILIKE :search
+          OR ip.last_name ILIKE :search
+          OR op.organization_name ILIKE :search
+        )`,
         { search: `%${search}%` },
       );
     }
@@ -377,7 +422,14 @@ export class LoanRepository {
     if (search) {
       const idx = params.length + 1;
       conditions.push(
-        `(l.loan_number ILIKE $${idx} OR ip.first_name ILIKE $${idx} OR ip.last_name ILIKE $${idx} OR op.organization_name ILIKE $${idx})`,
+        `(
+          l.loan_number ILIKE $${idx}
+          OR c.client_number ILIKE $${idx}
+          OR CONCAT(ip.first_name, ' ', ip.last_name) ILIKE $${idx}
+          OR ip.first_name ILIKE $${idx}
+          OR ip.last_name ILIKE $${idx}
+          OR op.organization_name ILIKE $${idx}
+        )`,
       );
       params.push(`%${search}%`);
     }

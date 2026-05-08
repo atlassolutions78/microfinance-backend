@@ -1,20 +1,20 @@
 ﻿import {
-  IsArray,
   IsEnum,
   IsIn,
   IsInt,
   IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
   Max,
   Min,
   MinLength,
-  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import {
   LoanCurrency,
+  LoanDocumentTemplate,
   LoanDocumentType,
   LoanStatus,
   LoanType,
@@ -24,17 +24,6 @@ import { ApiProperty } from '@nestjs/swagger';
 // ---------------------------------------------------------------------------
 // Loan application
 // ---------------------------------------------------------------------------
-
-export class LoanDocumentInputDto {
-  @IsEnum(LoanDocumentType)
-  documentType!: LoanDocumentType;
-
-  @IsString()
-  fileName!: string;
-
-  @IsString()
-  fileUrl!: string;
-}
 
 export class ApplyLoanDto {
   @IsUUID()
@@ -59,10 +48,6 @@ export class ApplyLoanDto {
   @Min(0.01)
   principalAmount!: number;
 
-  /**
-   * Required for PERSONAL_LOAN (10 or 12 months).
-   * Ignored for SALARY_ADVANCE (fixed 1 month) and OVERDRAFT (fixed 3 months).
-   */
   @IsInt()
   @Min(1)
   @Max(60)
@@ -72,12 +57,6 @@ export class ApplyLoanDto {
   @IsString()
   @IsOptional()
   purpose?: string;
-
-  /** Supporting documents: MOU, Commitment Letter, Request Letter */
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => LoanDocumentInputDto)
-  documents!: LoanDocumentInputDto[];
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +82,27 @@ export class RejectLoanDto {
 
 // ---------------------------------------------------------------------------
 // Repayment recording
+// ---------------------------------------------------------------------------
+// Document upload
+// ---------------------------------------------------------------------------
+
+export class GenerateDocumentQueryDto {
+  @IsEnum(LoanDocumentTemplate)
+  @IsOptional()
+  template?: LoanDocumentTemplate;
+}
+
+export class UploadLoanDocumentDto {
+  @IsEnum(LoanDocumentType)
+  documentType!: LoanDocumentType;
+
+  @IsString()
+  fileName!: string;
+
+  @IsString()
+  fileUrl!: string;
+}
+
 // ---------------------------------------------------------------------------
 
 export class RecordPaymentDto {
@@ -226,4 +226,14 @@ export class CollectionsQueryDto {
   @IsInt()
   @Min(1)
   page?: number;
+}
+
+export class WaivePenaltyDto {
+  @IsNumber()
+  @IsPositive()
+  amount: number;
+
+  @IsString()
+  @MinLength(1)
+  reason: string;
 }
