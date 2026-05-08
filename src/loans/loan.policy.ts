@@ -29,18 +29,18 @@ export const LOAN_PRODUCTS: Record<LoanType, LoanProduct> = {
     rateLabel: '2.5% per month',
   },
   [LoanType.PERSONAL_LOAN]: {
-    monthlyRate: 0.05 / 12, // 5 % annual â†’ ~0.4167 % per month
-    allowedTerms: [10, 12],
+    monthlyRate: 0.05 / 12,
+    allowedTerms: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
     formFeeUsd: 0,
-    label: 'Personal Loan',
-    rateLabel: '5% annual',
+    label: "Personal Loan",
+    rateLabel: "5% annual",
   },
   [LoanType.OVERDRAFT]: {
-    monthlyRate: 0.025, // 2.5 % per month
-    allowedTerms: [3],
+    monthlyRate: 0.025,
+    allowedTerms: [1, 2, 3],
     formFeeUsd: 0,
-    label: 'Overdraft',
-    rateLabel: '2.5% per month',
+    label: "Overdraft",
+    rateLabel: "2.5% per month",
   },
 };
 
@@ -84,8 +84,11 @@ export class LoanPolicy {
     }
 
     if (!requested || !allowedTerms.includes(requested)) {
+      const range = allowedTerms.length > 4
+        ? `between ${allowedTerms[0]} and ${allowedTerms[allowedTerms.length - 1]}`
+        : `one of [${allowedTerms.join(', ')}]`;
       throw new BadRequestException(
-        `Term for ${type} must be one of [${allowedTerms.join(', ')}] months.`,
+        `Term for ${type} must be ${range} months.`,
       );
     }
     return requested;

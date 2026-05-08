@@ -185,23 +185,57 @@ export class AccountRepository {
   }
 
   /**
+   * Computes the check digit for a savings account number.
+   *
+   * Algorithm (run on the PREVIOUS account's base digits):
+   *   1. Read digits right to left.
+   *   2. Odd positions (1,3,5...): multiply by 2; if ≥10, sum both digits.  → Sum A
+   *   3. Even positions (2,4,6...): multiply by 2; if ≥10, sum both digits. → Sum B
+   *   4. total = Sum A + Sum B
+   *   5. check = ceil(total / 10) * 10 − total  (upper bound of interval minus total)
+   */
+  static computeSavingsCheckDigit(base: string): number {
+    const digits = base.split('').map(Number).reverse();
+    let sumA = 0;
+    let sumB = 0;
+    for (let i = 0; i < digits.length; i++) {
+      const doubled = digits[i] * 2;
+      const digitSum = doubled >= 10 ? Math.floor(doubled / 10) + (doubled % 10) : doubled;
+      if ((i + 1) % 2 === 1) {
+        sumA += digitSum;
+      } else {
+        sumB += digitSum;
+      }
+    }
+    const total = sumA + sumB;
+    const upperBound = Math.ceil(total / 10) * 10;
+    return upperBound - total;
+  }
+
+  /**
    * Formats an account number for SAVINGS accounts.
    *
-   * Format: `{A} {BBB}\2 serie 433`
+   * Format: `{A} {BBB}\{check} serie 433`
    *   - A increments every 1000 accounts, starting at 50
-   *   - BBB is the position within the current block (001 on seq=1, then 000 rolls over)
-   *   - \2 is fixed separator, "serie 433" is the fixed series label
+   *   - BBB is the position within the current block
+   *   - check is computed from the previous account's base digits
    *
    * Sequence → number:
-   *   1  → "50 001\2 serie 433"
-   *   999  → "50 999\2 serie 433"
-   *   1000 → "51 000\2 serie 433"
-   *   1001 → "51 001\2 serie 433"
+   *   1    → "50 001\{check(50000)} serie 433"
+   *   999  → "50 999\{check(50998)} serie 433"
+   *   1000 → "51 000\{check(50999)} serie 433"
    */
   static formatSavingsNumber(seq: number): string {
     const prefix = 50 + Math.floor(seq / 1000);
     const counter = seq % 1000;
-    return `${prefix} ${String(counter).padStart(3, '0')}\\2 serie 433`;
+
+    const prevSeq = seq - 1;
+    const prevPrefix = 50 + Math.floor(prevSeq / 1000);
+    const prevCounter = prevSeq % 1000;
+    const prevBase = `${prevPrefix}${String(prevCounter).padStart(3, '0')}`;
+    const check = AccountRepository.computeSavingsCheckDigit(prevBase);
+
+    return `${prefix} ${String(counter).padStart(3, '0')}\\${check} serie 433`;
   }
 
   /**

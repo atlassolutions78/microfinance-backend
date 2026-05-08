@@ -27,6 +27,7 @@ import {
 } from './loan.model';
 import {
   LoanCurrency,
+  LoanDocumentTemplate,
   LoanStatus,
   LoanType,
   ReminderChannel,
@@ -38,11 +39,14 @@ import {
   ApplyLoanDto,
   CollectionsQueryDto,
   DisburseDto,
+  GenerateDocumentQueryDto,
   LoanApplicationsQueryDto,
   QueryLoansDto,
   RecordPaymentDto,
   RejectLoanDto,
+  UploadLoanDocumentDto,
 } from './loan.dto';
+import { LoanFormatter } from './loan.formatter';
 
 @Injectable()
 export class LoanService {
@@ -117,19 +121,6 @@ export class LoanService {
     });
 
     await this.loanRepository.save(loan);
-
-    // 7. Persist loan documents
-    for (const d of dto.documents) {
-      const doc = new LoanDocument();
-      doc.id = randomUUID();
-      doc.loanId = loan.id;
-      doc.documentType = d.documentType;
-      doc.fileName = d.fileName;
-      doc.fileUrl = d.fileUrl;
-      doc.uploadedBy = user.id;
-      doc.uploadedAt = new Date();
-      await this.loanRepository.saveDocument(doc);
-    }
 
     return loan;
   }
@@ -594,6 +585,56 @@ export class LoanService {
   async getDocuments(id: string): Promise<LoanDocument[]> {
     await this.findOrFail(id);
     return this.loanRepository.findDocumentsByLoanId(id);
+  }
+
+  async uploadDocument(
+    id: string,
+    dto: UploadLoanDocumentDto,
+    user: UserModel,
+  ): Promise<LoanDocument[]> {
+    await this.findOrFail(id);
+    const doc = new LoanDocument();
+    doc.id = randomUUID();
+    doc.loanId = id;
+    doc.documentType = dto.documentType;
+    doc.fileName = dto.fileName;
+    doc.fileUrl = dto.fileUrl;
+    doc.uploadedBy = user.id;
+    doc.uploadedAt = new Date();
+    await this.loanRepository.upsertDocument(doc);
+    return this.loanRepository.findDocumentsByLoanId(id);
+  }
+
+  async generateDocument(id: string, query: GenerateDocumentQueryDto): Promise<string> {
+    const loan = await this.findOrFail(id);
+    const { template } = query;
+
+    if (loan.type === LoanType.SALARY_ADVANCE) {
+      return LoanFormatter.salaryAdvanceHtml();
+    }
+
+    if (loan.type === LoanType.PERSONAL_LOAN) {
+      if (template === LoanDocumentTemplate.PERSONAL_LOAN_PROTOCOLE) {
+        return LoanFormatter.personalLoanProtocoleHtml();
+      }
+      return LoanFormatter.personalLoanActeHtml();
+    }
+
+    if (loan.type === LoanType.OVERDRAFT) {
+      const [client, account] = await Promise.all([
+        this.clientService.findById(loan.clientId),
+        this.accountService.findById(loan.accountId),
+      ]);
+      const clientName =
+        client.firstName && client.lastName
+          ? `${client.firstName} ${client.lastName}`
+          : (client.companyName ?? '');
+      return LoanFormatter.overdraftHtml(clientName, account.accountNumber);
+    }
+
+    throw new BadRequestException(
+      `No document template available for loan type: ${loan.type}`,
+    );
   }
 
   // ---------------------------------------------------------------------------
