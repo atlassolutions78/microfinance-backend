@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   ClientTransactionEntity,
+  SessionDenominationEntity,
   TransferEntity,
 } from '../teller/teller.entity';
 import { AccountEntity } from '../accounts/account.entity';
@@ -18,6 +19,7 @@ import { ReceiptService } from './receipt.service';
   imports: [
     TypeOrmModule.forFeature([
       ClientTransactionEntity,
+      SessionDenominationEntity,
       TransferEntity,
       AccountEntity,
       BranchEntity,

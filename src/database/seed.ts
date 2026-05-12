@@ -248,6 +248,13 @@ async function seed() {
       role: UserRole.LOAN_APPROVER,
     },
     {
+      firstName: 'Bernadette',
+      middleName: 'Furaha',
+      lastName: 'Kizungu',
+      email: 'bernadette.kizungu@microfinance.cd',
+      role: UserRole.HEAD_CASHIER,
+    },
+    {
       firstName: 'Aimée',
       middleName: null,
       lastName: 'Masika',
@@ -318,6 +325,13 @@ async function seed() {
       lastName: 'Muhindo',
       email: 'espoir.muhindo@microfinance.cd',
       role: UserRole.LOAN_APPROVER,
+    },
+    {
+      firstName: 'Théodore',
+      middleName: null,
+      lastName: 'Bisimwa',
+      email: 'theodore.bisimwa@microfinance.cd',
+      role: UserRole.HEAD_CASHIER,
     },
     {
       firstName: 'Dieudonné',

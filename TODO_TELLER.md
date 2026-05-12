@@ -1,6 +1,6 @@
 # TODO — Teller
 
-## 1. Deposit slip fields — depositor info and denomination breakdown
+## 1. Deposit slip fields — depositor info and denomination breakdown — **DONE 2026-05-09**
 
 Currently `TellerDepositDto` only captures `accountId`, `amount`, `currency`, and an optional
 `description`. The physical deposit slip (Bordereau de Versement d'Espèces) also contains
@@ -87,7 +87,7 @@ At the end the receipt must include all of this information.
 
 ---
 
-## 2. Withdrawal fee
+## 2. Withdrawal fee — **DONE 2026-05-09**
 
 When a client withdraws, the teller may charge a fee. The fee is optional and decided entirely
 by the teller. For institutional accounts (`BUSINESS_CURRENT`) the convention is 1% of the
@@ -156,7 +156,7 @@ withdrawal amount, but the teller can override this to any value including zero.
 
 ---
 
-## 3. New role: HEAD_CASHIER (Cassier Principale)
+## 3. New role: HEAD_CASHIER (Cassier Principale) — **DONE 2026-05-09**
 
 The Cassier Principale is the person responsible for the branch vault and float distribution.
 They are the only one who can approve teller session requests and close sessions after EOD
@@ -195,7 +195,7 @@ the vault's cash position need to be confirmed with Cadeco before any code is wr
 
 ---
 
-## 4. Transfer fee
+## 4. Transfer fee — **DONE 2026-05-09**
 
 When a transfer is processed, a fee of 1% may apply to institutional source accounts
 (`BUSINESS_CURRENT`). The teller decides the final amount and can override or waive it.

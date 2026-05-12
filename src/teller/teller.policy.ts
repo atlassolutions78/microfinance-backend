@@ -14,12 +14,13 @@ export class TellerPolicy {
   }
 
   /**
-   * Ensures the approving user is a BRANCH_MANAGER.
+   * Ensures the acting user is a HEAD_CASHIER (Cassier Principale).
+   * Only HEAD_CASHIER can approve floats, close sessions, and view pending reconciliation.
    */
-  static assertIsBranchManager(role: UserRole): void {
-    if (role !== UserRole.BRANCH_MANAGER && role !== UserRole.ADMIN) {
+  static assertIsHeadCashier(role: UserRole): void {
+    if (role !== UserRole.HEAD_CASHIER) {
       throw new ForbiddenException(
-        'Only branch managers can approve teller sessions.',
+        'Only the head cashier (Cassier Principale) can perform this action.',
       );
     }
   }
@@ -85,6 +86,32 @@ export class TellerPolicy {
           ? COA_CODES.CUSTOMER_CURRENT_FC
           : COA_CODES.CUSTOMER_CURRENT_USD;
     }
+  }
+
+  /**
+   * Returns the suggested transfer fee: 1% for BUSINESS_CURRENT source, 0 otherwise.
+   */
+  static suggestedTransferFee(
+    sourceAccountType: AccountType,
+    amount: number,
+  ): string {
+    if (sourceAccountType === AccountType.BUSINESS_CURRENT) {
+      return (amount * 0.01).toFixed(2);
+    }
+    return '0.00';
+  }
+
+  /**
+   * Returns the suggested withdrawal fee: 1% for BUSINESS_CURRENT, 0 otherwise.
+   */
+  static suggestedWithdrawalFee(
+    accountType: AccountType,
+    amount: number,
+  ): string {
+    if (accountType === AccountType.BUSINESS_CURRENT) {
+      return (amount * 0.01).toFixed(2);
+    }
+    return '0.00';
   }
 
   /**

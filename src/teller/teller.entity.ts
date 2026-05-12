@@ -345,6 +345,12 @@ export class ClientTransactionEntity {
   @Column({ name: 'performed_by', type: 'uuid' })
   performed_by: string;
 
+  @Column({ name: 'depositor_name', type: 'varchar', nullable: true })
+  depositor_name: string | null;
+
+  @Column({ name: 'depositor_phone', type: 'varchar', nullable: true })
+  depositor_phone: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   created_at: Date;
 }
@@ -410,6 +416,10 @@ export class SessionDenominationEntity {
   /** denomination × quantity — stored for reporting convenience. */
   @Column({ type: 'numeric', precision: 18, scale: 4 })
   subtotal: number;
+
+  /** Links denomination rows for a deposit to the specific client_transactions row. Null for FLOAT_APPROVAL and EOD_DECLARATION. */
+  @Column({ name: 'account_tx_id', type: 'uuid', nullable: true })
+  account_tx_id: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   created_at: Date;

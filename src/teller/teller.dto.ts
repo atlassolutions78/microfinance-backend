@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsEnum,
   IsArray,
+  ArrayMinSize,
   ValidateNested,
   Min,
   Max,
@@ -101,6 +102,23 @@ export class TellerDepositDto {
   currency: Currency;
 
   @IsString()
+  depositorName: string;
+
+  @IsString()
+  @IsOptional()
+  depositorPhone?: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => DenominationEntryDto)
+  denominations: DenominationEntryDto[];
+
+  @IsNumber()
+  @Min(0)
+  feeAmount: number;
+
+  @IsString()
   @IsOptional()
   description?: string;
 }
@@ -115,6 +133,17 @@ export class TellerWithdrawalDto {
 
   @IsEnum(Currency)
   currency: Currency;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  feeAmount?: number;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => DenominationEntryDto)
+  denominations: DenominationEntryDto[];
 
   @IsString()
   @IsOptional()
@@ -134,6 +163,11 @@ export class TellerTransferDto {
 
   @IsEnum(Currency)
   currency: Currency;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  feeAmount?: number;
 
   @IsString()
   @IsOptional()

@@ -13,6 +13,8 @@ export interface AccountTxModelProps {
   description: string | undefined;
   performedBy: string;
   createdAt: Date;
+  depositorName?: string;
+  depositorPhone?: string;
 }
 
 export class AccountTxModel {
@@ -27,6 +29,8 @@ export class AccountTxModel {
   readonly description: string | undefined;
   readonly performedBy: string;
   readonly createdAt: Date;
+  readonly depositorName: string | undefined;
+  readonly depositorPhone: string | undefined;
 
   constructor(props: AccountTxModelProps) {
     this.id = props.id;
@@ -40,6 +44,8 @@ export class AccountTxModel {
     this.description = props.description;
     this.performedBy = props.performedBy;
     this.createdAt = props.createdAt;
+    this.depositorName = props.depositorName;
+    this.depositorPhone = props.depositorPhone;
   }
 
   static create(props: AccountTxModelProps): AccountTxModel {

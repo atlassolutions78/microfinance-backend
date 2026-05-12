@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
   ClientTransactionEntity,
+  SessionDenominationEntity,
   TransferEntity,
 } from '../teller/teller.entity';
 import { AccountEntity } from '../accounts/account.entity';
@@ -19,6 +20,12 @@ import { AccountTxType } from '../teller/teller.enums';
 // Internal data shapes — not exposed outside this service
 // ---------------------------------------------------------------------------
 
+interface DenominationLine {
+  denomination: number;
+  quantity: number;
+  subtotal: string;
+}
+
 interface AccountTxReceiptData {
   type: AccountTxType;
   reference: string;
@@ -34,6 +41,10 @@ interface AccountTxReceiptData {
   destAccountNumber?: string;
   destClientName?: string;
   feeAmount?: string;
+  // Deposit only
+  depositorName?: string;
+  depositorPhone?: string;
+  denominations?: DenominationLine[];
 }
 
 interface RemittanceReceiptData {
@@ -60,6 +71,8 @@ export class ReceiptService {
     private readonly txRepo: Repository<ClientTransactionEntity>,
     @InjectRepository(TransferEntity)
     private readonly transferRepo: Repository<TransferEntity>,
+    @InjectRepository(SessionDenominationEntity)
+    private readonly denominationRepo: Repository<SessionDenominationEntity>,
     @InjectRepository(AccountEntity)
     private readonly accountRepo: Repository<AccountEntity>,
     @InjectRepository(BranchEntity)
@@ -104,6 +117,26 @@ export class ReceiptService {
         : 'Unknown',
       branchName: branch?.name ?? 'Unknown',
     };
+
+    // For deposits and withdrawals, load denomination breakdown
+    if (
+      tx.type === AccountTxType.DEPOSIT ||
+      tx.type === AccountTxType.WITHDRAWAL
+    ) {
+      if (tx.type === AccountTxType.DEPOSIT) {
+        data.depositorName = tx.depositor_name ?? undefined;
+        data.depositorPhone = tx.depositor_phone ?? undefined;
+      }
+      const denoms = await this.denominationRepo.find({
+        where: { account_tx_id: txId },
+        order: { denomination: 'ASC' },
+      });
+      data.denominations = denoms.map((d) => ({
+        denomination: Number(d.denomination),
+        quantity: Number(d.quantity),
+        subtotal: Number(d.subtotal).toFixed(2),
+      }));
+    }
 
     // For transfers, fetch the other leg to show destination
     if (
@@ -179,9 +212,15 @@ export class ReceiptService {
   // ── Private: HTML renderers ─────────────────────────────────────────────────
 
   private renderAccountTx(d: AccountTxReceiptData): string {
+    if (d.type === AccountTxType.DEPOSIT) {
+      return renderDepositBordereau(d);
+    }
+    if (d.type === AccountTxType.WITHDRAWAL) {
+      return renderWithdrawalReceipt(d);
+    }
+
     const title =
       {
-        [AccountTxType.DEPOSIT]: 'DEPOSIT',
         [AccountTxType.WITHDRAWAL]: 'WITHDRAWAL',
         [AccountTxType.TRANSFER_OUT]: 'TRANSFER',
         [AccountTxType.TRANSFER_IN]: 'TRANSFER',
@@ -193,7 +232,6 @@ export class ReceiptService {
 
     const amountLabel =
       {
-        [AccountTxType.DEPOSIT]: 'Deposited',
         [AccountTxType.WITHDRAWAL]: 'Withdrawn',
         [AccountTxType.TRANSFER_OUT]: 'Transferred',
         [AccountTxType.TRANSFER_IN]: 'Received',
@@ -389,4 +427,192 @@ function formatTime(date: Date): string {
     minute: '2-digit',
     second: '2-digit',
   });
+}
+
+// ---------------------------------------------------------------------------
+// Bordereau de Versement d'Espèces
+// ---------------------------------------------------------------------------
+
+function renderDepositBordereau(d: {
+  reference: string;
+  date: Date;
+  amount: string;
+  currency: string;
+  balanceAfter: string;
+  accountNumber: string;
+  clientName: string;
+  tellerName: string;
+  branchName: string;
+  depositorName?: string;
+  depositorPhone?: string;
+  denominations?: { denomination: number; quantity: number; subtotal: string }[];
+}): string {
+  const denoms = d.denominations ?? [];
+  const denomTotal = denoms.reduce((sum, dn) => sum + Number(dn.subtotal), 0).toFixed(2);
+  const fee = (Number(denomTotal) - Number(d.amount)).toFixed(2);
+  const hasFee = Number(fee) > 0;
+  const amountWords = numberToFrenchWords(Math.round(Number(denomTotal)));
+
+  const denomRows = denoms
+    .map((dn) => row(`${dn.quantity} × ${dn.denomination}`, `${d.currency} ${dn.subtotal}`))
+    .join('');
+
+  const body = `
+    ${header(d.branchName)}
+    ${divider()}
+    ${centered('Bordereau de Versement d\'Espèces')}
+    ${centered(`N. ${d.reference}`)}
+    ${divider()}
+    ${row('Date', formatDate(d.date))}
+    ${row('Heure', formatTime(d.date))}
+    ${row('Caissier', d.tellerName)}
+    ${divider()}
+    ${row('Versé par', d.depositorName ?? '—')}
+    ${d.depositorPhone ? row('Adresse', d.depositorPhone) : ''}
+    ${divider()}
+    ${centered('Pour le crédit du compte')}
+    ${row('N°', d.accountNumber)}
+    ${row('de', d.clientName)}
+    ${divider()}
+    ${centered('Détail Versement')}
+    ${denomRows}
+    ${divider()}
+    ${row('Montant du Versement', `${d.currency} ${denomTotal}`, true)}
+    ${hasFee ? row('dont frais de service', `${d.currency} ${fee}`) : ''}
+    ${row('Solde après', `${d.currency} ${d.balanceAfter}`)}
+    ${divider()}
+    ${centered('La somme de')}
+    ${centered(`${d.currency} ${amountWords}`)}
+    ${divider()}
+    ${centered('Signature du Déposant')}
+    ${centered('_______________________')}
+  `;
+
+  return wrapHtml(body, "Bordereau de Versement d'Espèces");
+}
+
+// ---------------------------------------------------------------------------
+// Bordereau de Retrait d'Espèces
+// ---------------------------------------------------------------------------
+
+function renderWithdrawalReceipt(d: {
+  reference: string;
+  date: Date;
+  amount: string;
+  currency: string;
+  balanceAfter: string;
+  accountNumber: string;
+  clientName: string;
+  tellerName: string;
+  branchName: string;
+  denominations?: { denomination: number; quantity: number; subtotal: string }[];
+}): string {
+  const denoms = d.denominations ?? [];
+  const feeAmount = denoms.length > 0
+    ? Math.max(0, Number(d.amount) - denoms.reduce((s, dn) => s + Number(dn.subtotal), 0))
+    : 0;
+  const hasFee = feeAmount > 0;
+  const netPayout = hasFee
+    ? (Number(d.amount) - feeAmount).toFixed(2)
+    : d.amount;
+
+  const denomRows = denoms
+    .map((dn) => row(`${dn.quantity} × ${dn.denomination}`, `${d.currency} ${dn.subtotal}`))
+    .join('');
+
+  const body = `
+    ${header(d.branchName)}
+    ${divider()}
+    ${centered('Bordereau de Retrait d\'Espèces')}
+    ${centered(`N. ${d.reference}`)}
+    ${divider()}
+    ${row('Date', formatDate(d.date))}
+    ${row('Heure', formatTime(d.date))}
+    ${row('Caissier', d.tellerName)}
+    ${divider()}
+    ${row('N° Compte', d.accountNumber)}
+    ${row('Titulaire', d.clientName)}
+    ${divider()}
+    ${denoms.length > 0 ? centered('Détail Retrait') : ''}
+    ${denomRows}
+    ${denoms.length > 0 ? divider() : ''}
+    ${row('Montant du Retrait', `${d.currency} ${d.amount}`, true)}
+    ${hasFee ? row('dont frais de service', `${d.currency} ${feeAmount.toFixed(2)}`) : ''}
+    ${hasFee ? row('Montant reçu', `${d.currency} ${netPayout}`, true) : ''}
+    ${row('Solde après', `${d.currency} ${d.balanceAfter}`)}
+    ${divider()}
+    ${centered('Merci de votre confiance')}
+  `;
+
+  return wrapHtml(body, "Bordereau de Retrait d'Espèces");
+}
+
+function numberToFrenchWords(n: number): string {
+  if (n === 0) return 'zéro';
+  if (n < 0) return 'moins ' + numberToFrenchWords(-n);
+
+  const ones = [
+    '', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf',
+    'dix', 'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize',
+    'dix-sept', 'dix-huit', 'dix-neuf',
+  ];
+
+  if (n < 20) return ones[n];
+
+  if (n < 70) {
+    const tens = ['', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante'];
+    const t = Math.floor(n / 10);
+    const u = n % 10;
+    if (u === 0) return tens[t];
+    if (u === 1) return tens[t] + ' et un';
+    return tens[t] + '-' + ones[u];
+  }
+
+  if (n < 80) {
+    const r = n - 60;
+    if (r === 11) return 'soixante et onze';
+    return 'soixante-' + ones[r];
+  }
+
+  if (n < 100) {
+    const r = n - 80;
+    if (r === 0) return 'quatre-vingts';
+    return 'quatre-vingt-' + ones[r];
+  }
+
+  if (n < 200) {
+    const r = n - 100;
+    return r === 0 ? 'cent' : 'cent ' + numberToFrenchWords(r);
+  }
+
+  if (n < 1000) {
+    const h = Math.floor(n / 100);
+    const r = n % 100;
+    const hWord = ones[h] + ' cent';
+    return r === 0 ? hWord + 's' : hWord + ' ' + numberToFrenchWords(r);
+  }
+
+  if (n < 2000) {
+    const r = n - 1000;
+    return r === 0 ? 'mille' : 'mille ' + numberToFrenchWords(r);
+  }
+
+  if (n < 1_000_000) {
+    const t = Math.floor(n / 1000);
+    const r = n % 1000;
+    const tWord = numberToFrenchWords(t) + ' mille';
+    return r === 0 ? tWord : tWord + ' ' + numberToFrenchWords(r);
+  }
+
+  if (n < 1_000_000_000) {
+    const m = Math.floor(n / 1_000_000);
+    const r = n % 1_000_000;
+    const mWord = numberToFrenchWords(m) + (m > 1 ? ' millions' : ' million');
+    return r === 0 ? mWord : mWord + ' ' + numberToFrenchWords(r);
+  }
+
+  const b = Math.floor(n / 1_000_000_000);
+  const r = n % 1_000_000_000;
+  const bWord = numberToFrenchWords(b) + (b > 1 ? ' milliards' : ' milliard');
+  return r === 0 ? bWord : bWord + ' ' + numberToFrenchWords(r);
 }

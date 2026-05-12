@@ -47,6 +47,54 @@ export class AccountingService {
     return this.post(draft, em, transactionId);
   }
 
+  async postDepositFee(
+    feeAmount: number,
+    currency: string,
+    tellerCode: string,
+    feeIncomeCode: string,
+    branchId: string,
+    createdBy: string,
+    em?: EntityManager,
+  ): Promise<string> {
+    const draft = new JournalEntryDraft(branchId, createdBy, 'Deposit fee', [
+      { accountCode: tellerCode, debit: feeAmount, credit: 0, currency },
+      { accountCode: feeIncomeCode, debit: 0, credit: feeAmount, currency },
+    ]);
+    return this.post(draft, em);
+  }
+
+  async postTransferFee(
+    feeAmount: number,
+    currency: string,
+    sourceCoaCode: string,
+    feeIncomeCode: string,
+    branchId: string,
+    createdBy: string,
+    em?: EntityManager,
+  ): Promise<string> {
+    const draft = new JournalEntryDraft(branchId, createdBy, 'Transfer fee', [
+      { accountCode: sourceCoaCode, debit: feeAmount, credit: 0, currency },
+      { accountCode: feeIncomeCode, debit: 0, credit: feeAmount, currency },
+    ]);
+    return this.post(draft, em);
+  }
+
+  async postWithdrawalFee(
+    feeAmount: number,
+    currency: string,
+    tellerCode: string,
+    feeIncomeCode: string,
+    branchId: string,
+    createdBy: string,
+    em?: EntityManager,
+  ): Promise<string> {
+    const draft = new JournalEntryDraft(branchId, createdBy, 'Withdrawal fee', [
+      { accountCode: tellerCode, debit: feeAmount, credit: 0, currency },
+      { accountCode: feeIncomeCode, debit: 0, credit: feeAmount, currency },
+    ]);
+    return this.post(draft, em);
+  }
+
   async postWithdrawal(
     amount: number,
     currency: string,
