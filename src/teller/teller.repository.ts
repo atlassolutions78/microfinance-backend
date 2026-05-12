@@ -257,7 +257,19 @@ export class TellerRepository {
       reference: tx.reference,
       description: tx.description ?? null,
       performed_by: tx.performedBy,
+      depositor_name: tx.depositorName ?? null,
+      depositor_phone: tx.depositorPhone ?? null,
       created_at: tx.createdAt,
     });
+  }
+
+  async findDenominationsByAccountTx(
+    accountTxId: string,
+  ): Promise<SessionDenominationRecord[]> {
+    const entities = await this.denominations.find({
+      where: { account_tx_id: accountTxId },
+      order: { currency: 'ASC', denomination: 'ASC' },
+    });
+    return entities.map(TellerMapper.denominationToRecord);
   }
 }

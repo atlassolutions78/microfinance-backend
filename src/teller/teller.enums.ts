@@ -9,6 +9,8 @@ export enum TellerSessionStatus {
 export enum DenominationType {
   FLOAT_APPROVAL = 'FLOAT_APPROVAL',   // manager hands cash to teller
   EOD_DECLARATION = 'EOD_DECLARATION', // teller counts drawer at close
+  DEPOSIT = 'DEPOSIT',                 // denomination breakdown for a cash deposit
+  WITHDRAWAL = 'WITHDRAWAL',           // denomination breakdown for a cash withdrawal
 }
 
 export enum TellerTxType {

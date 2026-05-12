@@ -15,6 +15,7 @@ import {
   SessionDenominationEntity,
   TellerCoaAccountEntity,
   TellerTransactionEntity,
+  TransferEntity,
 } from './teller.entity';
 import {
   TellerSessionStatus,
@@ -74,6 +75,8 @@ export interface WithdrawalPreview {
     currentFC: string;
     currentUSD: string;
   };
+  suggestedFee: string;
+  netPayout: string;
 }
 
 export interface TransferPreview {
@@ -105,6 +108,7 @@ export interface TransferPreview {
     debit: { code: string; name: string; amount: string; currency: string };
     credit: { code: string; name: string; amount: string; currency: string };
   };
+  suggestedFee: string;
 }
 
 export interface DepositPreview {
@@ -219,7 +223,7 @@ export class TellerService {
       throw new BadRequestException('Manager has no assigned branch.');
     }
 
-    TellerPolicy.assertIsBranchManager(manager.role);
+    TellerPolicy.assertIsHeadCashier(manager.role);
 
     const session = await this.findOrFail(sessionId);
     TellerPolicy.assertSessionInBranch(session.branchId, manager.branchId);
@@ -406,7 +410,27 @@ export class TellerService {
       description: dto.description,
       performedBy: teller.id,
       createdAt: new Date(),
+      depositorName: dto.depositorName,
+      depositorPhone: dto.depositorPhone,
     });
+
+    const denominationEntities: SessionDenominationEntity[] = dto.denominations.map((d) => {
+      const e = new SessionDenominationEntity();
+      e.id = randomUUID();
+      e.session_id = sessionId;
+      e.type = DenominationType.DEPOSIT;
+      e.currency = currency;
+      e.denomination = d.denomination;
+      e.quantity = d.quantity;
+      e.subtotal = new Decimal(d.denomination).times(d.quantity).toDecimalPlaces(4).toNumber();
+      e.account_tx_id = tx.id;
+      return e;
+    });
+
+    const feeAmount = dto.feeAmount ?? 0;
+    const feeIncomeCode = currency === Currency.FC
+      ? COA_CODES.FEE_INCOME_FC
+      : COA_CODES.FEE_INCOME_USD;
 
     await this.dataSource.transaction(async (em) => {
       await this.repo.saveAccountTx(tx, em);
@@ -422,7 +446,21 @@ export class TellerService {
         em,
         tx.id,
       );
+      await this.repo.saveDenominations(denominationEntities, em);
+      // Full amount + fee is received in cash; cash position reflects both
       session.recordCashMovement(TellerTxType.DEPOSIT, dto.amount, currency);
+      if (feeAmount > 0) {
+        session.recordCashMovement(TellerTxType.DEPOSIT, feeAmount, currency);
+        await this.accountingService.postDepositFee(
+          feeAmount,
+          currency,
+          tellerCode,
+          feeIncomeCode,
+          session.branchId,
+          teller.id,
+          em,
+        );
+      }
       await this.repo.saveSession(session, em);
       await this.saveTellerTx(
         { sessionId, type: TellerTxType.DEPOSIT, dto, reference },
@@ -445,7 +483,6 @@ export class TellerService {
     session.assertCanProcessTransaction();
 
     const currency = query.currency;
-    session.assertHasCashFor(query.amount, currency);
 
     const account = await this.accountService.findByIdEnriched(query.accountId);
     if (account.status !== AccountStatus.ACTIVE) {
@@ -459,6 +496,13 @@ export class TellerService {
         `Insufficient account balance. Available: ${account.balance}, requested: ${query.amount}`,
       );
     }
+
+    const suggestedFee = TellerPolicy.suggestedWithdrawalFee(
+      account.accountType as import('../accounts/account.enums').AccountType,
+      query.amount,
+    );
+    const netPayout = new Decimal(query.amount).minus(suggestedFee).toFixed(2);
+    session.assertHasCashFor(Number(netPayout), currency);
 
     const coaAccounts = await this.getCoaAccountsOrFail(session.tellerId);
     const tellerCode =
@@ -508,6 +552,8 @@ export class TellerService {
         currentFC: session.expectedClosingCashFC,
         currentUSD: session.expectedClosingCashUSD,
       },
+      suggestedFee,
+      netPayout,
     };
   }
 
@@ -523,7 +569,9 @@ export class TellerService {
     session.assertCanProcessTransaction();
 
     const currency = dto.currency;
-    session.assertHasCashFor(dto.amount, currency);
+    const feeAmount = dto.feeAmount ?? 0;
+    const netCashOut = new Decimal(dto.amount).minus(feeAmount).toNumber();
+    session.assertHasCashFor(netCashOut, currency);
 
     const account = await this.accountService.findById(dto.accountId);
     if (account.status !== AccountStatus.ACTIVE) {
@@ -569,9 +617,27 @@ export class TellerService {
       createdAt: new Date(),
     });
 
+    const denominationEntities: SessionDenominationEntity[] = dto.denominations.map((d) => {
+      const e = new SessionDenominationEntity();
+      e.id = randomUUID();
+      e.session_id = sessionId;
+      e.type = DenominationType.WITHDRAWAL;
+      e.currency = currency;
+      e.denomination = d.denomination;
+      e.quantity = d.quantity;
+      e.subtotal = new Decimal(d.denomination).times(d.quantity).toDecimalPlaces(4).toNumber();
+      e.account_tx_id = tx.id;
+      return e;
+    });
+
+    const feeIncomeCode = currency === Currency.FC
+      ? COA_CODES.FEE_INCOME_FC
+      : COA_CODES.FEE_INCOME_USD;
+
     await this.dataSource.transaction(async (em) => {
       await this.repo.saveAccountTx(tx, em);
       await this.accountService.recordBalance(dto.accountId, newBalance, em);
+      // Withdrawal journal: Dr. client COA for full amount (account debited in full)
       await this.accountingService.postWithdrawal(
         dto.amount,
         currency,
@@ -583,7 +649,20 @@ export class TellerService {
         em,
         tx.id,
       );
-      session.recordCashMovement(TellerTxType.WITHDRAWAL, dto.amount, currency);
+      await this.repo.saveDenominations(denominationEntities, em);
+      // Teller pays out only net amount in cash; fee stays in drawer
+      session.recordCashMovement(TellerTxType.WITHDRAWAL, netCashOut, currency);
+      if (feeAmount > 0) {
+        await this.accountingService.postWithdrawalFee(
+          feeAmount,
+          currency,
+          tellerCode,
+          feeIncomeCode,
+          session.branchId,
+          teller.id,
+          em,
+        );
+      }
       await this.repo.saveSession(session, em);
       await this.saveTellerTx(
         { sessionId, type: TellerTxType.WITHDRAWAL, dto, reference },
@@ -621,9 +700,14 @@ export class TellerService {
       );
     }
 
-    if (new Decimal(source.balance).lessThan(query.amount)) {
+    const suggestedFee = TellerPolicy.suggestedTransferFee(
+      source.accountType as import('../accounts/account.enums').AccountType,
+      query.amount,
+    );
+
+    if (new Decimal(source.balance).lessThan(new Decimal(query.amount).plus(suggestedFee))) {
       throw new BadRequestException(
-        `Insufficient source account balance. Available: ${source.balance}, requested: ${query.amount}`,
+        `Insufficient source account balance. Available: ${source.balance}, requested: ${query.amount} + fee: ${suggestedFee}`,
       );
     }
 
@@ -652,6 +736,7 @@ export class TellerService {
         currentBalance: source.balance,
         balanceAfter: new Decimal(source.balance)
           .minus(query.amount)
+          .minus(suggestedFee)
           .toFixed(2),
         clientId: source.clientId,
         clientName: source.clientName,
@@ -683,6 +768,7 @@ export class TellerService {
           currency,
         },
       },
+      suggestedFee,
     };
   }
 
@@ -730,9 +816,17 @@ export class TellerService {
       dest.currency,
     );
 
+    const feeAmount = dto.feeAmount ?? 0;
+    if (new Decimal(sourceBalance).lessThan(new Decimal(dto.amount).plus(feeAmount))) {
+      throw new BadRequestException(
+        `Insufficient source account balance. Available: ${sourceBalance}, requested: ${dto.amount} + fee: ${feeAmount}`,
+      );
+    }
+
     const destBalance = dest.balance;
     const sourceNewBalance = new Decimal(sourceBalance)
       .minus(dto.amount)
+      .minus(feeAmount)
       .toFixed(2);
     const destNewBalance = new Decimal(destBalance).plus(dto.amount).toFixed(2);
     const reference = await this.sequenceService.nextReference(
@@ -796,6 +890,31 @@ export class TellerService {
         em,
         debit.id,
       );
+      if (feeAmount > 0) {
+        const feeIncomeCode = currency === Currency.FC
+          ? COA_CODES.FEE_INCOME_FC
+          : COA_CODES.FEE_INCOME_USD;
+        await this.accountingService.postTransferFee(
+          feeAmount,
+          currency,
+          sourceCoaCode,
+          feeIncomeCode,
+          session.branchId,
+          teller.id,
+          em,
+        );
+      }
+      // Link debit and credit transactions so the receipt can find both legs
+      const transferEntity = new TransferEntity();
+      transferEntity.id = randomUUID();
+      transferEntity.debit_transaction_id = debit.id;
+      transferEntity.credit_transaction_id = credit.id;
+      transferEntity.is_internal = true;
+      transferEntity.fee_amount = feeAmount;
+      transferEntity.recipient_name = null;
+      transferEntity.claim_reference = null;
+      await em.save(TransferEntity, transferEntity);
+
       // Record a single teller tx entry for the transfer (session cash unchanged)
       const tellerTxEntity = new TellerTransactionEntity();
       tellerTxEntity.id = randomUUID();
@@ -851,7 +970,7 @@ export class TellerService {
       throw new BadRequestException('Manager has no assigned branch.');
     }
 
-    TellerPolicy.assertIsBranchManager(manager.role);
+    TellerPolicy.assertIsHeadCashier(manager.role);
 
     const session = await this.findOrFail(sessionId);
     TellerPolicy.assertSessionInBranch(session.branchId, manager.branchId);
@@ -938,7 +1057,7 @@ export class TellerService {
   async listPendingReconciliation(
     manager: UserModel,
   ): Promise<TellerSessionModel[]> {
-    TellerPolicy.assertIsBranchManager(manager.role);
+    TellerPolicy.assertIsHeadCashier(manager.role);
     if (!manager.branchId) return [];
     return this.repo.findPendingReconciliationByBranch(manager.branchId);
   }
