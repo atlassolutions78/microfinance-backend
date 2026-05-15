@@ -5,7 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { UserRole } from './user.enums';
+import { UserRole, UserStatus } from './user.enums';
 
 /**
  * Represents a system user (staff account) as stored in the database.
@@ -37,8 +37,14 @@ export class UserEntity {
   @Column({ type: 'enum', enum: UserRole })
   role: UserRole;
 
-  @Column({ name: 'is_active', default: true })
-  is_active: boolean;
+  @Column({ type: 'enum', enum: UserStatus, default: UserStatus.ACTIVE })
+  status: UserStatus;
+
+  @Column({ name: 'invitation_token', type: 'varchar', length: 255, nullable: true, unique: true })
+  invitation_token: string | null;
+
+  @Column({ name: 'invitation_expires_at', type: 'timestamptz', nullable: true })
+  invitation_expires_at: Date | null;
 
   @Column({ name: 'must_change_password', default: false })
   must_change_password: boolean;

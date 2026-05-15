@@ -7,3 +7,8 @@ export enum UserRole {
   HQ_MANAGER = 'HQ_MANAGER',
   ADMIN = 'ADMIN',
 }
+export enum UserStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  PENDING = 'PENDING',
+}

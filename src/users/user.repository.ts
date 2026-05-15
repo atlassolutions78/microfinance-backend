@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { UserEntity } from './user.entity';
 import { UserModel } from './user.model';
 import { UserMapper } from './user.mapper';
-import { UserRole } from './user.enums';
+import { UserRole, UserStatus } from './user.enums';
 
 @Injectable()
 export class UserRepository {
@@ -24,6 +24,11 @@ export class UserRepository {
 
   async findByEmail(email: string): Promise<UserModel | null> {
     const entity = await this.repo.findOne({ where: { email } });
+    return entity ? UserMapper.toDomain(entity) : null;
+  }
+
+  async findByToken(token: string): Promise<UserModel | null> {
+    const entity = await this.repo.findOne({ where: { invitation_token: token } });
     return entity ? UserMapper.toDomain(entity) : null;
   }
 
@@ -59,7 +64,8 @@ export class UserRepository {
       qb.andWhere('u.role = :role', { role: filters.role });
     }
     if (filters.isActive !== undefined) {
-      qb.andWhere('u.is_active = :isActive', { isActive: filters.isActive });
+      const status = filters.isActive ? UserStatus.ACTIVE : UserStatus.INACTIVE;
+      qb.andWhere('u.status = :status', { status });
     }
     if (search) {
       qb.andWhere(
@@ -83,10 +89,14 @@ export class UserRepository {
       role: UserRole;
       branch_id: string | null;
       password_hash: string;
-      is_active: boolean;
+      status: UserStatus;
       must_change_password: boolean;
     }>,
   ): Promise<void> {
     await this.repo.update(id, fields);
+  }
+
+  async remove(id: string): Promise<void> {
+    await this.repo.delete(id);
   }
 }
