@@ -33,3 +33,14 @@ export class AuthResponseDto {
     scope: 'branch' | 'global';
   };
 }
+
+export class SetPasswordDto {
+  @ApiProperty({ description: 'The secure invitation token from the email' })
+  @IsString()
+  token: string;
+
+  @ApiProperty({ description: 'The new password', minLength: 8 })
+  @IsString()
+  @MinLength(8)
+  password: string;
+}

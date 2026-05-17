@@ -49,7 +49,7 @@ import {
   DocumentStatus,
 } from 'src/documents/document.enums';
 import { UserEntity } from 'src/users/user.entity';
-import { UserRole } from 'src/users/user.enums';
+import { UserRole, UserStatus } from 'src/users/user.enums';
 import { BranchEntity } from 'src/settings/branch.entity';
 import { BranchType } from 'src/settings/branch.enums';
 import {
@@ -281,7 +281,7 @@ async function seed() {
       email: u.email,
       password_hash: await bcrypt.hash('Password123!', 12),
       role: u.role,
-      is_active: true,
+      status: UserStatus.ACTIVE,
     });
     await userRepo.save(entity);
     createdUsers[u.role] = entity;
@@ -360,7 +360,7 @@ async function seed() {
       email: u.email,
       password_hash: await bcrypt.hash('Password123!', 12),
       role: u.role,
-      is_active: true,
+      status: UserStatus.ACTIVE,
     });
     await userRepo.save(entity);
     bukavuCreatedUsers[u.role] = entity;

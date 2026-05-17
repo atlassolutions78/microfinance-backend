@@ -1,4 +1,4 @@
-import { UserRole } from './user.enums';
+import { UserRole, UserStatus } from './user.enums';
 
 export interface UserModelProps {
   id: string;
@@ -9,7 +9,9 @@ export interface UserModelProps {
   email: string;
   passwordHash: string;
   role: UserRole;
-  isActive: boolean;
+  status: UserStatus;
+  invitationToken: string | null;
+  invitationExpiresAt: Date | null;
   mustChangePassword: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -30,7 +32,9 @@ export class UserModel {
   branchId: string | null;
   passwordHash: string;
   role: UserRole;
-  isActive: boolean;
+  status: UserStatus;
+  invitationToken: string | null;
+  invitationExpiresAt: Date | null;
   mustChangePassword: boolean;
   updatedAt: Date;
 
@@ -43,21 +47,27 @@ export class UserModel {
     this.email = props.email;
     this.passwordHash = props.passwordHash;
     this.role = props.role;
-    this.isActive = props.isActive;
+    this.status = props.status;
+    this.invitationToken = props.invitationToken;
+    this.invitationExpiresAt = props.invitationExpiresAt;
     this.mustChangePassword = props.mustChangePassword;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
   }
 
+  get isActive(): boolean {
+    return this.status === UserStatus.ACTIVE;
+  }
+
   deactivate(): void {
-    if (!this.isActive) throw new Error('User is already inactive.');
-    this.isActive = false;
+    if (this.status === UserStatus.INACTIVE) throw new Error('User is already inactive.');
+    this.status = UserStatus.INACTIVE;
     this.updatedAt = new Date();
   }
 
   activate(): void {
-    if (this.isActive) throw new Error('User is already active.');
-    this.isActive = true;
+    if (this.status === UserStatus.ACTIVE) throw new Error('User is already active.');
+    this.status = UserStatus.ACTIVE;
     this.updatedAt = new Date();
   }
 

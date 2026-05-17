@@ -4,7 +4,8 @@ import * as bcrypt from 'bcryptjs';
 import { UserRepository } from '../users/user.repository';
 import { SettingsService } from '../settings/settings.service';
 import { UserRole } from '../users/user.enums';
-import { LoginDto, AuthResponseDto } from './auth.dto';
+import { LoginDto, AuthResponseDto, SetPasswordDto } from './auth.dto';
+import { UserService } from '../users/user.service';
 
 const GLOBAL_ROLES: UserRole[] = [UserRole.HQ_MANAGER, UserRole.ADMIN];
 
@@ -14,7 +15,13 @@ export class AuthService {
     private readonly userRepository: UserRepository,
     private readonly settingsService: SettingsService,
     private readonly jwtService: JwtService,
+    private readonly userService: UserService,
   ) {}
+
+  async setPassword(dto: SetPasswordDto): Promise<{ success: boolean }> {
+    await this.userService.activateByToken(dto);
+    return { success: true };
+  }
 
   async login(dto: LoginDto): Promise<AuthResponseDto> {
     const user = await this.userRepository.findByEmail(dto.email);

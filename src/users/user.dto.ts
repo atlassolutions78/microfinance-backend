@@ -121,3 +121,40 @@ export class UserFilterDto {
   @IsOptional()
   limit?: number;
 }
+
+export class InviteUserDto {
+  @ApiProperty({ example: 'Jean' })
+  @IsString()
+  @MinLength(2)
+  @MaxLength(100)
+  firstName: string;
+
+  @ApiProperty({ example: 'Mutombo' })
+  @IsString()
+  @MinLength(2)
+  @MaxLength(100)
+  lastName: string;
+
+  @ApiProperty({ example: 'jean@cadeco.cd' })
+  @IsEmail()
+  email: string;
+
+  @ApiProperty({ enum: UserRole, example: UserRole.TELLER })
+  @IsEnum(UserRole)
+  role: UserRole;
+
+  @ApiProperty({ example: 'b1b2c3d4-e5f6-7890-abcd-ef1234567890' })
+  @IsUUID()
+  branchId: string;
+}
+
+export class SetPasswordDto {
+  @ApiProperty({ description: 'The secure invitation token from the email' })
+  @IsString()
+  token: string;
+
+  @ApiProperty({ description: 'The new password', minLength: 8 })
+  @IsString()
+  @MinLength(8)
+  password: string;
+}
